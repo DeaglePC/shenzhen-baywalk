@@ -1,5 +1,6 @@
 import * as T from 'three';
-import {Surface,bounds,random,sideWall} from './city-geometry.js';
+import {Surface,bounds,sideWall} from './city-geometry.js';
+import {photo} from './city-materials.js';
 import {architecturalMetal} from './city-curtainwall.js';
 
 // Roof plan and longitudinal section published by MAD at
@@ -9,16 +10,21 @@ import {architecturalMetal} from './city-curtainwall.js';
 export const cultureIDs=[1441599159,1441599154,1441599155,1441599156,1441599157,1441599158];
 const tau=Math.PI*2;
 function granite(){
-  const c=document.createElement('canvas');c.width=c.height=512;
-  const g=c.getContext('2d'),r=random(6134);
-  g.fillStyle='#aaa9a4';g.fillRect(0,0,512,512);
-  for(let y=-1;y<16;y++)for(let x=-1;x<17;x++){
-    const v=Math.floor(214+r()*13);
-    g.fillStyle='rgb('+v+','+(v+1)+','+(v-1)+')';g.fillRect(x*32+(y%2)*16+.4,y*32+.35,31.4,31.4);
-  }
-  for(let i=0;i<24000;i++){const v=Math.floor(103+r()*130);g.fillStyle='rgba('+v+','+v+','+v+',.31)';g.fillRect(r()*512,r()*512,1,.7+r());}
-  const tex=new T.CanvasTexture(c);tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.anisotropy=8;tex.colorSpace=T.SRGBColorSpace;
-  return new T.MeshStandardMaterial({map:tex,color:0xf3f1e9,roughness:.75,metalness:.06,side:T.DoubleSide});
+  const normals=photo('museum-granite-normal.webp'),rough=photo('museum-granite-rough.webp');
+  normals.colorSpace=rough.colorSpace=T.NoColorSpace;
+  const mat=new T.MeshPhysicalMaterial({map:photo('museum-granite-color.webp'),normalMap:normals,normalScale:new T.Vector2(.16,.16),
+    roughnessMap:rough,roughness:.69,metalness:.025,clearcoat:.18,clearcoatRoughness:.38,side:T.DoubleSide});
+  mat.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      vec2 strips=vMapUv/vec2(.24,1.18);
+      strips.y+=mod(floor(strips.x),3.)*.3333;
+      vec2 cell=fract(strips),width=fwidth(strips);
+      vec2 margin=min(cell,1.-cell);
+      vec2 joint=1.-smoothstep(vec2(.013,.003),vec2(.013,.003)+max(width,.0001),margin);
+      float reveal=max(joint.x*(1.-smoothstep(.08,.45,width.x)),joint.y*(1.-smoothstep(.08,.45,width.y)));
+      float shade=fract(sin(dot(floor(strips),vec2(47.1,19.2)))*33134.7);
+      diffuseColor.rgb*=(1.-.34*reveal)*mix(.965,1.025,shade);`);
+  };return mat;
 }
 export function cultureSquare(root,m,map){
   const city=new Map(map.buildings.filter(f=>cultureIDs.includes(f.id)).map(f=>[f.id,f]));
@@ -58,7 +64,7 @@ export function cultureSquare(root,m,map){
     const N=82,V=45,pos=[],uv=[],idx=[];
     for(let j=0;j<=V;j++)for(let i=0;i<=N;i++){
       const a=i*tau/N,p=point(a,j/V);pos.push(...p);
-      uv.push(i/N*tau*(rx+rz)*.5/7.2,j/V*shell.h*1.44/7.2);
+      uv.push(i/N*tau*(rx+rz)*.5,j/V*shell.h*1.44);
     }
     for(let j=0;j<V;j++)for(let i=0;i<N;i++){
       const k=j*(N+1)+i,a=(i+.5)*tau/N,v=(j+.5)/V;

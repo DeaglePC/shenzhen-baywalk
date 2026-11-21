@@ -1,10 +1,10 @@
 import * as T from 'three';
 import {Surface,Instances} from './city-geometry.js';
-import {architecturalMetal} from './city-curtainwall.js';
+import {architecturalMetal, bayStone} from './city-curtainwall.js';
 
 const height=392.5,columns=56,turn=Math.PI*2;
 const section=[[0,30.8],[.045,34.4],[.12,36.25],[.22,36.65],[.34,36.5],
-  [.48,35.4],[.62,32.5],[.74,28.1],[.83,22.9],[.89,16.9],[.95,9.1],[.987,2.55],[1,.10]];
+  [.48,35.4],[.62,32.5],[.74,28.1],[.83,21.8],[.89,15.9],[.95,8.7],[.987,2.75],[.9984,.81],[1,.42]];
 function radius(t){
   let j=1;while(j<section.length-1&&t>section[j][0])j++;
   const [a,v]=section[j-1],[b,w]=section[j],l=b-a,s=T.MathUtils.clamp((t-a)/l,0,1);
@@ -35,39 +35,75 @@ function annulus(s,inner,outer,y,N){
     s.quad(...p,p.map(q=>[q[0]/3.2,q[2]/3.2]));
   }
 }
+function triangle(s,p,uv,color){
+  const k=s.vertex(p[0],uv[0],color);s.vertex(p[1],uv[1],color);s.vertex(p[2],uv[2],color);
+  s.indices.push(k,k+1,k+2);
+}
+function crownLites(occupied,sky) {
+  // Each sheet spans two column halves. Alternating pleats meet along real
+  // meridians; their specular normals come from their four non-coplanar corners.
+  const floors=[.805,.827,.849,.866,345/height,.904,.932,.951,.969,.982,.991,.9984];
+  const hues=[new T.Color('#f2f5f4'),new T.Color('#e6eded')];
+  const fullWidth=28*2*1.37*3;
+  function vertex(i,t,j) {
+    const width=Math.sin(Math.PI*Math.max(0,(t-.795)/.21));
+    const pleat=(i%2===0?.10:-.29-.57*width)*(j%2===0?1:.72);
+    const angle=turn*(i+.5)/56;
+    return polar(angle,Math.max(.62,radius(t)+pleat),height*t);
+  }
+  for(let j=0;j<floors.length-1;j++){
+    const a=floors[j],b=floors[j+1],shell=a<345/height-.00001?occupied:sky;
+    for(let i=0;i<56;i++){
+      const panel=[vertex(i,a,j),vertex(i+1,a,j),vertex(i+1,b,j+1),vertex(i,b,j+1)];
+      const u=i/56*fullWidth,v=(i+1)/56*fullWidth;
+      const uv=[[u,height*a],[v,height*a],[v,height*b],[u,height*b]];
+      const folds=(i+j)%2===0?[[0,1,2],[0,2,3]]:[[0,1,3],[1,2,3]];
+      for(const f of folds)triangle(shell,f.map(k=>panel[k]),f.map(k=>uv[k]),hues[(i+j)%2]);
+    }
+  }
+}
 function cladding(group,m){
   const facade=new Surface(),crown=new Surface(),rails=new Surface(),screen=new Surface();
   const fin=new Surface(),ribs=new Surface(),brass=new Surface();
-  const white=new T.Color('#e4edf1'),crownShade=new T.Color(),crownMetal=architecturalMetal(0xc3cbd0,.23);
+  const white=new T.Color('#e4edf1'),crownMetal=architecturalMetal(0xc8cdc9,.24);
   crownMetal.vertexColors=true;
   const mainFin=architecturalMetal(0xc4c9c6,.21);mainFin.vertexColors=true;mainFin.metalness=.74;mainFin.roughness=.25;
+  mainFin.customProgramCacheKey=()=> 'column-cover-joints';
+  mainFin.onBeforeCompile=shader=>{
+    shader.vertexShader='varying float vColumnY;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n vColumnY=position.y;');
+    shader.fragmentShader='varying float vColumnY;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
+      #include <color_fragment>
+      float grid=(vColumnY-38.07)/4.48,aa=max(.0001,fwidth(grid));
+      float seam=(1.-smoothstep(.002,.004+aa*.50,abs(fract(grid+.5)-.5)));
+      seam*=1.-smoothstep(.05,.29,aa);seam*=smoothstep(37.,39.,vColumnY);
+      diffuseColor.rgb*=1.-seam*.67;
+    `).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n roughnessFactor+=.21*seam;');
+  };
   const bronze=architecturalMetal(0xb5966c,.24);
   const glass=m.bambooGlass;
-  const skyGlass=new T.MeshPhysicalMaterial({color:0x809aa4,vertexColors:true,metalness:.27,roughness:.12,clearcoat:.87,
-    clearcoatRoughness:.10,transparent:true,opacity:.73,side:T.FrontSide,depthWrite:false,envMapIntensity:1.15});
+  const skyGlass=new T.MeshPhysicalMaterial({color:0x9caeb8,vertexColors:true,metalness:.32,roughness:.103,clearcoat:.93,
+    clearcoatRoughness:.08,transparent:true,opacity:.56,side:T.FrontSide,depthWrite:false,envMapIntensity:1.25});
   skyGlass.userData.cityProbe='district';
   const innerFrame=new Instances(new T.CylinderGeometry(.80,1,1,6,1,true),architecturalMetal(0xd3bc9b,.23),'空中大厅内部金属桁架');
   const lightTube=new T.MeshStandardMaterial({color:0xdbccb2,emissive:0xffc181,emissiveIntensity:.18,roughness:.37});
   m.walls.push(lightTube);
   const guides=new Instances(new T.CylinderGeometry(1,1,1,5,1,true),lightTube,'冠部内侧线性照明');
   const edge=new T.MeshStandardMaterial({color:0x536167,metalness:.52,roughness:.32,side:T.DoubleSide});
-  const steps=88,N=112;
+  const steps=66,N=112;
   for(let j=0;j<steps;j++){
-    const t0=.035+j*(1-.035)/steps,t1=.035+(j+1)*(1-.035)/steps,y0=t0*height,y1=t1*height,r0=radius(t0),r1=radius(t1);
+    const t0=.035+j*(.805-.035)/steps,t1=.035+(j+1)*(.805-.035)/steps,y0=t0*height,y1=t1*height,r0=radius(t0),r1=radius(t1);
     for(let i=0;i<N;i++){
       const a=turn*i/N,b=turn*(i+1)/N;
       // 168 glass lites encircle a typical floor. The number of lights and
       // slab spacing remain consistent as the conical shell narrows.
       const u=i/N*168*1.37,v=(i+1)/N*168*1.37;
-      const A=polar(a,r0,y0),B=polar(b,r0,y0),C=polar(b,r1,y1),D=polar(a,r1,y1);
-      if(t0<.854)facade.quad(A,B,C,D,[[u,y0],[v,y0],[v,y1],[u,y1]],white);
-      else{
-        const value=.64+.15*Math.sin(a*2.0+.55)+.09*Math.cos((i%4)*.8);
-        crownShade.setRGB(value*.77,value*.87,value);
-        crown.quad(A,B,C,D,[[u,y0],[v,y0],[v,y1],[u,y1]],crownShade);
-      }
+      const fold=(t,col)=> -.87*Math.max(0,(.125-t)/.09)*Math.pow(Math.sin(col*Math.PI/4),2);
+      const A=polar(a,r0+fold(t0,i),y0),B=polar(b,r0+fold(t0,i+1),y0),C=polar(b,r1+fold(t1,i+1),y1),D=polar(a,r1+fold(t1,i),y1);
+      facade.quad(A,B,C,D,[[u,y0],[v,y0],[v,y1],[u,y1]],white);
     }
   }
+  crownLites(facade,crown);
   function band(s,t,h,depth){
     const y=t*height,r0=radius(t)+depth,r1=radius((y+h)/height)+depth;
     for(let i=0;i<112;i++){
@@ -75,10 +111,11 @@ function cladding(group,m){
       s.quad(polar(a,r0,y),polar(b,r0,y),polar(b,r1,y+h),polar(a,r1,y+h));
     }
   }
-  for(const t of [.306,.628,.829]){
-    band(screen,t,1.04,.06);
-    for(let k=0;k<4;k++)band(rails,t+k*.0007,.095,.14);
-    band(brass,t+.00275,.105,.17);
+  // The two full-width belts are visible in KPF's waterfront photograph.
+  for(const t of [.327,.646]){
+    band(screen,t,1.62,.11);
+    for(let k=0;k<5;k++)band(rails,t+k*.00084,.095,.16);
+    band(brass,t+.00428,.085,.17);
   }
   // Folded stainless-steel sections have different optical normals across
   // the chamfer and the face, where a cylindrical tube would look flat.
@@ -95,37 +132,54 @@ function cladding(group,m){
   for(let i=0;i<columns;i++){
     const split=i%2?1:-1,root=2*Math.floor(i/2)+.5;
     sweep(fin,k=>{
-      const t=.097+k*(.818-.097),a=i*turn/columns;
-      return [a,t,.69-.18*k,.79-.22*k];
-    },23);
+      const t=.097+k*(.805-.097),a=i*turn/columns;
+      return [a,t,.75-.17*k,.89-.19*k];
+    },32);
     sweep(fin,k=>{
       const t=.097*k;
       // From 28 lower portals the structure opens to 56 tower columns.
-      const index=k<.44?T.MathUtils.lerp(root,i+split*1.05,k/.44):T.MathUtils.lerp(i+split*1.05,i,(k-.44)/.56);
-      return [index*turn/columns,t,.95-.48*k,.94-.3*k];
+      const blend=1-Math.pow(1-k,1.65),index=T.MathUtils.lerp(root,i+split,blend);
+      return [index*turn/columns,t,1.06-.31*k,1.14-.25*k];
     },14);
     sweep(ribs,k=>{
-      const t=.818+k*.182,merged=root+(i-root)*(1-Math.min(1,k/.61));
-      return [merged*turn/columns,t,Math.max(.04,.37*(1-k*.86)),Math.max(.11,.50*(1-k*.76))];
-    },18);
+      const t=.805+k*.133,index=T.MathUtils.lerp(i,root,k);
+      return [index*turn/columns,t,.56-.23*k,.69-.27*k];
+    },17);
+    if(i%2===0)sweep(ribs,k=>[root*turn/columns,.938+.0604*k,.38-.28*k,.45-.32*k],12);
   }
   for(let i=0;i<28;i++)for(const side of [-1,1]){
     sweep(ribs,k=>{
-      const t=.835+k*.105,index=2*i+.5+side*k*2;
-      return [index*turn/columns,t,.43-.16*k,.37];
+      const t=.805+k*.133,index=2*i+.5+side*(1.5-k);
+      return [index*turn/columns,t,.29-.10*k,.40-.14*k];
     },14);
-    sweep(fin,k=>[(2*i+.5+side*1.55*k)*turn/columns,k*.043,.36-.11*k,.46],7);
+  }
+  const hallFloor=new Surface(),spandrel=new Surface(),spire=new Surface(),floor=345;
+  const stoneFloor=new T.MeshStandardMaterial({color:0x979a94,metalness:.28,roughness:.28,side:T.DoubleSide});
+  const capMetal=architecturalMetal(0xc6c8c5,.27);
+  annulus(hallFloor,0,radius(floor/height)-.24,floor,112);
+  orbitWall(spandrel,radius(floor/height)-.25,floor-.45,floor,112,new T.Color('#bcc4c1'));
+  for(const t of [.900,.930,.956,.976,.986]){
+    const r=radius(t)*.90,y=height*t;
+    for(let i=0;i<28;i++){
+      const p=polar(turn*(i+.25)/28,r,y),q=polar(turn*(i+1.25)/28,r,y);
+      innerFrame.between(...p,...q,t>.956?.073:.11);
+    }
   }
   for(let i=0;i<28;i++){
     const a=i*turn/28;
     for(const sign of [-1,1]){
-      const A=polar(a,.89*radius(.854),height*.854),
-        B=polar(a+sign*.050,.87*radius(.919),height*.919),
-        C=polar(a+sign*.007,.87*radius(.975),height*.975);
+      const A=polar(a,.94*radius(floor/height),floor),
+        B=polar(a+sign*.087,.90*radius(.933),height*.933),
+        C=polar(a+sign*.012,.88*radius(.979),height*.979);
       innerFrame.between(...A,...B,.26);innerFrame.between(...B,...C,.19);
       if(i%2===0){guides.between(...A,...B,.11);guides.between(...B,...C,.12);}
     }
+    const p=polar(a,.81,height*.9984),q=polar(a+turn/28,.81,height*.9984);
+    const u=polar(a,.42,height),v=polar(a+turn/28,.42,height);
+    spire.quad(p,q,v,u);
   }
+  annulus(spire,0,.42,height,28);
+  hallFloor.mesh(group,stoneFloor,'345米空中大厅楼板');spandrel.mesh(group,m.rail,'空中大厅楼板包边');spire.mesh(group,capMetal,'不锈钢尖顶收口');
   innerFrame.flush(group);guides.flush(group);
   facade.mesh(group,glass,'低辐射弧面双层玻璃',true);crown.mesh(group,skyGlass,'锥形空中大厅玻璃');
   fin.mesh(group,mainFin,'不锈钢折面翼柱 · 基座分叉');
@@ -139,6 +193,32 @@ function lobby(group,m){
   const stainless=architecturalMetal(0xa9ad9f,.25,'street');
   const bands=new Instances(new T.BoxGeometry(1,1,1),stainless,'大堂雨棚收边');
   const warm=new T.MeshStandardMaterial({color:0xe7b98a,emissive:0xffb56d,emissiveIntensity:.78,roughness:.48,side:T.DoubleSide});
+  const core=new Surface(),thresholds=new Surface(),ceiling=new Surface(),elevators=new Surface();
+  const limestone=bayStone();limestone.color.setHex(0xd5c6ae);limestone.name='大堂浅色石板';
+  const portal=architecturalMetal(0x998c79,.35,'street');
+  const lobbyLite=new T.MeshPhysicalMaterial({color:0xc0cdcd,metalness:.37,roughness:.096,transparent:true,opacity:.36,
+    clearcoat:.85,clearcoatRoughness:.065,depthWrite:false,side:T.FrontSide,envMapIntensity:1.08});
+  lobbyLite.userData.cityProbe='street';
+  annulus(thresholds,16.4,r+.01,.238,112);
+  annulus(ceiling,15.9,r,h-.07,112);
+  for(let i=0;i<28;i++){
+    const a=i*turn/28,b=(i+1)*turn/28,rad=16.45;
+    const p=polar(a,rad,.24),q=polar(b,rad,.24),length=Math.hypot(q[0]-p[0],q[2]-p[2]);
+    const door=i%4===1||i%4===2;
+    function face(s,h0,h1,r0=rad){
+      s.quad(polar(a,r0,h0),polar(b,r0,h0),polar(b,r0,h1),polar(a,r0,h1),
+        [[0,h0],[length,h0],[length,h1],[0,h1]]);
+    }
+    if(door){
+      face(elevators,.24,3.25,rad-.14);face(core,3.25,h);
+      const mid=polar((a+b)*.5,rad-.09,.25),top=polar((a+b)*.5,rad-.09,3.17);
+      gaskets.between(...mid,...top,.019);
+      const loc=polar((a+b)*.5,rad+.05,3.43);bands.at(...loc,1.65,.06,.13,(a+b)*.5);
+    }else face(core,.24,h);
+    const rib=polar(a,rad+.03,.24),head=polar(a,rad+.03,h-.10);
+    gaskets.between(...rib,...head,.032);
+  }
+  for(const radius of [18.4,21.8,25.3])annulus(channels,radius,radius+.052,h-.105,112);
   orbitWall(glassDrum,r,.24,h,112,new T.Color('#f0e6ce'));
   annulus(soffit,r-.12,radius(h/height)+.16,h,112);
   for(let i=0;i<4;i++){
@@ -149,6 +229,15 @@ function lobby(group,m){
   for(let i=0;i<56;i++){
     const a=i/56*turn,P=polar(a,r+.08,.28),Q=polar(a,r+.08,h-.06);
     gaskets.between(...P,...Q,i%2?.058:.11);
+    const next=(i+1)*turn/56;
+    for(const y of [3.2,7.4,10.91]){
+      const p=polar(a,r+.04,y),q=polar(next,r+.04,y);
+      gaskets.between(...p,...q,y<4?.055:.037);
+    }
+    if(i%2===0){
+      const at=polar(a,r+.04,2.65);
+      bands.at(...at,.11,.54,.09,a);
+    }
     if(i%4===0){
       const rot=a;
       const p=polar(a,r+1.0,3.1);
@@ -165,7 +254,9 @@ function lobby(group,m){
     }
   }
   paving.mesh(group,m.paving,'塔前花岗岩铺地');soffit.mesh(group,m.cream,'双层入口室外吊顶');channels.mesh(group,warm,'环形嵌入式照明');
-  glassDrum.mesh(group,m.atriumGlass,'后退式高透明入口大堂');gaskets.flush(group);bands.flush(group,true);blades.flush(group);
+  const polished=bayStone();polished.color.setHex(0xaaa9a1);polished.roughness=.31;
+  core.mesh(group,limestone,'通高石材门厅内壁');thresholds.mesh(group,polished,'门厅石材地面');ceiling.mesh(group,m.cream,'门厅天花');elevators.mesh(group,portal,'退入式金属内门');
+  glassDrum.mesh(group,lobbyLite,'后退式高透明入口大堂');gaskets.flush(group);bands.flush(group,true);blades.flush(group);
   const board=new T.Group();board.position.set(35.45,0,9.5);board.rotation.y=1.32;group.add(board);
   const c=document.createElement('canvas');c.width=1024;c.height=208;const ctx=c.getContext('2d');
   ctx.fillStyle='#393e40';ctx.fillRect(0,0,c.width,c.height);

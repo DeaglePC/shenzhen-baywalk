@@ -1,5 +1,7 @@
 import * as T from 'three';
 import {Surface,Instances,ribbon,along,random} from './city-geometry.js';
+import {columnsOnBridge} from './talent-bridge.js';
+import {engravedFaces} from './talent-faces.js';
 import {photo} from './city-materials.js';
 import {architecturalMetal} from './city-curtainwall.js';
 
@@ -13,7 +15,7 @@ function columnMaterial(){
   // Scattered apertures in the powder-coated cylindrical sleeve. The bright
   // acrylic core is slightly recessed inside the dark countersunk rim.
   for(let i=0;i<640;i++){
-    const y=rng()*h;if(y>h*.52&&y<h*.76)continue;
+    const y=rng()*h;if(y>h*.37&&y<h*.79)continue;
     const x=rng()*w,r=2.2+Math.pow(rng(),2.7)*9.6,light=.4+rng()*.57;
     for(const xx of [x-w,x,x+w]){
       for(const [c,radius,color] of [[albedo,r+1.6,'#172124'],[albedo,r+.48,'#87918f'],[albedo,r-.15,'#ccd4cc'],[metal,r,'#242424'],[rough,r,'#4b4b4b'],[glow,r-.3,'rgba(210,231,232,'+light+')']]){
@@ -21,12 +23,9 @@ function columnMaterial(){
       }
     }
   }
-  const c1=h*.52,c2=h*.76;
-  albedo.fillStyle='#a5aca3';albedo.fillRect(0,c1,w,c2-c1);
+  const c1=h*.37,c2=h*.79;
+  albedo.fillStyle='#adb1ae';albedo.fillRect(0,c1,w,c2-c1);
   for(let i=0;i<1150;i++){const l=Math.floor(100+rng()*100);albedo.fillStyle='rgba('+l+','+Math.min(255,l+2)+','+l+',.15)';albedo.fillRect(rng()*w,c1+rng()*(c2-c1),10+rng()*120,.45);}
-  albedo.fillStyle='#434c4c';albedo.textAlign='center';albedo.font='500 24px "Microsoft YaHei",sans-serif';albedo.fillText('人才星光桥',w*.52,c1+118);
-  albedo.font='11px Arial';albedo.fillText('STARLIGHT BRIDGE',w*.52,c1+142);
-  albedo.font='13px "Microsoft YaHei",sans-serif';albedo.fillText('深圳人才公园',w*.52,c1+204);albedo.font='10px Arial';albedo.fillText('NANSHAN · SHENZHEN',w*.52,c1+226);
   for(const y of [c1,c2]){albedo.fillStyle='#4e5654';albedo.fillRect(0,y,w,2);}
   rough.fillStyle='#696969';rough.fillRect(0,c1,w,c2-c1);
   const tx=contexts.map((c,i)=>{const t=new T.CanvasTexture(c.canvas);t.colorSpace=i===0||i===3?T.SRGBColorSpace:T.NoColorSpace;t.wrapS=T.RepeatWrapping;t.anisotropy=8;return t;});
@@ -83,10 +82,14 @@ export function starBridge(root,rd,m){
   const blue=new T.MeshStandardMaterial({map:photo('asphalt.webp'),color:0x4599b6,roughness:.87,side:T.DoubleSide});
   lane.mesh(root,blue,'环湖蓝色慢跑带');paint.mesh(root,m.paint,'跑道白边');
   const column=columnMaterial();m.walls.push(column);
+  const columns=columnsOnBridge(p);
+  root.userData.talentReady=engravedFaces(root,columns,m);
   const post=new Instances(new T.CylinderGeometry(.98,1,1,32,1),column,'穿孔星光柱');
   const satin=architecturalMetal(0xafb9b9,.24,'bridge'),steel=architecturalMetal(0x5e6f70,.28,'bridge');
   const cap=new Instances(new T.CylinderGeometry(1,1,1,24,1),satin,'圆形不锈钢柱脚');
   const screws=new Instances(new T.CylinderGeometry(1,1,1,6),steel,'地脚紧固件');
+  const seams=new Instances(new T.BoxGeometry(1,1,1),steel,'铭牌侧接缝');
+  const pins=new Instances(new T.SphereGeometry(1,8,5),satin,'金属铭牌沉头螺钉');
   const handrail=new Instances(new T.CylinderGeometry(1,1,1,10,1,true),steel,'深色扶手');
   const wire=new Instances(new T.CylinderGeometry(1,1,1,4,1,true),satin,'细钢索水平防护');
   const bevel=new Instances(new T.BoxGeometry(.77,1,1.25),satin,'斜撑扁钢');
@@ -104,13 +107,17 @@ export function starBridge(root,rd,m){
       const nx=-dz,nz=dx,ox=nx*off,oz=nz*off;
       bevel.between(x+ox-dx*.17-nx*flank*.12,h+.15,z+oz-dz*.17-nz*flank*.12,x+ox+dx*.2,h+1.10,z+oz+dz*.2,.108);
     });
-    along(p,9.2,5,(x,z,dx,dz)=>{
-      const ox=-dz*(11.8*.5-.38)*flank,oz=dx*(11.8*.5-.38)*flank,rot=Math.atan2(dx,dz);
-      const plaqueYaw=Math.atan2(-dz*flank,dx*flank);post.at(x+ox,h+2.10,z+oz,.216,4.20,.216,plaqueYaw);cap.at(x+ox,h+.036,z+oz,.265,.062,.265,rot);
-      for(let k=0;k<4;k++){const a=rot+Math.PI*.5*k;screws.at(x+ox+.238*Math.sin(a),h+.077,z+oz+.238*Math.cos(a),.014,.013,.014,rot);}
-      cap.at(x+ox,h+4.20,z+oz,.212,.020,.212,rot);
-    });
   }
-  [post,cap,screws,handrail,wire,bevel,kick].forEach(obj=>obj.flush(root,obj===post||obj===bevel));
+  for(const {x,z,dx,dz} of columns){
+    const rot=Math.atan2(dx,dz);post.at(x,h+2.10,z,.216,4.20,.216,rot);
+    cap.at(x,h+.036,z,.265,.062,.265,rot);
+    for(let k=0;k<4;k++){const a=rot+Math.PI*.5*k;screws.at(x+.238*Math.sin(a),h+.077,z+.238*Math.cos(a),.014,.013,.014,rot);}
+    cap.at(x,h+4.20,z,.212,.020,.212,rot);
+    for(const sign of [-1,1]){
+      seams.at(x+sign*.214*dx,4.166,z+sign*.214*dz,.004,1.75,.005,rot);
+      for(const y of [3.34,4.98])pins.at(x+sign*.216*dx,y,z+sign*.216*dz,.009,.009,.004,rot);
+    }
+  }
+  [post,cap,screws,seams,pins,handrail,wire,bevel,kick].forEach(obj=>obj.flush(root,obj===post||obj===bevel));
 }
 

@@ -83,7 +83,7 @@ export function createCity(scene,map,options={}){
   const ready=canopyData.then(async trees=>{
     if(!far.active)return;
     foliage=furnishing(root,map,m,grid,trees);
-    await root.userData.foliageReady;
+    await Promise.all([root.userData.foliageReady,root.userData.talentReady]);
   });
   function roadAt(x,z){
     let height=0;

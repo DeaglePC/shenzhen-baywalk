@@ -10,6 +10,8 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
   const captures=[
     {key:'district',at:new T.Vector3(-241,87,-425),target:null},
     {key:'bridge',at:new T.Vector3(215.2,4.25,136),target:null},
+    {key:'library',at:new T.Vector3(-432,3.1,232),target:null},
+    ...(low?[]:[{key:'gallery',at:new T.Vector3(-344,2.8,430),target:null}]),
     {key:'street',at:new T.Vector3(-126.8,1.44,-420.7),target:null}
   ];
   const waterProxy=new T.MeshStandardMaterial({color:0x345951,roughness:.25,metalness:.28});
@@ -56,7 +58,8 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       sun.position.copy(oldSun);sun.target.position.copy(oldTarget);sun.shadow.needsUpdate=true;
     }
     for(const m of materials){
-      const tex=scene.userData[m.userData.cityProbe+'Probe'];
+      const key=m.userData.cityProbe;
+      const tex=scene.userData[key+'Probe']??(key==='gallery'?scene.userData.libraryProbe:null);
       if(!tex)continue;
       m.envMap=tex;m.envMapRotation?.set(0,0,0);m.needsUpdate=true;
     }

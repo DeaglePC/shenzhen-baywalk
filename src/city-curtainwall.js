@@ -8,6 +8,8 @@ const styles={
   office: { tint:0xa4aaa8, panel:[1.68,3.8], metal:.41, rough:.20, slab:.18, room:.62 },
   fins:   { tint:0xb4bcb7, panel:[1.38,3.65], metal:.45, rough:.18, slab:.14, room:.52 },
   bamboo: { tint:0x9fb7c4, panel:[1.37,4.48], metal:.54, rough:.13, slab:.075, room:.32 },
+  bayOffice: { tint:0xa8bac5, panel:[1.47,4.56], metal:.50, rough:.151, slab:.062, room:.39 },
+  bayHome: { tint:0x98a7a6, panel:[1.72,4.15], metal:.32, rough:.163, slab:.056, room:.55 },
   atrium: { tint:0xa7c3c4, panel:[1.83,4.5], metal:.36, rough:.12, slab:.038, room:.68 }
 };
 export function curtainWall(style,uvScale=[1,1],probe='district'){
@@ -29,7 +31,8 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
     Object.assign(shader.uniforms,{
       glassUVScale:{value:new T.Vector2(...uvScale)},glassPane:{value:new T.Vector2(...opt.panel)},
       glassTint:{value:new T.Color(opt.tint)},glassProfile:{value:new T.Vector3(opt.rough,opt.metal,opt.slab)},
-      roomStrength:{value:opt.room},glassCapture:anchor,hasGlassCapture:local
+      roomStrength:{value:opt.room},glassCapture:anchor,hasGlassCapture:local,
+      residence:{value:style==='bayHome'?1:0},bayCladding:{value:style.startsWith('bay')?1:0}
     });
     shader.vertexShader=`
       uniform vec2 glassUVScale;
@@ -47,7 +50,7 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
       uniform vec2 glassPane;
       uniform vec3 glassTint;
       uniform vec3 glassProfile;
-      uniform float roomStrength,hasGlassCapture;
+      uniform float roomStrength,hasGlassCapture,residence,bayCladding;
       uniform vec3 glassCapture;
       varying vec2 vFacadeMeters;
       varying vec3 vPanePosition;
@@ -103,13 +106,16 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
       float shadeLevel=mix(1.,.74,shade*closeDetail);
       vec3 finish=glassTint*(.48+.49*closeRoom+.08*bayRnd)*shadeLevel;
       finish=mix(finish,vec3(.25,.27,.265),shade*closeDetail*.43);
+      float curtain=1.-smoothstep(.03,.12,abs(hit.x-.11)-(.025+.12*roomGroup));
+      float pleat=.93+.07*cos(130.*hit.x);
+      finish=mix(finish,vec3(.345,.326,.286)*pleat,residence*curtain*closeDetail*.64);
       vec3 satin=mix(vec3(.15,.19,.195),vec3(.39,.42,.42),frameX*.75+frameY*.2);
       diffuseColor.rgb=mix(satin,finish,glassArea)*diffuseColor.rgb;
       float lamella=glazingBand(fract(grid.y*1.0+.15),.012,aa.y);
       vec3 lampColor=mix(vec3(1.0,.52,.24),vec3(.80,.89,.97),smoothstep(.85,1.11,roomGroup+floorRnd*.24));
       float luminance=occupancy*(.12+.89*night)*glassArea;
       float ceiling=1.-smoothstep(.025+aa.y*.38,.13+aa.y*.65,abs(pane.y-.87));
-      float interiorLamp=roomStrength*(.22+.34*closeRoom+.90*ceiling+.48*lamella)*luminance;
+      float interiorLamp=roomStrength*(.22+.34*closeRoom+.90*ceiling+.48*lamella)*luminance*mix(1.,.52+.48*night,bayCladding);
     `);
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`
       #include <roughnessmap_fragment>
@@ -153,6 +159,29 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
 export function architecturalMetal(color,roughness,probe='district'){
   const mat=new T.MeshPhysicalMaterial({color,metalness:.88,roughness,clearcoat:.24,clearcoatRoughness:.18,envMapIntensity:1.14,side:T.DoubleSide});
   mat.userData.cityProbe=probe;
+  return mat;
+}
+
+// The pale cladding has honed faces and narrow panel joints that are visible
+// from the promenade. All coordinates are in metres, including sloping bands.
+export function bayStone() {
+  const mat=new T.MeshStandardMaterial({color:0xc9c7bb,roughness:.61,metalness:.08,side:T.DoubleSide});
+  mat.name='深圳湾一号 · 分缝浅色石材';
+  mat.customProgramCacheKey=()=> 'one-bay-honed-stone';
+  mat.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec2 vStoneM;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n vStoneM=uv;');
+    shader.fragmentShader='varying vec2 vStoneM;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
+      #include <color_fragment>
+      vec2 cell=vStoneM/vec2(1.62,.83);
+      vec2 aa=max(fwidth(cell),vec2(.0001)),d=abs(fract(cell+.5)-.5);
+      vec2 joint=(1.-smoothstep(vec2(.002),.004+aa*.68,d))*(1.-smoothstep(.07,.49,aa));
+      vec2 id=floor(cell);
+      float slab=fract(sin(dot(mod(id,149.),vec2(52.7,17.1)))*4376.9);
+      float grain=sin(vStoneM.x*54.+sin(vStoneM.y*19.))*sin(vStoneM.y*78.);
+      diffuseColor.rgb*= (.973+.044*slab-.28*max(joint.x,joint.y)+.014*grain*(1.-smoothstep(.008,.048,max(aa.x,aa.y))));
+    `);
+  };
   return mat;
 }
 

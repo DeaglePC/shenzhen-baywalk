@@ -81,6 +81,26 @@ function trim(poly,measure){
   return ret;
 }
 const ellipseDistance=(x,z,e)=>Math.hypot((x-e[0])/e[2],(z-e[1])/e[3]);
+// Expansion joints follow the diamond axes. Their footprint fades below one
+// pixel, so an aerial view shows a silver skin rather than a shimmering grid.
+function coatedPanels(mat,cx,cz){
+  mat.customProgramCacheKey=()=> 'cocoon-cassette-v2';
+  mat.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec2 cocoonCell;\n'+shader.vertexShader;
+    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+      vec2 grid=vec2(uv.x*${cx.toFixed(1)},(1.-uv.y)*${cz.toFixed(1)});
+      cocoonCell=vec2(grid.x+grid.y,grid.x-grid.y);`);
+    shader.fragmentShader='varying vec2 cocoonCell;\n'+shader.fragmentShader;
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      vec2 cell=cocoonCell+0.5, fw=max(fwidth(cell),vec2(.0001));
+      vec2 d=abs(fract(cell+.5)-.5);
+      vec2 weld=(1.-smoothstep(vec2(.003)-fw*.45,vec2(.011)+fw*.45,d))
+                   * min(vec2(1.),vec2(.017)/fw);
+      float plate=fract(sin(dot(floor(cell),vec2(17.37,73.13)))*4391.);
+      diffuseColor.rgb*=(.974+.048*plate)*(1.-.31*max(weld.x,weld.y));`);
+  };
+}
 function roof(root,hole){
   const gap=roofMap(hole),funnel=[83.6,-791.9],cache=new Map();
   function pos(u,v){
@@ -94,7 +114,7 @@ function roof(root,hole){
     let y=eave+(s[4]-eave)*Math.sin(phi)**.77;
     // A saddle around the football oculus rises to the ridge at the two
     // ends of the field. Its long sides dip towards a spectator's sightline.
-    const head=ease(119,183,x);
+    const head=ease(119,183,x)*(1-ease(274,328,x));
     y+=head*(3.2*Math.sin(phi*2)**2-4.8*Math.sin(phi)**8);
     const r=Math.hypot(x-funnel[0],z-funnel[1]);
     if(r<37)y-=2.4*(1-ease(20,37,r));
@@ -109,14 +129,16 @@ function roof(root,hole){
     normal=new T.Vector3(s[0]-n[0],s[1]-n[1],s[2]-n[2]).cross(along).normalize().toArray();
     normalCache.set(k,normal);return normal;
   }
-  const cx=58,cz=30,hi=new Faces(),lo=new Faces(),returns=new Faces();
+  const cx=64,cz=28,hi=new Faces(),lo=new Faces(),returns=new Faces(),soffit=new Faces();
   const c=document.createElement('canvas');c.width=2048;c.height=1024;
   const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);
   ctx.globalCompositeOperation='destination-out';
   const edge=[[0,-1],[1,0],[0,1],[-1,0]],round=rounded(2,.30);
   const toUV=p=>[p[0],1-p[1]];
   const outside=p=>{const v=pos(...p);return Math.min(gap(v[0],v[2]),Math.hypot(v[0]-funnel[0],v[2]-funnel[1])-funnelCut);};
-  const facadeSilver=new T.Color('#c7d1d1'),rimCol=new T.Color('#aebbbc'),vColor=new T.Color();
+  const facadeSilver=new T.Color('#cfceca'),edgeCol=new T.Color('#dcd9d1');
+  const rimCol=new T.Color('#969996'),shadowCol=new T.Color('#737b7c'),backCol=new T.Color('#a6a8a0'),vColor=new T.Color();
+  const offset=(p,n,d)=>[p[0]-n[0]*d,p[1]-n[1]*d,p[2]-n[2]*d];
   // Two staggered rows per diamond. All sections share the same reticulated
   // layout across the pool, gym, plaza tree and stadium roof.
   for(let j=0;j<=cz*2;j++){
@@ -137,7 +159,9 @@ function roof(root,hole){
       const halls=Math.min(ellipseDistance(x,z,ranges.swimming),ellipseDistance(x,z,ranges.gym));
       const westHole=Math.max((1-ease(.26,.76,across))*.88,
                               ease(.97,1.69,halls)*(.12+.74*ease(28,65,x)));
-      const fieldHole=ease(8,42,oc)*(.48+.49*(1-across)**.55);
+      // In the Sea Gate photograph the center of the raised arch is clad.
+      // The openwork spreads out from its two sides in scalloped rows.
+      const fieldHole=ease(8,40,oc)*(.04+.93*(1-ease(.06,.99,across))**.66);
       let open=lerp(westHole,fieldHole,east);
       if(fc<51)open=Math.max(open,.77*(1-ease(28,51,fc)));
       // Closed elliptical double-layer hall roofs read as quieter oval caps.
@@ -151,24 +175,26 @@ function roof(root,hole){
       const flat=diamond.map(p=>{const P=pos(...p);return lo.vertex(P,metallic(P),toUV(p),roofNormal(p));});
       lo.fan(flat);
       if(open<.095||cut||diamond.length!==4||u<.0001||u>.9999||v<.0001||v>.9999){
-        const ring=diamond.map(p=>{const P=pos(...p);return hi.vertex(P,metallic(P),null,roofNormal(p));});
+        const ring=diamond.map(p=>{const P=pos(...p);return hi.vertex(P,metallic(P),toUV(p),roofNormal(p));});
         hi.fan(ring);continue;
       }
       // Rounded rectangular waterjet cuts in diamond-shaped steel islands.
       // Outer support points are ray intersections with the exact shared cell.
-      const shell=[],holeUV=[],returnIDs=[],wallTop=[];
-      const pu=pos(clamp(u+.0004,0,1),v),pv=pos(u,clamp(v+.0004,0,1));
-      const A=new T.Vector3(...pu).sub(new T.Vector3(...center));
-      const B=new T.Vector3(...pv).sub(new T.Vector3(...center));
-      const n=B.cross(A).normalize();
-      const thick=.34+.16*open;
+      const shell=[],holeUV=[],walls=[],back=[];
+      // The steel members are welded closed boxes with a folded perimeter.
+      // The inside aperture is slightly narrower than the opening in the face.
+      const thick=.46+.42*open;
       for(const r of round){
         const scale=1/(Math.abs(r[0])+Math.abs(r[1]));
         const out=unit(r,scale),inside=unit(r,open);
         if(out[0]<-.000001||out[0]>1.000001||out[1]<-.000001||out[1]>1.000001)continue;
-        const P=pos(...out),Q=pos(...inside),base=[Q[0]-n.x*thick,Q[1]-n.y*thick,Q[2]-n.z*thick];
-        shell.push([hi.vertex(P,metallic(P),null,roofNormal(out)),hi.vertex(Q,metallic(Q),null,roofNormal(inside))]);
-        wallTop.push(returns.vertex(Q,rimCol));returnIDs.push(returns.vertex(base,rimCol));
+        const P=pos(...out),Q=pos(...inside),N=roofNormal(out),M=roofNormal(inside);
+        const fold=unit(r,Math.max(.055,open-.036)),foot=pos(...fold);
+        const lead=offset(foot,M,.085),base=offset(foot,M,thick);
+        shell.push([hi.vertex(P,metallic(P),toUV(out),N),hi.vertex(Q,metallic(Q),toUV(inside),M)]);
+        walls.push([returns.vertex(Q,edgeCol),returns.vertex(lead,rimCol),returns.vertex(base,shadowCol)]);
+        back.push([soffit.vertex(offset(P,N,thick),backCol,null,N.map(v=>-v)),
+                   soffit.vertex(base,backCol,null,M.map(v=>-v))]);
         holeUV.push(inside);
       }
       if(shell.length<4)continue;
@@ -176,19 +202,23 @@ function roof(root,hole){
       for(let k=0;k<shell.length;k++){
         const h=(k+1)%shell.length,[a,b]=shell[k],[d,e]=shell[h];
         hi.ix.push(a,b,e,a,e,d);
-        returns.ix.push(wallTop[k],returnIDs[k],returnIDs[h],wallTop[k],returnIDs[h],wallTop[h]);
+        const A=walls[k],B=walls[h],K=back[k],H=back[h];
+        for(let l=0;l<2;l++)returns.ix.push(A[l],A[l+1],B[l+1],A[l],B[l+1],B[l]);
+        soffit.ix.push(K[0],H[1],K[1],K[0],H[0],H[1]);
         const [U,V]=holeUV[k];if(k===0)ctx.moveTo(U*c.width,V*c.height);else ctx.lineTo(U*c.width,V*c.height);
       }
       ctx.closePath();ctx.fill();
     }
   }
-  const steel=new T.MeshStandardMaterial({vertexColors:true,metalness:.53,roughness:.37,side:T.DoubleSide});
+  const steel=new T.MeshStandardMaterial({vertexColors:true,metalness:.43,roughness:.35,side:T.DoubleSide});
+  const boxed=new T.MeshStandardMaterial({vertexColors:true,metalness:.39,roughness:.41,side:T.DoubleSide});
+  coatedPanels(steel,cx,cz);
   const high=new T.Group(),low=new T.Group();
   high.add(hi.mesh(steel,'银色冲孔钢板与封闭场馆屋面'));
-  high.add(returns.mesh(steel,'镂空网壳内缘与构件厚度'));
+  high.add(returns.mesh(boxed,'扭曲箱形钢网 · 折边和腹板'),soffit.mesh(boxed,'箱形钢网 · 内侧封板'));
   // At district distances the same varying holes survive in mipmapped alpha.
   const alpha=new T.CanvasTexture(c);alpha.colorSpace=T.SRGBColorSpace;alpha.anisotropy=6;
-  const far=steel.clone();far.map=alpha;far.alphaTest=.4;far.alphaToCoverage=true;
+  const far=steel.clone();far.map=alpha;far.alphaTest=.4;far.alphaToCoverage=true;coatedPanels(far,cx,cz);
   low.add(lo.mesh(far,'远景 · 连续网壳'));
   const lod=new T.LOD();lod.name='春茧连续网壳';lod.position.set(70,0,-790);
   for(const g of [high,low])g.position.set(-70,0,790);
@@ -212,7 +242,115 @@ function roof(root,hole){
     edgeSkin.quad([a[0],h-.26,a[1]],[a[0],h-1.9,a[1]],[b[0],k-1.9,b[1]],[b[0],k-.26,b[1]]);
   }
   edgeSkin.mesh(root,new T.MeshStandardMaterial({color:0xb6bdba,roughness:.45,metalness:.63,side:T.DoubleSide}),'体育场天窗金属封边');
-  return {ceiling,pos,gap};
+  // The lifted north/south eaves and the cut eastern end expose a continuous
+  // boxed edge. The dark soffit is visible when standing at the entrance.
+  const edgeSteel=new Surface(),lip=new T.Color('#d9d6cb'),web=new T.Color('#969998'),belly=new T.Color('#616867');
+  for(const [along,end] of [['long',0],['long',1],['short',0],['short',1]]){
+    const long=along==='long',n=long?160:100;
+    let last=null;
+    for(let k=0;k<=n;k++){
+      const t=k/n,u=long?t:end,v=long?end:t,outer=pos(u,v);
+      const next=long?pos(u,end===0?.006:.994):pos(end===0?.003:.997,v);
+      const inward=new T.Vector3(...next).sub(new T.Vector3(...outer)).normalize();
+      const depth=long?.56:1.18,reach=long?1.18:1.65;
+      const lower=[outer[0],outer[1]-depth,outer[2]];
+      const back=lower.map((v,i)=>v+inward.getComponent(i)*reach);
+      const row=[outer,[outer[0],outer[1]-.13,outer[2]],lower,back,next];
+      if(last)for(let j=0;j<4;j++)edgeSteel.quad(last[j],last[j+1],row[j+1],row[j],undefined,[lip,web,belly,web][j]);
+      last=row;
+    }
+  }
+  edgeSteel.mesh(root,boxed,'海之门与抬升檐口 · 成型封边及底翼缘');
+  return {ceiling,pos,gap,porosity:alpha};
+}
+
+// A reflection on the curved arena glass sees the nearby canopy, many metres
+// closer than the skyline cubemap. Trace the actual transverse roof stations,
+// then sample the very same aperture mask used by the distant roof mesh. The
+// method also provides a daylight mask on the covered pedestrian deck.
+function reflectCanopy(material,porosity,glass){
+  const frameCount=128,profile=new Float32Array(frameCount*4);
+  for(let i=0;i<frameCount;i++){
+    const x=lerp(pathX[0],pathX.at(-1),i/(frameCount-1));
+    profile.set([station(x,1),station(x,3),station(x,4),.5*(station(x,5)+station(x,6))],4*i);
+  }
+  const frames=new T.DataTexture(profile,frameCount,1,T.RGBAFormat,T.FloatType);
+  frames.magFilter=frames.minFilter=T.NearestFilter;frames.needsUpdate=true;
+  material.customProgramCacheKey=()=>glass?'arena-cocoon-reflection-v3':'cocoon-terrace-v3';
+  material.onBeforeCompile=s=>{
+    s.uniforms.cocoonStations={value:frames};s.uniforms.cocoonCutouts={value:porosity};
+    s.vertexShader='varying vec3 cocoonWorld;\n'+s.vertexShader;
+    s.vertexShader=s.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ncocoonWorld=(modelMatrix*vec4(position,1.)).xyz;');
+    s.fragmentShader=`
+      varying vec3 cocoonWorld;
+      uniform sampler2D cocoonStations, cocoonCutouts;
+      vec3 cocoonSection(vec3 p){
+        float u=(p.x+${(-pathX[0]).toFixed(2)})/${(pathX.at(-1)-pathX[0]).toFixed(2)};
+        float at=clamp(u,0.,1.)*127., key=floor(at);
+        vec4 a=texture2D(cocoonStations,vec2((key+.5)/128.,.5));
+        vec4 b=texture2D(cocoonStations,vec2((key+1.5)/128.,.5));
+        vec4 span=mix(a,b,fract(at));
+        float t=(p.z-span.x)/(span.y-span.x);
+        float v=acos(clamp(1.-2.*t,-1.,1.))/3.14159265;
+        float h=mix(span.w,span.z,pow(max(sin(3.14159265*v),0.),.77));
+        float edge=max(max(-t,t-1.)*(span.y-span.x),max(-u,u-1.)*495.);
+        return vec3(u,v,max(p.y-h,edge));
+      }
+      float cocoonHit(vec3 o,vec3 ray){
+        float lo=.09,hi=132.;
+        if(cocoonSection(o).z>0.||cocoonSection(o+ray*hi).z<0.)return 0.;
+        for(int k=0;k<10;k++){
+          float t=.5*(lo+hi);
+          if(cocoonSection(o+ray*t).z>0.)hi=t;else lo=t;
+        }
+        vec3 hit=o+ray*(.5*(lo+hi)), section=cocoonSection(hit);
+        float sill=texture2D(cocoonStations,vec2(section.x,.5)).w;
+        if(hit.y<6.2||(min(section.y,1.-section.y)<.006&&hit.y<sill)||
+           length((hit.xz-vec2(234.,-768.))/vec2(69.,94.))<1.)return 0.;
+        float crown=length(hit.xz-vec2(83.6,-791.9));
+        float shellMask=texture2D(cocoonCutouts,vec2(section.x,1.-section.y)).a;
+        if(crown<28.5){
+          float f, bottom=0.,top=hi;
+          for(int k=0;k<12;k++){
+            vec3 q=o+ray*((bottom+top)*.5);
+            f=clamp((q.y-5.90)/max(13.,hit.y-5.90),0.,1.);
+            float radius=10.4-.68*sin(3.14159265*f)+17.9*pow(f,3.15);
+            if(length(q.xz-vec2(83.6,-791.9))>radius)bottom=.5*(bottom+top);else top=.5*(bottom+top);
+          }
+          vec3 q=o+ray*(.5*(bottom+top));
+          vec2 polar=q.xz-vec2(83.6,-791.9);
+          vec2 lattice=vec2(atan(polar.y,polar.x)*3.97887,f*6.);
+          vec2 cell=abs(fract(vec2(lattice.x+lattice.y,lattice.x-lattice.y)+.5)-.5);
+          float opening=.67+.19*smoothstep(.05,1.,f);
+          float wire=smoothstep(opening-.10,opening+.10,2.*max(cell.x,cell.y));
+          return mix(wire,shellMask,smoothstep(24.,28.5,crown));
+        }
+        return shellMask;
+      }
+    `+s.fragmentShader;
+    if(glass){
+      s.fragmentShader=s.fragmentShader.replace('#include <opaque_fragment>',`
+        vec3 eyeRay=normalize(cocoonWorld-cameraPosition);
+        vec3 paneN=inverseTransformDirection(normal,viewMatrix);
+        vec3 ray=reflect(eyeRay,paneN);
+        float cover=cocoonHit(cocoonWorld+paneN*.12,ray)*smoothstep(-.12,.15,ray.y);
+        vec3 shellLight=vec3(.135,.158,.165);
+        #if NUM_DIR_LIGHTS > 0
+          shellLight*=clamp(dot(directionalLights[0].color,vec3(.21,.72,.07))*.46,.08,1.25);
+        #endif
+        outgoingLight=mix(outgoingLight,shellLight,.57*cover);
+        #include <opaque_fragment>`);
+    }else{
+      s.fragmentShader=s.fragmentShader.replace('#include <opaque_fragment>',`
+        #if NUM_DIR_LIGHTS > 0
+          vec3 skyDir=inverseTransformDirection(directionalLights[0].direction,viewMatrix);
+          float strength=clamp(dot(directionalLights[0].color,vec3(.21,.72,.07))*.56,0.,1.);
+          float shade=cocoonHit(cocoonWorld+vec3(0.,.08,0.),skyDir);
+          outgoingLight*=mix(vec3(1.),vec3(.50,.55,.59),shade*strength);
+        #endif
+        #include <opaque_fragment>`);
+    }
+  };
 }
 function capsule(r,half=42.195,n=48){
   const a=[];
@@ -356,22 +494,54 @@ const northRamp=[[85,-864],[104,-865],[106,-935],[96,-935]];
 const gateDeck=[[307,-829],[328,-829],[332,-713],[310,-713]];
 const gateAccess=[[312,-718],[320,-718],[317,-681],[309,-681]];
 const stadiumTunnel=[[326,-774],[326,-765.6],[282,-765.6],[282,-774]];
+const gateCenter=-770.8,gateHalf=58.5,portalHalf=44.2;
+const gatePlane=dz=>326.8+dz*.014;
+function pierVolume(x,z){
+  const t=z-gateCenter,s=Math.abs(t),face=gatePlane(t);
+  return s>=portalHalf&&s<=gateHalf&&x<face+.15&&x>face-10.4;
+}
 function rampLevel(x,z,ring,inside){
   if(!inRing(x,z,ring))return null;
   const ax=(ring[0][0]+ring[1][0])*.5,az=(ring[0][1]+ring[1][1])*.5;
   const bx=(ring[2][0]+ring[3][0])*.5,bz=(ring[2][1]+ring[3][1])*.5,dx=bx-ax,dz=bz-az;
   return lerp(inside,groundY,clamp(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz),0,1));
 }
-function buildingBase(root,m,shape,hole,ceiling,near){
+function buildingBase(root,m,shape,hole,roofData,near){
+  const {ceiling,porosity}=roofData;
   const plaza=new Surface(),stair=new Surface(),undercroft=new Surface(),facades=new Surface(),cap=new Surface(),stile=new Surface();
   const chalk=new T.Color('#e7e2d8'),shade=new T.Color('#a9aaa4'),gl=new T.Color();
   const metal=new T.MeshStandardMaterial({color:0xa3b2b5,roughness:.375,metalness:.58});
   const rails=new Instances(new T.CylinderGeometry(1,1,1,6,1,true),metal,'网壳下枝形立柱');
+  const reveals=new Surface(),darkJamb=new T.Color('#5a6060'),soffit=new T.Color('#767871'),piers=new T.Color('#b9b9ae');
+  const shopGlass=new T.Color('#535f5e'),vent=new T.Color('#414948');
   plaza.polygon(shape,[hole],terraceY,4,chalk);
   for(let i=0;i<shape.length;i++){
     const a=shape[i],b=shape[(i+1)%shape.length],mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
     if(inRing(...mid,southStair)||inRing(...mid,northRamp)||inRing(...mid,stadiumTunnel))continue;
-    undercroft.quad([a[0],.28,a[1]],[a[0],terraceY,a[1]],[b[0],terraceY,b[1]],[b[0],.28,b[1]],undefined,shade);
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]),dx=(b[0]-a[0])/len,dz=(b[1]-a[1])/len;
+    const inward=(-dz*(75-mid[0])+dx*(-778-mid[1]))>=0?1:-1;
+    const P=(t,y,depth=0)=>[lerp(a[0],b[0],t)-depth*dz*inward,y,lerp(a[1],b[1],t)+depth*dx*inward];
+    const n=Math.max(1,Math.round(len/8.8));
+    // A recessed concrete plinth, floor beam and individually framed bays
+    // replace a blank retaining wall. The central field tunnel remains open.
+    for(let k=0;k<n;k++){
+      const u=k/n,v=(k+1)/n,U=u+.33/len,V=v-.33/len;
+      if(inRing(lerp(a[0],b[0],(u+v)/2),lerp(a[1],b[1],(u+v)/2),stadiumTunnel))continue;
+      undercroft.quad(P(u,5.24),P(u,terraceY),P(v,terraceY),P(v,5.24),undefined,chalk);
+      undercroft.quad(P(u,5.24),P(v,5.24),P(v,5.24,2),P(u,5.24,2),undefined,soffit);
+      undercroft.quad(P(u,.28),P(u,5.24),P(U,5.24),P(U,.28),undefined,piers);
+      undercroft.quad(P(V,.28),P(V,5.24),P(v,5.24),P(v,.28),undefined,piers);
+      for(const t of [U,V])undercroft.quad(P(t,.28),P(t,5.24),P(t,5.24,2),P(t,.28,2),undefined,darkJamb);
+      undercroft.quad(P(U,.28),P(V,.28),P(V,.28,2),P(U,.28,2),undefined,shade);
+      const glazed=k%4!==2;
+      reveals.quad(P(U,.28,2),P(U,5.24,2),P(V,5.24,2),P(V,.28,2),undefined,glazed?shopGlass:vent);
+      if(glazed){
+        for(let pane=1;pane<4;pane++){
+          const t=lerp(U,V,pane/4);
+          reveals.quad(P(t,.28,1.94),P(t,5.24,1.94),P(t+.055/len,5.24,1.94),P(t+.055/len,.28,1.94),undefined,soffit);
+        }
+      }else for(let y=.55;y<5.1;y+=.32)reveals.quad(P(U,y,1.96),P(U,y+.07,1.9),P(V,y+.07,1.9),P(V,y,1.96),undefined,darkJamb);
+    }
   }
   for(const [r,stairs] of [[southStair,true],[northRamp,false],[gateAccess,false],[stadiumTunnel,false]]){
     const n=stairs?34:1;
@@ -403,8 +573,8 @@ function buildingBase(root,m,shape,hole,ceiling,near){
       const a=TAU*i/N,b=TAU*(i+1)/N;oval.push([cx+rx*Math.cos(a),cz+rz*Math.sin(a)]);
       for(let j=0;j<7;j++){
         const low=lerp(terraceY,topAt(a),j/7),high=lerp(terraceY,topAt(a),(j+1)/7),L=lerp(terraceY,topAt(b),j/7),H=lerp(terraceY,topAt(b),(j+1)/7);
-        gl.set(i%13<3&&j<2?'#78949a':j<2?'#557277':'#526d77');
-        gl.multiplyScalar(.86+.16*(Math.sin(i*3.57+j*6.8)*.5+.5));
+        gl.set(i%13<3&&j<2?'#65878c':j<2?'#3e5a5f':'#45636d');
+        gl.multiplyScalar(.92+.09*(Math.sin(i*3.57+j*6.8)*.5+.5));
         facades.quad(world(a,low),world(a,high),world(b,H),world(b,L),undefined,gl);
         stile.quad(world(a,high-.076,.11),world(a,high,.11),world(b,H,.11),world(b,H-.076,.11),undefined,white);
       }
@@ -421,8 +591,8 @@ function buildingBase(root,m,shape,hole,ceiling,near){
     }
   }
   const fc=[83.6,-791.9];
-  const plant=new Faces(),reveal=new Faces(),col=new T.Color('#d6dddd'),inside=new T.Color('#9ba9a9');
-  const nAngle=25,nRows=6,roundedCut=rounded(3,.29);
+  const plant=new Faces(),reveal=new Faces(),liner=new Faces(),col=new T.Color('#d3d3c9'),inside=new T.Color('#969c97'),innerTree=new T.Color('#a5a8a0');
+  const nAngle=25,nRows=6,roundedCut=rounded(4,.29);
   function tree(a,f){
     const r=10.4-.68*Math.sin(Math.PI*f)+17.9*f**3.15;
     const x=fc[0]+r*Math.cos(a),z=fc[1]+r*Math.sin(a);
@@ -439,23 +609,26 @@ function buildingBase(root,m,shape,hole,ceiling,near){
         poly=trim(poly,p=>p[1]);poly=trim(poly,p=>1-p[1]);
         plant.fan(poly.map(p=>plant.vertex(tree(...p),col)));continue;
       }
-      const ids=[],edge=[],innerR=[];
-      const opening=.57+.25*ease(.05,1,v);
+      const ids=[],edge=[],innerR=[],back=[];
+      const opening=.67+.19*ease(.05,1,v);
+      const treeBack=(p,angle)=>[p[0]-.60*Math.cos(angle),p[1]+.20*v,p[2]-.60*Math.sin(angle)];
       for(const ra of roundedCut){
         const outer=uv(ra,1/(Math.abs(ra[0])+Math.abs(ra[1]))),inner=uv(ra,opening);
-        const q=tree(...inner),x=q[0]-fc[0],z=q[2]-fc[1],l=Math.hypot(x,z);
-        ids.push([plant.vertex(tree(...outer),col),plant.vertex(q,col)]);
-        edge.push(reveal.vertex(q,inside));innerR.push(reveal.vertex([q[0]-.31*x/l,q[1]-.20*v,q[2]-.31*z/l],inside));
+        const q=tree(...inner),p=tree(...outer),qBack=treeBack(q,inner[0]);
+        ids.push([plant.vertex(p,col),plant.vertex(q,col)]);
+        edge.push(reveal.vertex(q,col));innerR.push(reveal.vertex(qBack,inside));
+        back.push([liner.vertex(treeBack(p,outer[0]),innerTree),liner.vertex(qBack,innerTree)]);
       }
       for(let k=0;k<ids.length;k++){
         const w=(k+1)%ids.length,[a,b]=ids[k],[d,e]=ids[w];
         plant.ix.push(a,b,e,a,e,d);
         reveal.ix.push(edge[k],innerR[k],innerR[w],edge[k],innerR[w],edge[w]);
+        const K=back[k],W=back[w];liner.ix.push(K[0],W[1],K[1],K[0],W[0],W[1]);
       }
     }
   }
   const treeSteel=new T.MeshStandardMaterial({vertexColors:true,metalness:.49,roughness:.34,side:T.DoubleSide});
-  root.add(plant.mesh(treeSteel,'大树广场 · 漏斗形钢网壳柱'),reveal.mesh(treeSteel,'倒伞柱镂空截面'));
+  root.add(plant.mesh(treeSteel,'大树广场 · 漏斗形钢网壳柱'),reveal.mesh(treeSteel,'倒伞柱镂空截面'),liner.mesh(treeSteel,'倒伞柱内侧翼缘'));
   const well=Array.from({length:54},(_,i)=>[fc[0]+10.6*Math.cos(TAU*i/54),fc[1]+10.6*Math.sin(TAU*i/54)]);
   const mold=new Surface();mold.polygon(well,[],terraceY+.03,2);mold.mesh(root,new T.MeshStandardMaterial({color:0x788481,roughness:.79}),'大树广场柱脚');
   // Bright roof panels above both double-layer halls. Sparse meridian seams,
@@ -495,6 +668,7 @@ function buildingBase(root,m,shape,hole,ceiling,near){
   };
   const paving=pavement.clone();paving.map=stone('stadium-granite',true);paving.normalMap=stone('stone-normal');
   paving.normalScale.set(.15,.15);paving.roughness=.80;
+  const coveredPaving=paving.clone();reflectCanopy(coveredPaving,porosity,false);
   const fore=new Surface(),baseX=72,baseZ=-775;
   const margin=shape.map(([x,z])=>[baseX+(x-baseX)*1.071,baseZ+(z-baseZ)*1.145]);
   // The gate fronts the existing water court (OSM 587965805); its landing
@@ -503,13 +677,14 @@ function buildingBase(root,m,shape,hole,ceiling,near){
   const surround=trim(margin,p=>shore(p[1])-p[0]);
   fore.polygon(surround,[shape],.345,4,chalk);
   for(const [sur,label] of [[deck,'东端海之门平台'],[plaza,'二层公共平台'],[stair,'大树广场南入口台阶与北坡道'],[fore,'环馆集散广场']]){
-    const mesh=sur.mesh(root,paving,label),a=mesh.geometry.attributes.position,uv=mesh.geometry.attributes.uv;
+    const mesh=sur.mesh(root,sur===plaza?coveredPaving:paving,label),a=mesh.geometry.attributes.position,uv=mesh.geometry.attributes.uv;
     for(let i=0;i<a.count;i++)uv.setXY(i,a.getX(i)/4.5,(a.getZ(i)+a.getY(i)*.38)/4.5);
     uv.needsUpdate=true;
   }
   undercroft.mesh(root,pavement,'平台结构边缘');
+  reveals.mesh(root,new T.MeshStandardMaterial({vertexColors:true,roughness:.49,metalness:.42,side:T.DoubleSide}),'平台退进玻璃及格栅');
   const glassMat=new T.MeshPhysicalMaterial({vertexColors:true,metalness:.54,roughness:.145,clearcoat:.85,side:T.DoubleSide});
-  glassMat.userData.cityProbe='district';facades.mesh(root,glassMat,'体育馆与游泳馆的反射玻璃幕墙');
+  reflectCanopy(glassMat,porosity,true);glassMat.userData.cityProbe='district';facades.mesh(root,glassMat,'体育馆与游泳馆的反射玻璃幕墙');
   stile.mesh(root,new T.MeshStandardMaterial({color:0xa9b7b9,metalness:.7,roughness:.34,side:T.DoubleSide}),'玻璃横梁与窗框');
   cap.mesh(root,pavement,'馆体围护顶');
   rails.flush(near);
@@ -567,7 +742,7 @@ function controls(footprint,shape){
     if(row>=0&&row<n)return 1.85+row*.575+(row>=17?1.18:0);
     return terraceY;
   }
-  const wall=(x,z)=>ellipseDistance(x,z,ranges.swimming)<1||ellipseDistance(x,z,ranges.gym)<1||Math.hypot(x-83.6,z+791.9)<9.7;
+  const wall=(x,z)=>ellipseDistance(x,z,ranges.swimming)<1||ellipseDistance(x,z,ranges.gym)<1||Math.hypot(x-83.6,z+791.9)<9.7||pierVolume(x,z);
   return {
     ownsFootprint:f=>[665408865,665408866,9244350,9244351].includes(Math.abs(Number(f.id))),
     groundHeight:terrace,
@@ -590,6 +765,11 @@ function controls(footprint,shape){
       const h=terrace(x,z);if(h===null)return null;
       const solid=ellipseDistance(x,z,ranges.gym)<1&&y<29||ellipseDistance(x,z,ranges.swimming)<1&&y<25.6;
       if(solid||y<h+.5)return true;
+      const dz=z-gateCenter;
+      if(Math.abs(dz)<=gateHalf&&x>gatePlane(dz)-10.4&&x<gatePlane(dz)+.15){
+        const roofY=shape.ceiling(gatePlane(dz),z);
+        if(y<roofY&&(y>roofY-9.3||(pierVolume(x,z)&&y>8.1)))return true;
+      }
       if(shape.gap(x,z)<0||!inRing(x,z,footprint))return false;
       const r=Math.hypot(x-83.6,z+791.9);
       if(r<28.3){
@@ -608,8 +788,8 @@ export function buildStadium(root,m,map){
   const inner=bowl.holes[0],north=sections.map(s=>[s[0],s[1]]),south=sections.map(s=>[s[2],s[3]]).reverse();
   const footprint=[...north,...south],shape=roof(group,inner);
   const near=new T.Group();near.name='近景球网、扶手、网壳细部';
-  trackAndSeating(group,near);buildingBase(group,m,footprint,inner,shape.ceiling,near);
-  courtMarkings(group,map);fittings(group,near,inner,shape.ceiling);
+  trackAndSeating(group,near);buildingBase(group,m,footprint,inner,shape,near);
+  courtMarkings(group,map);fittings(group,near,inner,shape.ceiling,m);
   const details=new T.LOD();details.position.set(63,0,-787);near.position.set(-63,0,787);
   details.addLevel(near,0);details.addLevel(new T.Group(),820,.10);group.add(details);
   return controls(footprint,shape);
@@ -649,7 +829,89 @@ function signSurface(cn,en,orange=false,dark=false){
   const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=8;
   return new T.MeshStandardMaterial({map:tex,color:0xffffff,emissiveMap:dark?tex:null,emissive:dark?0x719b92:0x000000,emissiveIntensity:.29,roughness:dark?.47:.64,side:T.DoubleSide});
 }
-function fittings(root,near,hole,ceiling){
+function seaGate(root,frame,darkRails,ceiling,lights){
+  // Geometric elevation traced against the supplier's completed Sea Gate
+  // photographs, including its exposed central opening and deep return faces.
+  // The off-state display remains transparent in daylight.
+  const frameSkin=new Surface(),film=new Surface(),posts=new Surface();
+  const outer=new T.Color('#9caaa8'),shadow=new T.Color('#525b5d'),under=new T.Color('#686e6d');
+  const P=(t,y,d=0)=>[gatePlane(t)-d,y,gateCenter+t];
+  const top=t=>ceiling(gatePlane(t),gateCenter+t)-1.20;
+  const lip=t=>top(t)-(7.55+.61*(1-(t/gateHalf)**2));
+  const count=34,depth=10.35;
+  for(let i=0;i<count;i++){
+    const u=-gateHalf+2*gateHalf*i/count,v=-gateHalf+2*gateHalf*(i+1)/count;
+    const a=top(u),b=top(v),c=lip(u),d=lip(v);
+    frameSkin.quad(P(u,c),P(u,c-.37),P(v,d-.37),P(v,d),undefined,outer);
+    frameSkin.quad(P(u,c-.37),P(u,c-.62,depth),P(v,d-.62,depth),P(v,d-.37),undefined,under);
+    frameSkin.quad(P(u,a,.1),P(v,b,.1),P(v,b,depth),P(u,a,depth),undefined,shadow);
+    for(const back of [.13,depth-.1]){
+      darkRails.between(...P(u,c,back),...P(v,d,back),.15);
+      darkRails.between(...P(u,a,back),...P(v,b,back),.13);
+      darkRails.between(...P(u,c,back),...P(u,a,back),.095);
+    }
+    darkRails.between(...P(u,c,depth-.65),...P(v,b,depth-.65),.12);
+    for(let h=1;h<4;h++)darkRails.between(...P(u,lerp(a,c,h/4),.2),...P(v,lerp(b,d,h/4),.2),.045);
+    const U=1-i/count,V=1-(i+1)/count;
+    film.quad(P(u,c,-.025),P(u,a,-.025),P(v,b,-.025),P(v,d,-.025),[[U,0],[U,1],[V,1],[V,0]]);
+  }
+  for(const side of [-1,1]){
+    const a=side*portalHalf,b=side*gateHalf,A=lip(a),B=lip(b),bottom=8.32;
+    for(const t of [a,b]){
+      const h=lip(t);
+      posts.quad(P(t,bottom,.26),P(t,h,.26),P(t,h,depth),P(t,bottom,depth),undefined,under);
+    }
+    posts.quad(P(a,bottom,depth),P(a,A,depth),P(b,B,depth),P(b,bottom,depth),undefined,shadow);
+    posts.quad(P(a,bottom,.22),P(b,bottom,.22),P(b,bottom,depth),P(a,bottom,depth),undefined,shadow);
+    film.quad(P(a,bottom,-.025),P(a,A,-.025),P(b,B,-.025),P(b,bottom,-.025),[[0,0],[0,1],[.08,1],[.08,0]]);
+    for(let k=0;k<=5;k++){
+      const t=lerp(a,b,k/5),h=lip(t);
+      frame.at(...P(t,(bottom+h)*.5,.8),1.2,h-bottom,.11);
+    }
+    for(let j=0;j<6;j++){
+      const t=j/6,h=lerp(bottom,A,t),H=lerp(bottom,B,t);
+      darkRails.between(...P(a,h,1.),...P(b,H,1.),.085);
+    }
+  }
+  const enamel=new T.MeshStandardMaterial({vertexColors:true,metalness:.56,roughness:.38,side:T.DoubleSide});
+  frameSkin.mesh(root,enamel,'海之门 · 桥形门楣、厚底板与滴水边',true);
+  posts.mesh(root,enamel,'海之门 · 两端屏柱及侧廊',true);
+  const c=document.createElement('canvas');c.width=1536;c.height=128;
+  const g=c.getContext('2d'),r=g.createLinearGradient(0,0,c.width,c.height);
+  r.addColorStop(0,'#205a78');r.addColorStop(.5,'#298ba8');r.addColorStop(1,'#195472');
+  g.fillStyle=r;g.fillRect(0,0,c.width,c.height);
+  for(let i=0;i<9;i++){
+    g.strokeStyle='rgba(108,225,223,.23)';g.lineWidth=1.5;g.beginPath();
+    for(let x=0;x<=c.width;x+=8){const y=68+25*Math.sin(x*.008+i*.13)+i*4;if(!x)g.moveTo(x,y);else g.lineTo(x,y);}g.stroke();
+  }
+  g.font='500 70px "Microsoft YaHei", sans-serif';g.textBaseline='middle';g.textAlign='center';g.fillStyle='#d6f2ee';
+  g.fillText('深 圳 湾 体 育 中 心',c.width/2,64);
+  const title=new T.CanvasTexture(c);title.colorSpace=T.SRGBColorSpace;title.anisotropy=8;
+  const screen=new T.MeshBasicMaterial({map:title,transparent:true,opacity:.1,side:T.DoubleSide,depthWrite:false});
+  screen.onBeforeRender=()=>{screen.opacity=.09+.65*clamp((lights.lamp.emissiveIntensity-.36)/2.6,0,1);};
+  film.mesh(root,screen,'海之门 · 透光媒体屏');
+  const trace=new Surface(),night=()=>clamp((lights.lamp.emissiveIntensity-.36)/2.6,0,1);
+  for(let k=0;k<96;k++){
+    const a=lerp(-68,68,k/96),b=lerp(-68,68,(k+1)/96),A=top(a)+.70,B=top(b)+.70;
+    trace.quad(P(a,A,-.07),P(a,A+.21,-.07),P(b,B+.21,-.07),P(b,B,-.07));
+  }
+  const strip=new T.MeshStandardMaterial({color:0x9ba8a9,emissive:0x168bdf,roughness:.39,side:T.DoubleSide});
+  strip.onBeforeRender=()=>{strip.emissiveIntensity=night()*2.8;};
+  trace.mesh(root,strip,'海之门 · 拱沿轮廓灯');
+  const lamps=new T.MeshStandardMaterial({color:0xcfbc95,emissive:0xffab4d,roughness:.40});
+  lamps.onBeforeRender=()=>{lamps.emissiveIntensity=.08+night()*2.5;};
+  const lenses=new Instances(new T.BoxGeometry(1,1,1),lamps,'两侧入口 · 檐下转角洗墙灯');
+  for(let x=37;x<162;x+=7.7){
+    for(const [k,side] of [[0,-1],[2,1]]){
+      const at=station(x,k),z=station(x,k+1),y=station(x,side<0?5:6);
+      if(y<9.5)continue;
+      frame.at(at,y-.41,z-side*.23,.68,.33,.42);
+      lenses.at(at,y-.42,z-side*.025,.52,.19,.07);
+    }
+  }
+  lenses.flush(root);
+}
+function fittings(root,near,hole,ceiling,m){
   const steel=new T.MeshStandardMaterial({color:0x74838a,roughness:.42,metalness:.70}), ivory=new T.MeshStandardMaterial({color:0xe2e5de,roughness:.39,metalness:.48});
   const bronze=new T.MeshStandardMaterial({color:0x374348,roughness:.56,metalness:.38});
   const darkRails=new Instances(new T.CylinderGeometry(1,1,1,6,1,true),steel,'天窗三角环桁架及支承');
@@ -701,13 +963,14 @@ function fittings(root,near,hole,ceiling){
       glass.quad([dx,8.37,z],[dx,9.53,z],[dx,9.53,Z-.055],[dx,8.37,Z-.055]);
     }
   }
-  for(const z of [-821,-799,-740,-717]){
+  for(const z of [-839,-832,-709,-702]){
     structure.between(322,.36,z,322,14,z,.43);
     for(const dz of [-1,1]){
       const Z=z+dz*7;
       structure.between(322,12.8,z,324,ceiling(324,Z)-.77,Z,.35);
     }
   }
+  seaGate(root,frame,darkRails,ceiling,m);
   const glassRail=new T.MeshPhysicalMaterial({color:0x749b9c,metalness:.18,roughness:.15,transparent:true,opacity:.37,depthWrite:false,side:T.DoubleSide});
   glass.mesh(root,glassRail,'看海廊玻璃栏板');
   // Undercroft shop windows, aluminium entry piers, individual double doors.

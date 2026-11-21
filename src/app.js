@@ -1,3 +1,4 @@
+import {personView} from './talent-bridge.js';
 import {applyIcons,icon} from './icons.js';
 import {showAtlas,drawMini} from './atlas.js';
 import {createAmbience} from './ambience.js';
@@ -20,6 +21,12 @@ function geo(){
     if(entrance)Object.assign(entrance,{x:79,z:-658,lookX:83,lookZ:-790});
     d.views.push({id:'field',name:'春茧 · 场内',x:271,z:-730,lookX:205,lookZ:-816},
       {id:'garden',name:'人才公园 · 林间步道',x:-253,z:-119,lookX:-269,lookZ:-137},model3Street());
+    const talent=personView(d,route.get('person')||undefined)||personView(d);
+    if(talent)d.views.push(talent);
+    d.views.push({id:'onebay',name:'深圳湾一号 · 空中',x:246.66,z:-20,lookX:-680,lookZ:413,flight:{eye:[246.66,38,-20],target:[-680,144,413],fov:24}},
+      {id:'pavilion',name:'求贤阁',x:-424,z:244,lookX:-451,lookZ:228,portrait:{height:3.3,target:[-451,5.15,228],fov:52}},
+      {id:'hall',name:'群英荟',x:-366,z:422,lookX:-330,lookZ:445,portrait:{height:2.36,target:[-330,3.9,445],fov:51}},
+      {id:'sail',name:'风帆塔',x:-239,z:8,lookX:-251.3,lookZ:-11.6,portrait:{height:2.6,target:[-251.3,6.9,-11.6],fov:49}});
     map=d;return d;
   }).catch(e=>{geoRequest=null;throw e;});
   return geoRequest;
@@ -50,11 +57,11 @@ async function launch(v=place,fly=false){
     try{
       const [data,module]=await Promise.all([geo(),import('./world.js')]);
       if(v===fallback){v=data.views.find(view=>view.id==='bridge')||v;place=v;}
-      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,daylight:!!(v.photo||v.portrait)||fly||v.id==='garden',initialClimate:climateFromQuery(route)});
+      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,daylight:!!(v.photo||v.portrait||v.flight)||fly||v.id==='garden',initialClimate:climateFromQuery(route)});
       climate.sync();
     }catch(e){console.error(e);progress(0,'场景载入失败。请使用开启硬件加速的 Chrome 或 Edge，或刷新后重试。');$('#loadBack').hidden=false;loading=false;return;}
   }
-  try{world.moveTo(v);if(fly)world.toggleDrone(v.id==='stadium'?stadiumFlight:undefined);await world.prepareView();}catch(e){notify(e.message);loading=false;load.hidden=true;return;}
+  try{world.moveTo(v);if(v.flight||fly)world.toggleDrone(v.flight??(v.id==='stadium'?stadiumFlight:undefined));await world.prepareView();}catch(e){notify(e.message);loading=false;load.hidden=true;return;}
   mode='world';document.body.dataset.mode=mode;world.setPlaying(true);world.setBlocked(false);home.hidden=true;hud.hidden=false;$('#locality').textContent=v.name;
   updateHud();progress(100,'进入漫游');await new Promise(requestAnimationFrame);loading=false;load.hidden=true;showHint();
 }
@@ -63,7 +70,7 @@ function resume(){
   if(!world){launch();return;}closePanel();mode='world';document.body.dataset.mode='world';home.hidden=true;hud.hidden=false;world.setPlaying(true);world.setBlocked(false);showHint();
 }
 $('#loadBack').onclick=()=>{goHome();location.reload();};$('#start').onclick=resume;$('#brand').onclick=()=>mode==='world'?openPanel('pause'):closePanel();
-const titles={map:['FIELD MAP','区域地图'],garage:['VEHICLE COLLECTION','车辆图鉴'],help:['FIELD GUIDE','操作指南'],pause:['FREE ROAM','漫游菜单']};
+const titles={map:['FIELD MAP','区域地图'],garage:['VEHICLE COLLECTION','车辆图鉴'],talent:['STARLIGHT BRIDGE','星光桥人物'],help:['FIELD GUIDE','操作指南'],pause:['FREE ROAM','漫游菜单']};
 async function openPanel(key,vehicleId){
   if(loading)return;climate.close();cleanup?.();cleanup=null;const version=++panelId;currentPanel=key;world?.setBlocked(true);
   panel.dataset.panel=key;$('#panelKicker').textContent=titles[key][0];$('#panelTitle').textContent=titles[key][1];
@@ -72,6 +79,9 @@ async function openPanel(key,vehicleId){
     if(key==='map'){
       const data=await geo();if(version!==panelId)return;
       cleanup=showAtlas(body,data,place,mode==='world'?world.position():null,launch);
+    }else if(key==='talent'){
+      const [data,{showTalentGuide}]=await Promise.all([geo(),import('./talent-guide.js')]);if(version!==panelId)return;
+      showTalentGuide(body,data,launch);
     }else if(key==='garage'){
       const {showGarage}=await import('./garage.js');if(version!==panelId)return;
       const focusedCar=vehicleId??(mode==='world'&&place.id==='model3'?'model3':'e6');
@@ -80,7 +90,7 @@ async function openPanel(key,vehicleId){
       body.innerHTML='<div class="panel-pad"><div class="help-row"><span><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / 方向键</span><span>步行移动</span></div><div class="help-row"><span><kbd>Shift</kbd> + 移动</span><span>快步</span></div><div class="help-row"><span>拖动鼠标 / 触屏</span><span>环顾四周</span></div><div class="help-row"><span>双击街景 / <kbd>Esc</kbd></span><span>锁定 / 释放鼠标</span></div><div class="help-row"><span><kbd>M</kbd> / <kbd>V</kbd></span><span>区域地图 / 鸟瞰</span></div><div class="help-row"><span>鸟瞰时拖动 / 滚轮</span><span>环绕 / 缩放</span></div><div class="help-row"><span>鸟瞰时右键拖动</span><span>平移落地点</span></div><div class="help-row"><span><kbd>F</kbd></span><span>起飞 / 退出自由无人机</span></div><div class="help-row"><span><kbd>E</kbd> / <kbd>Q</kbd></span><span>无人机上升 / 下降</span></div><div class="help-row"><span>季节与天气按钮</span><span>选择四季、雨雪和极光夜</span></div><p class="note">手机使用左侧摇杆移动，飞行时右侧可调节高度。通过区域地图可以前往其他街区。日照按钮可切换午后、日落和蓝调时刻。</p><div class="credits">地理数据 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap 贡献者</a>。卫星影像来自 Copernicus Sentinel。建筑高度部分按楼层及用途估算，车辆为按公开尺寸重建的外观模型。启动画面为生成式概念美术。<br><a href="/credits.html" target="_blank" rel="noopener">查看数据与素材来源</a></div></div>';
     }else{
       body.innerHTML='<div class="panel-pad menu-stack"></div>';const stack=body.firstElementChild;
-      for(const [ico,text,fn] of [['play','继续漫游',closePanel],['map','区域地图',()=>openPanel('map')],['car','车辆图鉴',()=>openPanel('garage')],['home','返回首页',goHome]]){
+      for(const [ico,text,fn] of [['play','继续漫游',closePanel],['map','区域地图',()=>openPanel('map')],['pin','星光桥人物',()=>openPanel('talent')],['car','车辆图鉴',()=>openPanel('garage')],['home','返回首页',goHome]]){
         const b=document.createElement('button');b.className='menu-item';b.innerHTML=icon(ico);b.append(text);b.onclick=fn;stack.append(b);
       }
     }
@@ -118,8 +128,9 @@ function updateHud(){
 }
 setInterval(updateHud,250);
 const requestedView=route.get('walk'),vehicleView=route.get('inspect');
-if(['taxi','model3'].includes(vehicleView))openPanel('garage',vehicleView==='model3'?'model3':'e6');
-else if(['bridge','street','stadium','field','garden','model3'].includes(requestedView)){
+if(vehicleView==='talent')openPanel('talent');
+else if(['taxi','model3'].includes(vehicleView))openPanel('garage',vehicleView==='model3'?'model3':'e6');
+else if(['bridge','street','stadium','field','garden','model3','talent','pavilion','hall','sail','onebay'].includes(requestedView)){
   geo().then(data=>{
     let place=data.views.find(view=>view.id===requestedView)||fallback;
     if(requestedView==='street'&&route.get('photo')==='1')place=photoStreet();

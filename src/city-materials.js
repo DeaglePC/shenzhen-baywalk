@@ -15,55 +15,30 @@ export function label(text,english,width=1024,background='#305d66'){
     g.font='400 24px Arial';g.fillText(english,68,143,w-100);
   },false);
 }
-function facade(kind,seed){
-  const rand=random(seed), glass=kind<3;
-  return canvasTexture(512,512,(g,w,h)=>{
-    const bw=glass?32:64,bh=glass?32:64,rows=h/bh,cols=w/bw;
-    g.fillStyle=['#536978','#636e76','#427583','#a99e8e','#a6a6a1'][kind];g.fillRect(0,0,w,h);
-    for(let i=0;i<cols;i++)for(let j=0;j<rows;j++){
-      const x=i*bw,y=j*bh,r=rand(),shift=Math.round(rand()*12),lit=r>.94;
-      if(glass){
-        const grad=g.createLinearGradient(x,y,x+bw*.5,y+bh);
-        grad.addColorStop(0,lit?'#9cafa9':`rgb(${104+shift},${133+shift},${148+shift})`);
-        grad.addColorStop(.6,lit?'#819696':`rgb(${94+shift},${117+shift},${130+shift})`);
-        grad.addColorStop(1,lit?'#708085':`rgb(${72+shift},${94+shift},${107+shift})`);
-        g.fillStyle=grad;g.fillRect(x+1,y+1,bw-2,bh-3);
-        if(r<.16){g.fillStyle='rgba(212,209,192,.22)';g.fillRect(x+2,y+2,bw-4,(4+rand()*14)|0);}
-        if(r>.90){g.fillStyle='rgba(253,232,189,.46)';g.fillRect(x+3,y+3,bw*(.45+rand()*.4),1);}
-        g.fillStyle=kind===2?'#82918e':'#87959b';g.fillRect(x,y+bh-2,bw,1);g.fillRect(x,y,1,bh);
-        if(kind===1&&i%4===0){g.fillStyle='#acb5b6';g.fillRect(x,y,4,bh);}
-      }else{
-        g.fillStyle=r>.45?'#a4a198':'#aba79a';g.fillRect(x+1,y+1,bw-2,bh-2);
-        g.fillStyle='#636e6b';g.fillRect(x+6,y+7,47,36);
-        g.fillStyle=lit?'#c5b391':`rgb(${54+shift},${74+shift},${83+shift})`;g.fillRect(x+8,y+9,43,32);
-        g.fillStyle='#c0bab0';g.fillRect(x+29,y+8,2,34);
-        if(r<.55){g.fillStyle='#d6ccba';g.fillRect(x+8,y+9,8+rand()*8,27);}
-        g.fillStyle='#737776';g.fillRect(x+3,y+45,52,4);g.fillStyle='#d1c8b5';g.fillRect(x+3,y+43,52,3);
-        if(kind===4){g.fillStyle='#818a87';g.fillRect(x+4,y+39,52,2);for(let k=0;k<6;k++)g.fillRect(x+5+8*k,y+40,1,6);}
-        if(r>.5){g.fillStyle='#888a86';g.fillRect(x+43,y+50,15,8);g.fillStyle='#bdb9af';g.fillRect(x+43,y+49,15,6);g.fillStyle='#858988';g.fillRect(x+46,y+50,8,3);}
-      }
-    }
-  });
-}
 export function materials(){
   const standard=(options)=>new T.MeshStandardMaterial({...options,side:T.DoubleSide});
   const linearPhoto=(name)=>{const t=photo(name);t.colorSpace=T.NoColorSpace;return t;};
-  const masonry=standard({map:photo('Facade020A-Color.webp'),normalMap:linearPhoto('Facade020A-NormalGL.webp'),
-    normalScale:new T.Vector2(.7,.7),roughnessMap:linearPhoto('Facade020A-Roughness.webp'),roughness:.9,vertexColors:true});
-  const residential=standard({map:facade(4,476),roughness:.73,vertexColors:true});
+  function scannedFacade(prefix){
+    const mat=standard({map:photo(prefix+'-Color.webp'),normalMap:linearPhoto(prefix+'-NormalGL.webp'),
+      roughnessMap:linearPhoto(prefix+'-Roughness.webp'),normalScale:new T.Vector2(.53,.53),roughness:.94,vertexColors:true});
+    mat.emissive.setHex(0xffe8bb);mat.emissiveIntensity=0;mat.userData.cityProbe='district';
+    // The photographed windows have a smooth roughness value, while stone
+    // surrounds and mortar are rough. Use the co-registered scan for both
+    // reflection response and a recessed light mask for occupied rooms.
+    mat.onBeforeCompile=shader=>{
+      shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        float pane=1.-smoothstep(.36,.64,texture2D(roughnessMap,vRoughnessMapUv).g);
+        roughnessFactor=mix(max(.70,roughnessFactor),.16,pane);`);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+        vec2 room=floor((vMapUv+vec2(.045,.065))*6.);
+        float lit=fract(sin(dot(mod(room,vec2(149.,73.)),vec2(12.9898,78.233)))*43758.5453);
+        totalEmissiveRadiance*=pane*smoothstep(.70,.73,lit)*(.19+.30*lit);`);
+    };return mat;
+  }
+  const masonry=scannedFacade('Facade020A'),residential=scannedFacade('Facade019A');
   const bambooGlass=curtainWall('bamboo'),atriumGlass=curtainWall('atrium',[1,1],'street');
   const walls=[curtainWall('silver',[38,64]),curtainWall('blue',[13,13]),curtainWall('office',[27,24]),
     masonry,residential,curtainWall('fins',[57,62]),bambooGlass,atriumGlass];
-  [masonry,residential].forEach((mat,index)=>{
-    mat.emissive.setHex(0xffeac6);mat.emissiveIntensity=0;
-    mat.emissiveMap=canvasTexture(512,512,(g)=>{
-      g.fillStyle='#000';g.fillRect(0,0,512,512);const rand=random(42432+index),window=64;
-      for(let x=0;x<512;x+=window)for(let y=0;y<512;y+=window){
-        if(rand()>.28)continue;g.fillStyle=['#987c52','#c7bba2','#b1bdc0','#736a4d','#f0d2a4'][rand()*5|0];
-        g.fillRect(x+8,y+9,rand()<.6?20:42,29);
-      }
-    });
-  });
   const roof=standard({map:photo('concrete.webp'),color:0xa8aaa7,roughness:.94,vertexColors:true});
   const frontage=photo('retail-fronts.webp');
   // Outside-facing wall rings run right to left in the shop's local view.

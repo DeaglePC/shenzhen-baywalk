@@ -4,6 +4,7 @@ import {specialBuildings} from './city-landmarks.js';
 import {streetStops} from './city-transit.js';
 import {districtDetails} from './city-district-details.js';
 import {cultureSquare} from './city-culture-square.js';
+import {parkBuilding} from './park-buildings.js';
 
 const walking=new Set(['footway','path','pedestrian','steps','cycleway']);
 export function roadHeight(r){
@@ -37,6 +38,8 @@ function shopfronts(surface,walkway,frames,columns,building,start,height,rand){
 }
 export function cityBlocks(root,map,m,grid){
   const detail=districtDetails(root,m);
+  const galleryUpper=map.buildings.find(f=>f.id===570468706);
+  if(galleryUpper){galleryUpper.minH=4.55;galleryUpper.h=8.8;}
   const chunks=new Map(),plant=new Instances(new T.BoxGeometry(1,1,1),m.curb,'屋顶设备'),lids=new Instances(new T.BoxGeometry(1,1,1),m.dark,'通风机顶盖');
   const roofAntennas=new Instances(new T.CylinderGeometry(.54,1,1,5),m.rail,'天线');
   const awnings=new Instances(new T.BoxGeometry(1,1,1),m.rail,'店铺雨棚');
@@ -45,25 +48,26 @@ export function cityBlocks(root,map,m,grid){
   for(const f of map.buildings){
     const b=f.bbox=bounds(f.p),cx=(b[0]+b[2])/2,cz=(b[1]+b[3])/2;
     if(!f.minH||f.minH<1.85)grid.buildings.add(f,b);
-    if(specialBuildings.has(Math.abs(Number(f.id))))continue;
+    if(specialBuildings.has(Math.abs(Number(f.id)))||f===galleryUpper||parkBuilding(root,f,m,galleryUpper))continue;
     const key=Math.floor(cx/1350)+','+Math.floor(cz/1350);let c=chunks.get(key);
     if(!c)chunks.set(key,c={walls:Array.from({length:6},()=>new Surface()),shop:new Surface(),roof:new Surface(),base:new Surface()});
     const rand=random(Math.abs(f.id)),h=Math.max(2.4,f.h),start=Math.max(0,f.minH||0),dist=Math.hypot(cx,cz);
     if(h<=start+.1)continue;
-    const isRes=/house|apartments|dorm|residential|school|university|hotel/.test(f.kind);
-    let type=isRes?3+(rand()*2|0):h>65?rand()*3|0:/commercial|office|retail/.test(f.kind)?rand()*3|0:h<19?3:rand()*5|0;
-    if(isRes&&h>125&&dist<1800)type=f.id%2===0?0:1;
+    const isRes=/house|apartments|dorm|residential/.test(f.kind);
+    let type=isRes?4:/commercial|office|retail|hotel/.test(f.kind)||h>65?rand()*3|0:3;
     if(!isRes&&h>90&&Math.abs(f.id)%4===0)type=5;
     if(f.material==='glass'||f.material==='mirror')type=[0,1,2,5][Math.abs(f.id)%4];
     if(f.material==='concrete'||f.material==='limestone')type=3;
     if(Number(f.id)===529272469)type=1;
-    const scales=[[38,64],[13,13],[27,24],[13,13],[27,25.6],[57,62]];
+    // Each photographed masonry tile covers six window bays and six floors.
+    const floors=Math.max(1,Math.round((h-start)/(isRes?3.05:3.65)));
+    const scales=[[38,64],[13,13],[27,24],[19.8,6*(h-start)/floors],[21.6,6*(h-start)/floors],[57,62]];
     const [subdiv,repeatY]=scales[type];
     const colors=type<3?[0xd9ebef,0xbccfd5,0xd8e2df,0xe0cfc2,0xc2d3d3,0xb6c9d2]:[0xe5ded1,0xdae0de,0xd4c7ae,0xe4cfc1,0xcad6d3];
     col.setHex(colors[Math.floor(rand()*colors.length)]).multiplyScalar(.88+rand()*.15);
     if(f.color&&/^#[a-f\d]{6}$/i.test(f.color))col.lerp(new T.Color(f.color),.28);
     const streetRetail=/retail|commercial/.test(f.kind);
-    const retailEligible=start<.9 && (streetRetail && h>3.3 || dist<1600 && h>7 && /office|yes|hotel|apartments/.test(f.kind));
+    const retailEligible=start<.9 && streetRetail && h>3.3;
     const ruifu=Number(f.id)===529272469;
     const shopH=ruifu?8.8:retailEligible?Math.min(h,Math.max(3.25,Math.min(h*.37,4.7))):start;
     if(shopH>start+.2&&!ruifu){

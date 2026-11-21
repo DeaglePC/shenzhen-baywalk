@@ -17,3 +17,12 @@
 * 车辆图鉴和 Blender 摄影棚使用 Sergej Majboroda 拍摄的 CC0 环境光照 [Urban Courtyard 02](https://polyhaven.com/a/urban_courtyard_02)。登良路内的车漆及玻璃使用游戏实际街景的局部反射。
 * 普通建筑的外立面、窗饰、店铺、吊顶、照明、桥梁细部、园林家具、树种和模型布置经过艺术化处理。模型没有逐栋现场扫描，地表局部坡道与楼梯以简化高度处理。
 * 办公、住宅与酒店外墙使用 ambientCG 的 CC0 材质 [Facade 005](https://ambientcg.com/view?id=Facade005)、[Facade 015](https://ambientcg.com/view?id=Facade015)、[Facade 017](https://ambientcg.com/view?id=Facade017)、[Facade 019 A](https://ambientcg.com/view?id=Facade019A) 和 [Facade 020 A](https://ambientcg.com/view?id=Facade020A)，包括本地颜色、法线和粗糙度贴图。
+
+
+### 人才公园与后海建筑本次校准
+
+求贤阁、群英荟及风帆塔采用地图的平面轮廓与[照明设计项目实景](https://www.elicht.com/view/19573.html)。群英荟下层和上层分别使用两条相互重叠的测绘轮廓。阅览室书架、不可见的内墙、构件截面和局部高度依图估计。
+
+春笋与深圳湾一号八座塔楼参考 [KPF 春笋](https://www.kpf.com/project/china-resources-tower)、[KPF 深圳湾一号](https://www.kpf.com/project/one-shenzhen-bay)、[KPF 东立面与总图](https://www.kpf.com/wp-content/uploads/imported-files/AP202103_KPF_OSB_P176-183.pdf)及[主体钢构项目资料](https://www.szgsin.com/en/projects/shenzhen-bay-one/)。春茧使用[建筑师实景](https://www.axscom.jp/legacy/en/project/no03341/)和[海之门透明屏供货方现场摄影](https://cn.unilumin.com/news/company_4172.html)。室内和背街面的局部做法、平台高度、钢板厚度及板缝为依据外观的估算。
+
+文化广场的自然白花岗岩细条覆面依据[MAD 建成实景](https://www.i-mad.com/articles/shenzhen-bay-culture-square-completion)重建。颗粒、微表面法线和粗糙度来自 [Poly Haven Granite Tile 04](https://polyhaven.com/a/granite_tile_04) 的 CC0 素材，截取石板内部、重新调色并沿展馆曲面分缝。普通街区楼宇依地图用途、尺寸和楼层排布窗间墙；[Facade019A](https://ambientcg.com/view?id=Facade019A) 和 [Facade020A](https://ambientcg.com/view?id=Facade020A) 为 ambientCG CC0 通用材质，未逐栋拍摄。

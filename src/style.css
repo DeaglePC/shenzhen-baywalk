@@ -38,3 +38,5 @@ dialog{background:#1a2022;color:#f4f3ec;border:1px solid #ffffff38;border-radius
 .garage-stage.model3-studio .model-status{color:#32363a}.garage-stage.model3-studio .model-caption{background:#fffffff2;color:#262b31}
 .garage-source{color:#e7e8e2;font-size:13px;text-underline-offset:3px;margin-top:6px}.garage-source[hidden]{display:none}
 @media(max-width:760px){.garage-stage:has(.taxi-angles:not([hidden])) .model-status{top:48px}.garage-source{grid-column:1/-1}}
+.talent-guide label{display:flex;align-items:center;gap:14px;font-weight:600;margin:1em 0}.talent-guide input{min-width:0;max-width:24em;flex:1;border:1px solid #667470;background:#202b2a;color:#f2f1e9;padding:9px 13px;font:inherit;border-radius:5px}.talent-results article{padding:15px 0;border-top:1px solid #53605c}.talent-results h3,.talent-results p{margin:0 0 6px}.talent-results p{font-size:.86rem;color:#bbc3bd}.talent-results article div{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}.talent-results a{color:#ebc5a8;font-size:.8rem}.talent-results .place{white-space:nowrap}
+.talent-references{display:flex;gap:18px}.talent-references a{color:#ebc5a8;text-underline-offset:3px}
