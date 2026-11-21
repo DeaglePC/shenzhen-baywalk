@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171b1d">
+  <title>深圳漫游 · BAYWALK</title>
+  <meta name="description" content="在深圳人才公园与后海街区之间自由漫步，探索深圳湾的道路、车辆与城市天际线。">
+  <link rel="icon" href="/media/mark.svg" type="image/svg+xml">
+  <link rel="preload" as="image" href="/media/baywalk.webp">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body data-mode="home">
+  <div id="world"></div>
+  <main id="home">
+    <div class="cover" role="img" aria-label="深圳湾黄昏与蓝白出租车的场景概念主视觉"></div>
+    <div class="cover-shade"></div>
+    <section class="intro" aria-labelledby="headline">
+      <div class="eyebrow"><span class="orange-line"></span>开放世界 <i>/</i> 城市探索</div>
+      <h1 id="headline">深圳漫游<span class="headline-dot"></span></h1>
+      <div class="english-title" lang="en">SHENZHEN <span>FREE ROAM</span></div>
+      <p class="lead">从人才公园出发，沿着深圳湾的街道自由漫步。</p>
+      <div class="actions">
+        <button class="primary large" id="start"><span data-icon="play"></span>开始漫游</button>
+        <button class="glass large" data-action="map"><span data-icon="map"></span>区域地图</button>
+      </div>
+    </section>
+    <footer class="landing-footer">
+      <div class="facts">
+        <div class="fact"><span data-icon="pin"></span><div><small>起始地点</small><strong id="spawnName">人才星光桥</strong></div></div>
+        <div class="fact"><span data-icon="radar"></span><div><small>探索半径</small><strong><em>3.0</em> 公里</strong></div></div>
+        <div class="fact"><span data-icon="layers"></span><div><small>地理比例</small><strong><em>1 : 1</em></strong></div></div>
+      </div>
+      <div class="coordinate"><span class="crossmark">⌖</span><div><b>SHENZHEN, CHINA</b><small>22.51366° N&nbsp; 113.94417° E</small></div></div>
+    </footer>
+  </main>
+  <header id="topbar">
+    <button class="brand" id="brand" aria-label="漫游首页"><img src="/media/mark.svg" alt=""><span><b>BAYWALK</b><small>城市漫游计划</small></span></button>
+    <nav aria-label="工具栏">
+      <button class="garage-link" data-action="garage"><span data-icon="car"></span><span>车辆图鉴</span></button>
+      <span class="nav-divider"></span>
+      <button class="icon-button" id="sound" aria-label="开启环境音" title="开启环境音" aria-pressed="false"><span data-icon="mute"></span></button>
+      <button class="icon-button" data-action="help" aria-label="操作指南" title="操作指南"><span data-icon="help"></span></button>
+      <button class="icon-button" id="fullscreen" aria-label="全屏" title="全屏"><span data-icon="expand"></span></button>
+    </nav>
+  </header>
+  <div id="hud" hidden>
+    <div class="compass" aria-label="朝向"><b id="heading">NW</b><span></span><small id="bearing">315°</small></div>
+    <button class="mini-panel" data-action="map" aria-label="打开区域地图"><canvas id="mini"></canvas><span class="map-north">N</span><span class="minilabel"><span data-icon="pin"></span><b id="locality">人才公园</b><kbd>M</kbd></span></button>
+    <div class="world-tools"><button class="glass" id="period"><span data-icon="sun"></span><span id="periodName">日落</span></button><button class="glass" id="aerial"><span data-icon="bird"></span><span id="cameraName">鸟瞰</span></button><button class="glass" id="pause"><span data-icon="pause"></span><span>菜单</span></button></div>
+    <div class="aim"></div><div id="walkHint">W A S D 移动　·　拖动环顾　·　Shift 快步</div>
+    <div class="touchpad" aria-label="移动摇杆"><span></span></div>
+  </div>
+  <section id="loading" hidden aria-live="polite"><div class="loading-box"><div class="eyebrow"><span class="orange-line"></span> BAYWALK</div><h2>正在进入深圳湾</h2><div class="load-track"><span id="loadFill"></span></div><p id="loadText">读取地理数据…</p><button id="loadBack" class="glass" hidden>返回首页</button></div></section>
+  <dialog id="panel" aria-labelledby="panelTitle">
+    <div class="panel-head"><div><div class="eyebrow" id="panelKicker">FIELD MAP</div><h2 id="panelTitle">区域地图</h2></div><button id="closePanel" class="icon-button" aria-label="关闭"><span data-icon="close"></span></button></div>
+    <div id="panelBody"></div>
+  </dialog>
+  <div id="toast" role="status" hidden></div>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
