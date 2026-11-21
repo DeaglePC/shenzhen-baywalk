@@ -1,10 +1,12 @@
 import * as T from 'three';
 
 // Sample the actual district at tower, bridge and car-body heights.
-export function localReflections(renderer,scene,city,sun,direction,low){
+export function localReflections(renderer,scene,city,sun,direction,low,vehicles){
   const size=low?128:256;
   const cube=new T.WebGLCubeRenderTarget(size,{type:T.HalfFloatType,generateMipmaps:false});
   const camera=new T.CubeCamera(.32,14000,cube),filter=new T.PMREMGenerator(renderer);
+  const paintCube=low?cube:new T.WebGLCubeRenderTarget(512,{type:T.HalfFloatType,generateMipmaps:false});
+  const paintCamera=low?camera:new T.CubeCamera(.32,14000,paintCube);
   const captures=[
     {key:'district',at:new T.Vector3(-241,87,-425),target:null},
     {key:'bridge',at:new T.Vector3(215.2,4.25,136),target:null},
@@ -24,16 +26,23 @@ export function localReflections(renderer,scene,city,sun,direction,low){
     scene.userData.capturingProbe=true;omit.forEach(o=>o.visible=false);
     try{
       for(const capture of captures){
-        camera.position.copy(capture.at);camera.updateMatrixWorld(true);
-        city.update(time,camera);
+        const street=capture.key==='street',eye=street?paintCamera:camera,buffer=street?paintCube:cube;
+        eye.position.copy(capture.at);eye.updateMatrixWorld(true);
+        city.update(time,eye);
+        if(street){
+          // Populate the surrounding real cars. Parked hero remains excluded from
+          // its own reflection; its exact spot is also empty in the instanced fleet.
+          vehicles.update(0,capture.at);
+          for(const o of omit)o.visible=o.name==='Shenzhen road traffic';
+        }
         if(city.water)city.water.material=waterProxy;
         sun.target.position.set(capture.at.x,0,capture.at.z);sun.position.copy(sun.target.position).addScaledVector(direction,540);
         sun.shadow.needsUpdate=true;
         const suppress=capture.key==='district'?tower:[],visible=suppress.map(o=>o.visible);
         suppress.forEach(o=>o.visible=false);
         try{
-          cube.texture.generateMipmaps=false;camera.update(renderer,scene);
-          capture.target=filter.fromCubemap(cube.texture,capture.target);
+          buffer.texture.generateMipmaps=false;eye.update(renderer,scene);
+          capture.target=filter.fromCubemap(buffer.texture,capture.target);
           capture.target.texture.userData.capturePosition=capture.at.clone();
           scene.userData[capture.key+'Probe']=capture.target.texture;
         }finally{
@@ -52,5 +61,5 @@ export function localReflections(renderer,scene,city,sun,direction,low){
       m.envMap=tex;m.envMapRotation?.set(0,0,0);m.needsUpdate=true;
     }
   }
-  return {refresh,dispose(){cube.dispose();filter.dispose();waterProxy.dispose();captures.forEach(p=>p.target?.dispose());}};
+  return {refresh,dispose(){if(paintCube!==cube)paintCube.dispose();cube.dispose();filter.dispose();waterProxy.dispose();captures.forEach(p=>p.target?.dispose());}};
 }

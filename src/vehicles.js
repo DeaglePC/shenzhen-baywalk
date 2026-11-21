@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {loadHeroTaxi} from './vehicle-hero.js';
+import {curbTaxi} from './taxi-framing.js';
 
 // All meshes face +Z. The body width excludes mirrors, the e6 height excludes its taxi sign.
 export const VEHICLE_CATALOG = [
-  { id: 'e6', name: '比亚迪 e6 深圳出租车', size: [4.56, 1.822, 1.63], wheelbase: 2.83, radius: .326, colors: ['#247DC9'] },
+  { id: 'e6', name: '比亚迪 e6 · 深圳巴士集团鹏程出租车', size: [4.695, 1.810, 1.670], wheelbase: 2.8, radius: .325, colors: ['#3982BC'] },
   { id: 'model3', name: '特斯拉 Model 3', size: [4.72, 1.85, 1.44], wheelbase: 2.875, radius: .337, colors: ['#B9C1CB', '#D4DADA', '#333D49', '#933335'] },
   { id: 'tang', name: '比亚迪 唐', size: [4.87, 1.95, 1.725], wheelbase: 2.82, radius: .373, colors: ['#324C5F', '#D7D8D1', '#48545F', '#53383C'] },
   { id: 'mifa9', name: '上汽大通 大家9', size: [5.27, 2, 1.84], wheelbase: 3.2, radius: .354, colors: ['#70596B', '#505D6A', '#C7C1B2', '#343B42'] },
@@ -16,7 +17,7 @@ export const VEHICLE_CATALOG = [
 const UP = new THREE.Vector3(0, 1, 0);
 const AXLE = new THREE.Vector3(1, 0, 0);
 const ROAD = /^(primary|secondary|tertiary|trunk|residential|unclassified|living_street|service)(_link)?$/;
-const modelPath = id => `${import.meta.env.BASE_URL}models/${id}.glb`;
+const modelPath = id => `${import.meta.env.BASE_URL}models/${id==='e6'?'e6-pengcheng-traffic':id}.glb`;
 const pointId = p => p.join(',');
 
 function randomGenerator(seed) {
@@ -130,7 +131,7 @@ function makeTraffic(data, options) {
       sampleLane(car); cars.push(car);
     }
   }
-  const hero = { x: -126.8, z: -420.7, yaw: Math.atan2(.30, -.954), model: 'e6' };
+  const hero = {x:curbTaxi.x,z:curbTaxi.z,yaw:curbTaxi.yaw,y:curbTaxi.floor,model:'e6'};
   const spots = options.parkedSpots?.length ? options.parkedSpots : [hero];
   let heroCar;
   for (const spot of spots) {
@@ -284,12 +285,13 @@ function instance(geometry, material, capacity, group) {
 
 function setupType(scene, spec, material, group) {
   scene.updateMatrixWorld(true);
-  const body = [], wheel = [], glazings = [], marks = [], offsets = [];
+  const body = [], wheel = [], glazings = [], marks = [], offsets = [],distant=[];
   scene.traverse(node => {
     if (node.name.startsWith('wheel_') && node.userData.rolling_radius) offsets.push(node.position.clone());
     if (!node.isMesh) return;
     let root=node;
-    while (root.parent && !root.userData.rolling_radius && !root.userData.design_reference) root=root.parent;
+    while (root.parent && !root.userData.rolling_radius && !root.userData.design_reference && !root.userData.distant_taxi) root=root.parent;
+    if(root.userData.distant_taxi){distant.push({mesh:node,matrix:node.matrixWorld});return;}
     if (root.userData.rolling_radius) {
       if (root.name !== 'wheel_LF') return;
       const local = root.matrixWorld.clone().invert().multiply(node.matrixWorld);
@@ -313,7 +315,7 @@ function setupType(scene, spec, material, group) {
     return obj;
   });
   const farMat = material.clone(); farMat.onBeforeCompile=material.onBeforeCompile; farMat.side=THREE.DoubleSide;
-  const far = instance(distantShape(spec),farMat,440,group);
+  const far = instance(distant.length?packMeshes(distant):distantShape(spec),farMat,440,group);
   return {near, wheels, extra, far, offsets};
 }
 
@@ -418,7 +420,7 @@ export async function createVehicles(scene, data, options = {}) {
         }
         if (car.distance+eye.y*eye.y<250*250 && shadow.count<1000) {
           const [len,w]=VEHICLE_CATALOG[m].size;
-          pos.y-=.009;
+          pos.y+=car===traffic.heroCar ? .004 : -.009;
           scale.set(w*1.24,1,len*1.1);
           wheelWorld.compose(pos,rot,scale);
           shadow.setMatrixAt(shadow.count++,wheelWorld);

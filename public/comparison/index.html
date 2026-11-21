@@ -19,7 +19,7 @@
     <span class="tag old-tag">优化前</span><span class="tag new-tag">优化后</span><span aria-hidden="true" class="divider"><b>‹ ›</b></span>
     <input type="range" min="0" max="100" step=".1" value="50" class="slider" aria-label="拖动调整优化前与优化后画面的分界">
   </div>
-  <div class="row"><div class="details" aria-label="查看局部"></div><div class="links"><a id="originalA" target="_blank" rel="noopener">优化前原图</a><a id="originalB" target="_blank" rel="noopener">优化后原图</a></div></div>
+  <div class="row"><div class="details" aria-label="查看局部"></div><div class="links"><a id="photoStreet" href="../?walk=street&amp;photo=1" hidden>从实车照片角度看出租车</a><a id="originalA" target="_blank" rel="noopener">优化前原图</a><a id="originalB" target="_blank" rel="noopener">优化后原图</a></div></div>
   <div class="technical" id="technical"></div>
 </main>
 <script type="module">
@@ -39,6 +39,7 @@
   async function select(id){
     if(id===selected)return;selected=id;
     const token=++request;location.hash=id;frame.dataset.loading='true';$('.back').href='../?walk='+id;
+    $('#photoStreet').hidden=id!=='street';
     document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===id));
     slider.value=50;split();const details=$('.details');details.replaceChildren();
     const label=document.createElement('span');label.textContent='查看';details.append(label);

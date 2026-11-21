@@ -1,6 +1,7 @@
 import {applyIcons,icon} from './icons.js';
 import {showAtlas,drawMini} from './atlas.js';
 import {createAmbience} from './ambience.js';
+import {photoStreet} from './taxi-framing.js';
 applyIcons();
 const $=s=>document.querySelector(s),panel=$('#panel'),body=$('#panelBody'),load=$('#loading'),home=$('#home'),hud=$('#hud');
 const audio=createAmbience();let map,geoRequest,world,place,loading=false,panelId=0,cleanup=null,toastTimer,hintTimer;
@@ -23,7 +24,8 @@ async function launch(v=place){
     try{
       const [data,module]=await Promise.all([geo(),import('./world.js')]);
       if(v===fallback){v=data.views.find(view=>view.id==='bridge')||v;place=v;}
-      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel});
+      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,daylight:!!v.photo});
+      $('#periodName').textContent=world.period;
     }catch(e){console.error(e);progress(0,'场景载入失败。请使用开启硬件加速的 Chrome 或 Edge，或刷新后重试。');$('#loadBack').hidden=false;loading=false;return;}
   }
   try{world.moveTo(v);}catch(e){notify(e.message);loading=false;load.hidden=true;return;}
@@ -77,9 +79,10 @@ function updateHud(){
   else $('#locality').textContent=Math.hypot(pos.x,pos.z)<610?'人才公园':'南山后海';
 }
 setInterval(updateHud,250);
-const requestedView=new URLSearchParams(location.search).get('walk');
-if(['bridge','street'].includes(requestedView)){
-  geo().then(data=>launch(data.views.find(view=>view.id===requestedView)||fallback))
+const route=new URLSearchParams(location.search),requestedView=route.get('walk');
+if(route.get('inspect')==='taxi')openPanel('garage');
+else if(['bridge','street'].includes(requestedView)){
+  geo().then(data=>launch(requestedView==='street'&&route.get('photo')==='1'?photoStreet():data.views.find(view=>view.id===requestedView)||fallback))
     .catch(()=>notify('地图读取失败，请点击开始漫游重试。'));
 }else if('requestIdleCallback' in window)requestIdleCallback(()=>geo().catch(()=>{}),{timeout:3000});
 else setTimeout(()=>geo().catch(()=>{}),1400);

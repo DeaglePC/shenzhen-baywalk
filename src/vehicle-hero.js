@@ -1,8 +1,9 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
+import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 
-const heroURL = () => `${import.meta.env.BASE_URL}models/e6-hero.glb`;
+const heroURL = () => `${import.meta.env.BASE_URL}models/e6-pengcheng.glb`;
 const glaze = /glass|windscreen|clear lens/i;
 const lacquer = /Ocean Blue clearcoat|Pearl White clearcoat|Fleet side enamel/;
 const NOISE = `
@@ -25,8 +26,11 @@ const NOISE = `
 
 function finishPaint(material, origin) {
   material.clearcoat=1;
-  material.clearcoatRoughness=.145;
-  material.envMapIntensity=1.0;
+  material.clearcoatRoughness=.065;
+  material.envMapIntensity=1.17;
+  if(material.name==='Ocean Blue clearcoat'){
+    material.roughness=.205;material.metalness=.59;
+  }
   material.onBeforeCompile=shader=>{
     shader.uniforms.taxiOrigin={value:origin};
     shader.vertexShader=shader.vertexShader.replace('#include <common>',
@@ -49,7 +53,7 @@ function finishPaint(material, origin) {
         if(abs(txDet)>1.e-12) clearcoatNormal=normalize(abs(txDet)*clearcoatNormal-sign(txDet)*(dFdx(txBump)*txR0+dFdy(txBump)*txR1));
       `);
   };
-  material.customProgramCacheKey=()=> 'e6-clearcoat-v2';
+  material.customProgramCacheKey=()=> 'pengcheng-pearl';
 }
 
 export async function loadHeroTaxi() {
@@ -63,13 +67,20 @@ export async function loadHeroTaxi() {
     if(materials.has(mat)) return;
     materials.add(mat);
     if(mat.map) mat.map.anisotropy=8;
-    if(mat.name==='Fleet print') {
-      mat.transparent=false;mat.alphaTest=.35;mat.alphaToCoverage=true;mat.depthWrite=true;
+    if(mat.map && mat.alphaTest>0) {
+      mat.transparent=false;mat.alphaToCoverage=true;mat.depthWrite=true;
       mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-1;
     }
     if(lacquer.test(mat.name)) finishPaint(mat,origin);
     if(glaze.test(mat.name) && mat.transparent) {
       mat.side=T.FrontSide;mat.depthWrite=false;mat.envMapIntensity=1.09;
+      const automotiveGlass=!/lens/i.test(mat.name);
+      if(automotiveGlass){
+        mat.metalness=.48;mat.roughness=.073;
+        mat.color.set(mat.name.includes('Privacy')?0x19262d:0x374b59);
+        mat.opacity=mat.name.includes('Privacy')?.92:mat.name.includes('windscreen')?.77:.82;
+        mat.envMapIntensity=1.23;
+      }
       mat.onBeforeCompile=shader=>{
         shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
           float taxiGrazing=pow(1.-clamp(dot(normal,normalize(vViewPosition)),0.,1.),3.);
@@ -80,17 +91,17 @@ export async function loadHeroTaxi() {
     }
     if(mat.isMeshStandardMaterial) reflective.push(mat);
   });
-  model.name='Parked Shenzhen e6 · close detail';
+  model.name='深圳巴士集团鹏程出租车 · AT-099';
   model.userData.excludeFromProbe=true;
   let environment;
   return {
     model,
-    setEnvironment(texture) {
+    setEnvironment(texture,rotation=0) {
       origin.copy(model.position);
       if(texture===environment)return;
       environment=texture;
       for(const mat of reflective) {
-        mat.envMap=texture??null;mat.envMapRotation?.set(0,0,0);mat.needsUpdate=true;
+        mat.envMap=texture??null;mat.envMapRotation?.set(0,rotation,0);mat.needsUpdate=true;
       }
     },
     dispose() {
@@ -106,25 +117,11 @@ export async function loadHeroTaxi() {
   };
 }
 
-// Long studio cards and dark flags create readable reflections along curved doors.
-export function taxiStudio(renderer) {
-  const scene=new T.Scene();
-  scene.background=new T.Color(.195,.218,.236);
-  function card(position,look,width,height,color,intensity) {
-    const m=new T.MeshBasicMaterial({color:new T.Color(color).multiplyScalar(intensity),side:T.DoubleSide});
-    const panel=new T.Mesh(new T.PlaneGeometry(width,height),m);
-    panel.position.fromArray(position);panel.lookAt(...look);scene.add(panel);
-  }
-  card([0,-2,0],[0,1,0],50,50,0x6e7777,.54);
-  card([0,6,0],[0,0,0],10,5,0xb8c6ca,.64);
-  card([5,2,-.8],[0,0,0],9.5,.68,0xe3f2f6,3.15);
-  card([4,.72,-1],[0,0,0],9.1,.18,0x85999f,.81);
-  card([-4,2.7,-1],[0,0,0],9,2.4,0xfbebe0,3.1);
-  card([.5,1.55,-5],[0,0,0],6.3,.82,0xdae9f4,2.1);
-  card([-.9,1.9,5.0],[0,0,0],5,.61,0xffffff,2.9);
-  card([4,-.12,1],[0,0,0],10,.69,0x303234,.53);
-  card([-3,-.13,2],[0,0,0],8,.32,0x253032,.4);
-  const pmrem=new T.PMREMGenerator(renderer), target=pmrem.fromScene(scene,.012,.1,100);
-  pmrem.dispose(); for(const o of scene.children){o.geometry.dispose();o.material.dispose();}
-  return target;
+// Use one measured, overcast courtyard for the rotating catalogue inspection.
+export async function taxiStudio(renderer,isActive){
+  const texture=await new HDRLoader().loadAsync(import.meta.env.BASE_URL+'media/courtyard.hdr');
+  if(!isActive()){texture.dispose();return null;}
+  const pmrem=new T.PMREMGenerator(renderer);
+  try{return pmrem.fromEquirectangular(texture);}
+  finally{pmrem.dispose();texture.dispose();}
 }

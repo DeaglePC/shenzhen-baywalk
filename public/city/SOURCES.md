@@ -8,6 +8,8 @@
 * 湖面和登良路近景积水使用 [Three.js Reflector](https://github.com/mrdoob/three.js/blob/dev/examples/jsm/objects/Reflector.js) 投影场景倒影。湖面的细波叠加了 [waternormals.jpg](https://github.com/mrdoob/three.js/blob/dev/examples/textures/waternormals.jpg)。湖岸深浅采用地图岸线及七个岛屿轮廓计算，岛缘石块和草丛为程序布置。
 * 星光桥木面使用 Poly Haven 的 CC0 [Wood Floor Deck](https://polyhaven.com/a/wood_floor_deck)，桥栏、灯柱和铭牌为几何与材质重建。参考[深圳市城市设计促进中心的人才公园项目资料](https://www.szdesigncenter.com/tgspy)。
 * 春笋模型依据实测标注高度和 [KPF 对外框柱与收分轮廓的说明](https://www.kpf.com/project/china-resources-tower)。春茧模型基于地图馆体坐标，以及[深圳市南山区政府对场馆结构的说明](https://www.szns.gov.cn/mlns/whns/tycg/content/post_12589347.html)。两座地标均为原创几何重建。
-* 深圳湾文化广场采用五个地图屋顶轮廓和 [MAD 发布的设计资料与平剖面](https://www.i-mad.com/articles/shenzhen-bay-culture-square-completion)，重建九个馆体石形、支承结构和侧窗。登良路近景出租车的车身比例取自[比亚迪 e6 车型资料](https://sg.byd.com/wp-content/uploads/2017/11/E6.pdf)，蓝白波纹、深港字样和红色标记参考[深圳 e6 实车照片](https://commons.wikimedia.org/wiki/File:Shenzhen_BYD_e-taxi_new_look_1.jpg)。
+* 深圳湾文化广场采用五个地图屋顶轮廓和 [MAD 发布的设计资料与平剖面](https://www.i-mad.com/articles/shenzhen-bay-culture-square-completion)，重建九个馆体石形、支承结构和侧窗。
+* 登良路蓝白出租车依据项目提供的深圳巴士集团鹏程实车照片建模。车身侧视轮廓、4,695 × 1,810 × 1,670 mm 外廓、2,800 mm 轴距和 215/55 R17 轮胎参考[比亚迪第二代 e6 原厂尺寸图](https://sg.byd.com/wp-content/uploads/2021/11/BYD-e6-Spec-Sheet-Sime-Darby-2th-Nov-2021.pdf)。左前照片用于校对前脸、车灯、顶灯和侧面涂装，车尾与内饰由同代车型资料补全。照片机位按轮圈和车牌估算透视。
+* 车辆图鉴和 Blender 摄影棚使用 Sergej Majboroda 拍摄的 CC0 环境光照 [Urban Courtyard 02](https://polyhaven.com/a/urban_courtyard_02)。登良路内的车漆及玻璃使用游戏实际街景的局部反射。
 * 普通建筑的外立面、窗饰、店铺、吊顶、照明、桥梁细部、园林家具、树种和模型布置经过艺术化处理。模型没有逐栋现场扫描，地表局部坡道与楼梯以简化高度处理。
 * 办公、住宅与酒店外墙使用 ambientCG 的 CC0 材质 [Facade 005](https://ambientcg.com/view?id=Facade005)、[Facade 015](https://ambientcg.com/view?id=Facade015)、[Facade 017](https://ambientcg.com/view?id=Facade017)、[Facade 019 A](https://ambientcg.com/view?id=Facade019A) 和 [Facade 020 A](https://ambientcg.com/view?id=Facade020A)，包括本地颜色、法线和粗糙度贴图。

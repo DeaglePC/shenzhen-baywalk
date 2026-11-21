@@ -6,6 +6,7 @@ import {createVehicles} from './vehicles.js';
 import {createPedestrians} from './pedestrians.js';
 import {createFilm} from './film.js';
 import {localReflections} from './local-reflections.js';
+import {referenceFov} from './taxi-framing.js';
 
 const skies=[
   {key:'sunset',name:'日落',fog:0xd6b09f,density:.00021,rotation:3.32,dir:[-.884,.086,-.458],light:0xffba80,power:2.36,env:.62,bg:.54,exposure:.94,night:.19},
@@ -13,7 +14,7 @@ const skies=[
   {key:'dusk',name:'蓝调',fog:0x657990,density:.00018,rotation:3.42,dir:[-.9,.13,-.41],light:0xffb59b,power:.51,env:.36,bg:.66,exposure:.95,night:.92}
 ];
 const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
-export async function buildWorld(container,map,{progress,report,step,onCamera}){
+export async function buildWorld(container,map,{progress,report,step,onCamera,daylight=false}){
   progress(15,'初始化 WebGL 渲染器…');await frame();
   const renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance',alpha:false,logarithmicDepthBuffer:true});
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
@@ -31,6 +32,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
   const sunDirection=new T.Vector3(),skiesLoaded=new Map(),loader=new HDRLoader();
   let city,vehicles,people,probes,skyIndex=0,skyRequest=0,anchorX=1e8,anchorZ=1e8,lastShadow=-1e8;
   let playing=false,orbiting=false,pitch=0,yaw=0,elapsed=0,gait=0,stepDist=0,joyX=0,joyZ=0;
+  let pictureLens=false,eyeHeight=1.67;
   const keys=new Set(),foot=new T.Vector3(),dir=new T.Vector3(),ground=new T.Vector3();
   const orbit=new OrbitControls(camera,canvas);orbit.enabled=false;orbit.enableDamping=true;
   orbit.minDistance=28;orbit.maxDistance=3100;orbit.maxPolarAngle=Math.PI*.478;orbit.minPolarAngle=.09;orbit.screenSpacePanning=false;orbit.dampingFactor=.095;
@@ -49,13 +51,15 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
     city?.setSun?.(sunDirection,sun.color);city?.setNight?.(sky.night);vehicles?.setNight(sky.night);anchorX=1e8;
     probes?.refresh(elapsed);
   }
-  function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
-  new ResizeObserver(resize).observe(container);resize();const initialSky=setSky(0);
+  function lens(){camera.fov=pictureLens?referenceFov(camera.aspect):67;camera.updateProjectionMatrix();}
+  function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;lens();}
+  const firstSky=daylight?1:0;
+  new ResizeObserver(resize).observe(container);resize();const initialSky=setSky(firstSky);
   progress(30,'构建建筑、步道与湖岸…');await frame();await frame();
   city=createCity(scene,map,{renderer,camera,quality:software?'low':'balanced'});progress(62,'装载深圳出租车与城市车流…');await frame();
   [vehicles]=await Promise.all([createVehicles(scene,map),initialSky,city.ready]);
   progress(84,'采集玻璃与车漆的街区反射…');await frame();
-  probes=localReflections(renderer,scene,city,sun,sunDirection,software);await setSky(0);
+  probes=localReflections(renderer,scene,city,sun,sunDirection,software,vehicles);await setSky(firstSky);
   progress(94,'准备湖面倒影与街景…');await frame();
   createPedestrians(scene,map,city).then(p=>people=p).catch(err=>console.warn('行人资源',err));
   function safePoint(x,z){
@@ -70,10 +74,18 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
     if(orbiting){orbiting=false;orbit.enabled=false;onCamera(false);}
     foot.set(safe[0],0,safe[1]);const dx=place.lookX-foot.x,dz=place.lookZ-foot.z;yaw=Math.atan2(-dx,-dz);
     pitch=place.id==='bridge'?.135:place.id==='stadium'?.09:place.id==='pi'?.08:0;
-    camera.rotation.set(pitch,yaw,0,'YXZ');camera.position.set(foot.x,city.groundHeight(foot.x,foot.z)+1.67,foot.z);
+    const floor=city.groundHeight(foot.x,foot.z);
+    pictureLens=!!place.photo;eyeHeight=pictureLens?place.photo.height-floor:1.67;lens();
+    camera.position.set(foot.x,floor+eyeHeight,foot.z);camera.rotation.set(pitch,yaw,0,'YXZ');
+    if(place.photo){
+      const target=camera.position.clone().add(new T.Vector3(...place.photo.direction));
+      camera.quaternion.setFromRotationMatrix(new T.Matrix4().lookAt(camera.position,target,new T.Vector3(...place.photo.up)));
+      pitch=camera.rotation.x;yaw=camera.rotation.y;
+    }
     anchorX=1e8;gait=0;keys.clear();orbit.target.set(foot.x,0,foot.z);
   }
   function mode(){
+    if(pictureLens){pictureLens=false;eyeHeight=1.67;lens();}
     if(!orbiting){
       release();orbiting=true;orbit.enabled=true;
       const towards=new T.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
@@ -110,7 +122,8 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
     let moved=0;if(len){const oldX=foot.x,oldZ=foot.z;if(clear(foot.x+x,foot.z+z)){foot.x+=x;foot.z+=z;}
       else{if(clear(foot.x+x,foot.z))foot.x+=x;if(clear(foot.x,foot.z+z))foot.z+=z;}moved=Math.hypot(foot.x-oldX,foot.z-oldZ);}
     gait+=moved*3.5;stepDist+=moved;if(stepDist>(fast?1.15:.88)){step(fast);stepDist=0;}
-    const targetY=city.groundHeight(foot.x,foot.z)+1.67+(moved?Math.sin(gait)*.025:0);
+    if(moved)eyeHeight=1.67;
+    const targetY=city.groundHeight(foot.x,foot.z)+eyeHeight+(moved?Math.sin(gait)*.025:0);
     camera.position.set(foot.x,T.MathUtils.lerp(camera.position.y,targetY,1-Math.exp(-14*dt)),foot.z);
   }
   function position(){camera.getWorldDirection(dir);const p=orbiting?orbit.target:camera.position;return {x:p.x,z:p.z,heading:Math.atan2(dir.x,-dir.z)};}
