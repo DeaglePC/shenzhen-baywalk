@@ -24,6 +24,7 @@ function geo(){
     const talent=personView(d,route.get('person')||undefined)||personView(d);
     if(talent)d.views.push(talent);
     d.views.push({id:'onebay',name:'深圳湾一号 · 空中',x:246.66,z:-20,lookX:-680,lookZ:413,flight:{eye:[246.66,38,-20],target:[-680,144,413],fov:24}},
+      {id:'t7',name:'深圳湾一号 · T7 临湖面',x:-565,z:525,lookX:-680,lookZ:538,flight:{eye:[-565,312,525],target:[-679,313,538],fov:33}},
       {id:'pavilion',name:'求贤阁',x:-424,z:244,lookX:-451,lookZ:228,portrait:{height:3.3,target:[-451,5.15,228],fov:52}},
       {id:'hall',name:'群英荟',x:-366,z:422,lookX:-330,lookZ:445,portrait:{height:2.36,target:[-330,3.9,445],fov:51}},
       {id:'sail',name:'风帆塔',x:-239,z:8,lookX:-251.3,lookZ:-11.6,portrait:{height:2.6,target:[-251.3,6.9,-11.6],fov:49}});
@@ -130,7 +131,7 @@ setInterval(updateHud,250);
 const requestedView=route.get('walk'),vehicleView=route.get('inspect');
 if(vehicleView==='talent')openPanel('talent');
 else if(['taxi','model3'].includes(vehicleView))openPanel('garage',vehicleView==='model3'?'model3':'e6');
-else if(['bridge','street','stadium','field','garden','model3','talent','pavilion','hall','sail','onebay'].includes(requestedView)){
+else if(['bridge','street','stadium','field','garden','model3','talent','pavilion','hall','sail','onebay','t7'].includes(requestedView)){
   geo().then(data=>{
     let place=data.views.find(view=>view.id===requestedView)||fallback;
     if(requestedView==='street'&&route.get('photo')==='1')place=photoStreet();

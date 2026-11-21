@@ -26,3 +26,5 @@
 春笋与深圳湾一号八座塔楼参考 [KPF 春笋](https://www.kpf.com/project/china-resources-tower)、[KPF 深圳湾一号](https://www.kpf.com/project/one-shenzhen-bay)、[KPF 东立面与总图](https://www.kpf.com/wp-content/uploads/imported-files/AP202103_KPF_OSB_P176-183.pdf)及[主体钢构项目资料](https://www.szgsin.com/en/projects/shenzhen-bay-one/)。春茧使用[建筑师实景](https://www.axscom.jp/legacy/en/project/no03341/)和[海之门透明屏供货方现场摄影](https://cn.unilumin.com/news/company_4172.html)。室内和背街面的局部做法、平台高度、钢板厚度及板缝为依据外观的估算。
 
 文化广场的自然白花岗岩细条覆面依据[MAD 建成实景](https://www.i-mad.com/articles/shenzhen-bay-culture-square-completion)重建。颗粒、微表面法线和粗糙度来自 [Poly Haven Granite Tile 04](https://polyhaven.com/a/granite_tile_04) 的 CC0 素材，截取石板内部、重新调色并沿展馆曲面分缝。普通街区楼宇依地图用途、尺寸和楼层排布窗间墙；[Facade019A](https://ambientcg.com/view?id=Facade019A) 和 [Facade020A](https://ambientcg.com/view?id=Facade020A) 为 ambientCG CC0 通用材质，未逐栋拍摄。
+
+T7 临湖主立面使用钉钉于 2022 年 1 月 1 日拍摄的 [Shenzhen Talents Park 18](https://commons.wikimedia.org/wiki/File:Shenzhen_Talents_Park_18.jpg)。本地 t7-east-elevation.webp 已按窗带内缘校正透视，分离既有天空倒影，保留窗格、设备层百叶与冠部标识。原作与此衍生纹理采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)。转动视角时，玻璃反射来自三维场景。

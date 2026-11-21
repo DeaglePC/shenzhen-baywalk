@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {Surface, Instances, along, area, bounds, inRing, sideWall} from './city-geometry.js';
 import {curtainWall, architecturalMetal, bayStone} from './city-curtainwall.js';
-import {label} from './city-materials.js';
+import {label,photo} from './city-materials.js';
 import {bamboo} from './city-bamboo.js';
 import {buildStadium} from './city-stadium.js';
 import {starBridge} from './city-starbridge.js';
@@ -52,6 +52,7 @@ function bayCentralTower(parts,s) {
   }
   function ring(y,out=0){return plan.map(([x,z])=>point(x,z,y,out));}
   const upper=h-15.9, step=(upper-7.8)/69;
+  const elevationUV=(bottom,top)=>s.elevationUV.push(1,bottom,1,top,0,top,0,bottom);
   let base=ring(.22);
   for(let k=0;k<=69;k++){
     const y=k===0?7.8:7.8+k*step,top=ring(y);
@@ -60,8 +61,9 @@ function bayCentralTower(parts,s) {
     for(let i=0;i<plan.length;i++){
       const j=(i+1)%plan.length;
       const structure=stoneFaces.has(i);
-      const surface=structure?s.stone:s.office;
+      const surface=i===8?s.east:structure?s.stone:s.office;
       wallFace(surface,base[i],top[i],top[j],base[j],structure?null:curtainFaces.has(i)?clearTint:coolTint,u);
+      if(i===8)elevationUV(.935*(base[i][1]-.22)/(upper-.22),.935*(y-.22)/(upper-.22));
       u+=Math.hypot(top[j][0]-top[i][0],top[j][2]-top[i][2]);
     }
     const width=service?1.04:k<2?.86:.32;
@@ -83,7 +85,12 @@ function bayCentralTower(parts,s) {
   // bridge-like parapets, as seen on the waterfront elevation.
   const skyPlan=[[-.77,-.79],[.77,-.79],[.77,.79],[-.77,.79]];
   const hallRing=y=>skyPlan.map(([x,z])=>point(x,z,y));
-  belt(s.office,hallRing(upper),hallRing(upper+7.35),coolTint);cap(s.soffit,hallRing(upper+7.35));
+  const hallBase=hallRing(upper),hallTop=hallRing(upper+7.35);
+  for(let i=0;i<4;i++){const j=(i+1)%4;
+    wallFace(i===1?s.east:s.office,hallBase[i],hallTop[i],hallTop[j],hallBase[j],coolTint);
+    if(i===1)elevationUV(.935,1);
+  }
+  cap(s.soffit,hallTop);
   for(const side of [-1,1]){
     function rail(x,z,y){return point(x*side,z,y);}
     const topY=z=>h-(z+1)*.70;
@@ -235,7 +242,8 @@ function bayGardens(podiums,towers,s) {
 function oneShenzhenBay(root,map,m) {
   const byId=new Map();
   for(const f of map.buildings){const id=Math.abs(Number(f.id));if(specialBuildings.has(id))byId.set(id,f);}
-  const s=Object.fromEntries(['office','homes','stone','guards','soffit','shadow','trim','lawns','leaves','pavers'].map(k=>[k,new Surface()]));
+  const s=Object.fromEntries(['office','east','homes','stone','guards','soffit','shadow','trim','lawns','leaves','pavers'].map(k=>[k,new Surface()]));
+  s.elevationUV=[];
   const parts=t7Parts.map(id=>byId.get(id)).filter(Boolean);
   if(parts.length===3)bayCentralTower(parts,s);
   for(const id of bayTowers)if(byId.has(id))bayNeighbour(byId.get(id),s,id===bayTowers[0]);
@@ -244,6 +252,22 @@ function oneShenzhenBay(root,map,m) {
   bayGardens(podiums,[...parts,...bayTowers.map(id=>byId.get(id)).filter(Boolean)],s);
   const g=new T.Group();g.name='深圳湾一号 · 八座塔楼与临水商业';root.add(g);
   const office=curtainWall('bayOffice'),homes=curtainWall('bayHome');m.walls.push(office,homes);
+  if(s.east.indices.length){
+    const east=curtainWall('bayOffice'),image=photo('t7-east-elevation.webp');
+    image.wrapS=image.wrapT=T.ClampToEdgeWrapping;
+    const glaze=east.onBeforeCompile;
+    east.onBeforeCompile=shader=>{
+      glaze(shader);shader.uniforms.eastSurvey={value:image};
+      shader.vertexShader='attribute vec2 elevationCoord; varying vec2 eastUv;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\neastUv=elevationCoord;');
+      shader.fragmentShader='uniform sampler2D eastSurvey; varying vec2 eastUv;\n'+shader.fragmentShader.replace('#include <alphatest_fragment>',`
+        vec3 measured=texture2D(eastSurvey,eastUv).rgb / vec3(.462,.527,.571);
+        diffuseColor.rgb*=mix(vec3(1.),clamp(measured,vec3(.19),vec3(2.35)),.85);
+        #include <alphatest_fragment>`);
+    };
+    east.customProgramCacheKey=()=>'t7-east-photo-v1';m.walls.push(east);
+    const shell=s.east.mesh(g,east,'T7临湖面 · 实拍窗格、百叶与鹏瑞标识',true);
+    shell.geometry.setAttribute('elevationCoord',new T.Float32BufferAttribute(s.elevationUV,2));
+  }
   const glass=new T.MeshPhysicalMaterial({color:0x9bb1b1,metalness:.19,roughness:.14,transparent:true,opacity:.23,depthWrite:false,clearcoat:.89,side:T.DoubleSide});
   glass.userData.cityProbe='district';
   s.office.mesh(g,office,'T7与T1 · 超白单元式幕墙',true);s.homes.mesh(g,homes,'住宅与商业步廊的内退玻璃',true);

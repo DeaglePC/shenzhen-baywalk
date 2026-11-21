@@ -18,12 +18,12 @@ export function label(text,english,width=1024,background='#305d66'){
 export function materials(){
   const standard=(options)=>new T.MeshStandardMaterial({...options,side:T.DoubleSide});
   const linearPhoto=(name)=>{const t=photo(name);t.colorSpace=T.NoColorSpace;return t;};
-  function scannedFacade(prefix){
+  function masonryFacade(prefix){
     const mat=standard({map:photo(prefix+'-Color.webp'),normalMap:linearPhoto(prefix+'-NormalGL.webp'),
       roughnessMap:linearPhoto(prefix+'-Roughness.webp'),normalScale:new T.Vector2(.53,.53),roughness:.94,vertexColors:true});
     mat.emissive.setHex(0xffe8bb);mat.emissiveIntensity=0;mat.userData.cityProbe='district';
-    // The photographed windows have a smooth roughness value, while stone
-    // surrounds and mortar are rough. Use the co-registered scan for both
+    // The window panels have a smooth roughness value, while stone
+    // surrounds and mortar are rough. Use the aligned roughness map for both
     // reflection response and a recessed light mask for occupied rooms.
     mat.onBeforeCompile=shader=>{
       shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
@@ -35,7 +35,7 @@ export function materials(){
         totalEmissiveRadiance*=pane*smoothstep(.70,.73,lit)*(.19+.30*lit);`);
     };return mat;
   }
-  const masonry=scannedFacade('Facade020A'),residential=scannedFacade('Facade019A');
+  const masonry=masonryFacade('Facade020A'),residential=masonryFacade('Facade019A');
   const bambooGlass=curtainWall('bamboo'),atriumGlass=curtainWall('atrium',[1,1],'street');
   const walls=[curtainWall('silver',[38,64]),curtainWall('blue',[13,13]),curtainWall('office',[27,24]),
     masonry,residential,curtainWall('fins',[57,62]),bambooGlass,atriumGlass];

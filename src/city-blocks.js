@@ -59,7 +59,7 @@ export function cityBlocks(root,map,m,grid){
     if(f.material==='glass'||f.material==='mirror')type=[0,1,2,5][Math.abs(f.id)%4];
     if(f.material==='concrete'||f.material==='limestone')type=3;
     if(Number(f.id)===529272469)type=1;
-    // Each photographed masonry tile covers six window bays and six floors.
+    // Each masonry material tile covers six window bays and six floors.
     const floors=Math.max(1,Math.round((h-start)/(isRes?3.05:3.65)));
     const scales=[[38,64],[13,13],[27,24],[19.8,6*(h-start)/floors],[21.6,6*(h-start)/floors],[57,62]];
     const [subdiv,repeatY]=scales[type];
