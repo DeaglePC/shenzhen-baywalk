@@ -1,5 +1,7 @@
 import * as T from 'three';
-import {Water} from 'three/addons/objects/Water.js';
+import {makeLake} from './lake.js';
+import {islandShores} from './lake-shores.js';
+import {streetSurface} from './street-surface.js';
 import {Surface,Grid,Instances,bounds,inArea,random,segmentDistance,ribbon,clamp} from './city-geometry.js';
 import {materials,asset} from './city-materials.js';
 import {landmarks} from './city-landmarks.js';
@@ -38,7 +40,10 @@ function terrain(root,map,m,grid){
   for(const w of map.water){w.bbox=bounds(w.p);grid.water.add(w,w.bbox);}
   const edges=new Surface();
   const lake=map.water.find(f=>Number(f.id)===-10175109);
-  if(lake){ribbon(edges,[...lake.p,lake.p[0]],.67,.171,4);edges.mesh(root,m.curb,'内湖驳岸');}
+  if(lake){
+    ribbon(edges,[...lake.p,lake.p[0]],.67,.171,4);edges.mesh(root,m.curb,'内湖驳岸');
+    islandShores(root,lake,m.grass);
+  }
   const plantedFeatures=map.land.filter(f=>groups[f.kind]);return plantedFeatures;
 }
 function farTerrain(root){
@@ -58,45 +63,18 @@ function farTerrain(root){
     const mountains=new T.Mesh(g,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));mountains.name='真实高程 · 香港与南山山脊';root.add(mountains);
   }).catch(e=>console.warn('Regional terrain unavailable',e));return state;
 }
-function lakeSurface(root,map,options,m){
-  const s=new Surface();for(const f of map.water)s.polygon(f.p,f.holes,0,1);
-  const g=s.geometry();if(!g)return null;
-  // Water's reflection plane is local XY. Bake the projection into that plane.
-  g.rotateX(Math.PI/2);
-  const normals=new T.TextureLoader().load(asset('waternormals.jpg'));normals.wrapS=normals.wrapT=T.RepeatWrapping;
-  const dir=new T.Vector3(-.71,.37,-.52).normalize();
-  const water=new Water(g,{textureWidth:options.quality==='low'?256:512,textureHeight:options.quality==='low'?256:512,
-    waterNormals:normals,sunDirection:dir,sunColor:0xffdeac,waterColor:0x4c7774,distortionScale:1.18,
-    clipBias:.0003,side:T.DoubleSide,fog:true});
-  water.name='深圳湾与人才湖 · 实时镜面水域';water.rotation.x=-Math.PI/2;water.position.y=.151;
-  water.material.uniforms.size.value=3.7;
-  water.material.fragmentShader=water.material.fragmentShader
-    .replace('float rf0 = 0.3;','float rf0 = 0.13;')
-    .replace('diffuseLight * 0.3','diffuseLight * 0.12')
-    .replace('vec3( 0.1 ) + reflectionSample * 0.9 + reflectionSample * specularLight','vec3( 0.012 ) + reflectionSample * 0.86 + reflectionSample * min(specularLight,vec3(1.3))');
-  // Limit the additional scene pass, while keeping the wave shader continuous.
-  const excluded=root.children.filter(o=>['后海 · Sentinel-2 真彩色地表','园林草地','硬质铺装广场','停车场','潮间带','运动场','树下环境阴影'].includes(o.name));
-  const reflect=water.onBeforeRender;let last=-1000,hasReflection=false;
-  const lastCamera=new T.Vector3(Infinity,0,0);
-  water.onBeforeRender=function(renderer,scene,camera,...rest){
-    if(camera.isArrayCamera)return;
-    const now=performance.now(),nearLake=Math.hypot(camera.position.x,camera.position.z)<970,rate=nearLake?75:180;
-    if(!hasReflection||now-last>rate||lastCamera.distanceToSquared(camera.position)>100){
-      const previous=excluded.map(o=>o.visible);excluded.forEach(o=>o.visible=false);
-      try{reflect.call(this,renderer,scene,camera,...rest);}
-      finally{excluded.forEach((o,i)=>o.visible=previous[i]);}
-      last=now;lastCamera.copy(camera.position);hasReflection=true;
-    }
-  };
-  root.add(water);return water;
-}
 export function createCity(scene,map,options={}){
   const root=new T.Group();root.name='深圳人才公园与后海城区';scene.add(root);
   const m=materials(),grid={buildings:new Grid(100),water:new Grid(100),roads:new Grid(72)};
   terrain(root,map,m,grid);cityBlocks(root,map,m,grid);streets(root,map,m,grid);landmarks(root,map.roads,m);
   let foliage=[],night=0;
-  const far=farTerrain(root),water=lakeSurface(root,map,options,m);
-  const ready=canopyData.then(trees=>{if(far.active)foliage=furnishing(root,map,m,grid,trees);});
+  const far=farTerrain(root),water=makeLake(root,map,options);
+  const ground=streetSurface(root,m,options,map.roads);
+  const ready=canopyData.then(async trees=>{
+    if(!far.active)return;
+    foliage=furnishing(root,map,m,grid,trees);
+    await root.userData.foliageReady;
+  });
   function roadAt(x,z){
     let height=0;
     for(const seg of grid.roads.query(x,z)){
@@ -122,7 +100,8 @@ export function createCity(scene,map,options={}){
   }
   let lastTone=-1;const lastDetailEye=new T.Vector3(Infinity,0,0);let detailCount=-1;
   function update(time,camera){
-    if(water)water.material.uniforms.time.value=time*.56;
+    if(camera)root.userData.updateTrees?.(camera.position);
+    if(water)water.material.uniforms.time.value=time;
     const details=root.userData.localDetails||[];
     if(camera&&(detailCount!==details.length||lastDetailEye.distanceToSquared(camera.position)>25)){
       for(const {item,range} of details){
@@ -136,11 +115,11 @@ export function createCity(scene,map,options={}){
     if(Math.abs(lastTone-intensity)>.02){for(const a of foliage)a.color.setHex(0xe4ebdc).multiplyScalar(.67+.3*intensity);lastTone=intensity;}
   }
   function setNight(fraction){
-    night=clamp(fraction,0,1);for(const wall of m.walls)wall.emissiveIntensity=night*1.14;
+    night=clamp(fraction,0,1);if(water)water.material.uniforms.night.value=night;for(const wall of m.walls)wall.emissiveIntensity=night*1.14;
     m.lamp.emissiveIntensity=.36+night*2.6;
     m.shop.emissiveIntensity=.16+night*.69;
   }
-  function setSun(direction,color){if(!water)return;water.material.uniforms.sunDirection.value.copy(direction).normalize();if(color)water.material.uniforms.sunColor.value.set(color);}
-  function dispose(){far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
-  return {root,ready,update,groundHeight,isWalkable,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
+  function setSun(direction,color){ground.invalidate();if(!water)return;water.material.uniforms.sunDirection.value.copy(direction).normalize();if(color)water.material.uniforms.sunColor.value.set(color);}
+  function dispose(){ground.dispose();water?.dispose();far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
+  return {root,ready,update,captureStreet:ground.capture,groundHeight,isWalkable,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
 }

@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {random} from './city-geometry.js';
+import {curtainWall} from './city-curtainwall.js';
 export const asset=n=>import.meta.env.BASE_URL+'city/'+n;
 const loader=new T.TextureLoader();
 function canvasTexture(w,h,paint,repeat=true){
@@ -46,24 +47,20 @@ function facade(kind,seed){
 }
 export function materials(){
   const standard=(options)=>new T.MeshStandardMaterial({...options,side:T.DoubleSide});
-  const assets=['Facade005','Facade019A','Facade017','Facade020A',null,'Facade015'];
   const linearPhoto=(name)=>{const t=photo(name);t.colorSpace=T.NoColorSpace;return t;};
-  const walls=assets.map((id,type)=>{
-    if(!id)return standard({map:facade(4,476),roughness:.73,vertexColors:true});
-    return standard({map:photo(id+'-Color.webp'),normalMap:linearPhoto(id+'-NormalGL.webp'),
-      normalScale:new T.Vector2(.72,.72),roughnessMap:linearPhoto(id+'-Roughness.webp'),
-      roughness:type===3?.92:.77,metalness:type===3?.09:.32,vertexColors:true});
-  });
-  walls.forEach((mat,index)=>{
+  const masonry=standard({map:photo('Facade020A-Color.webp'),normalMap:linearPhoto('Facade020A-NormalGL.webp'),
+    normalScale:new T.Vector2(.7,.7),roughnessMap:linearPhoto('Facade020A-Roughness.webp'),roughness:.9,vertexColors:true});
+  const residential=standard({map:facade(4,476),roughness:.73,vertexColors:true});
+  const bambooGlass=curtainWall('bamboo'),atriumGlass=curtainWall('atrium',[1,1],'street');
+  const walls=[curtainWall('silver',[38,64]),curtainWall('blue',[13,13]),curtainWall('office',[27,24]),
+    masonry,residential,curtainWall('fins',[57,62]),bambooGlass,atriumGlass];
+  [masonry,residential].forEach((mat,index)=>{
     mat.emissive.setHex(0xffeac6);mat.emissiveIntensity=0;
     mat.emissiveMap=canvasTexture(512,512,(g)=>{
-      g.fillStyle='#000';g.fillRect(0,0,512,512);
-      const window=index<3?32:64,rand=random(42429+index);
+      g.fillStyle='#000';g.fillRect(0,0,512,512);const rand=random(42432+index),window=64;
       for(let x=0;x<512;x+=window)for(let y=0;y<512;y+=window){
-        if(rand()>.28)continue;
-        g.fillStyle=['#987c52','#c7bba2','#b1bdc0','#736a4d','#f0d2a4'][rand()*5|0];
-        if(index<3)g.fillRect(x+3,y+4,window-6,window-10);
-        else g.fillRect(x+8,y+9,rand()<.6?20:42,29);
+        if(rand()>.28)continue;g.fillStyle=['#987c52','#c7bba2','#b1bdc0','#736a4d','#f0d2a4'][rand()*5|0];
+        g.fillRect(x+8,y+9,rand()<.6?20:42,29);
       }
     });
   });
@@ -73,7 +70,7 @@ export function materials(){
   frontage.repeat.x=-1;
   const shop=standard({map:frontage,emissiveMap:frontage,emissive:0xffeee0,emissiveIntensity:.22,roughness:.65});
   return {
-    walls,roof,shop, grass:standard({map:photo('grass.webp'),roughness:1,vertexColors:true}),
+    walls,bambooGlass,atriumGlass,roof,shop, grass:standard({map:photo('grass.webp'),roughness:1,vertexColors:true}),
     gutter:standard({map:photo('asphalt.webp'),color:0x646963,roughness:.87}),
     kerb:standard({map:canvasTexture(256,48,(g,w,h)=>{
       const r=random(823);g.fillStyle='#b3b3a9';g.fillRect(0,0,w,h);

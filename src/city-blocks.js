@@ -2,6 +2,8 @@ import * as T from 'three';
 import {Surface,Instances,Grid,area,along,bounds,random,ribbon,sideWall} from './city-geometry.js';
 import {specialBuildings} from './city-landmarks.js';
 import {streetStops} from './city-transit.js';
+import {districtDetails} from './city-district-details.js';
+import {cultureSquare} from './city-culture-square.js';
 
 const walking=new Set(['footway','path','pedestrian','steps','cycleway']);
 export function roadHeight(r){
@@ -34,6 +36,7 @@ function shopfronts(surface,walkway,frames,columns,building,start,height,rand){
   }
 }
 export function cityBlocks(root,map,m,grid){
+  const detail=districtDetails(root,m);
   const chunks=new Map(),plant=new Instances(new T.BoxGeometry(1,1,1),m.curb,'屋顶设备'),lids=new Instances(new T.BoxGeometry(1,1,1),m.dark,'通风机顶盖');
   const roofAntennas=new Instances(new T.CylinderGeometry(.54,1,1,5),m.rail,'天线');
   const awnings=new Instances(new T.BoxGeometry(1,1,1),m.rail,'店铺雨棚');
@@ -51,17 +54,23 @@ export function cityBlocks(root,map,m,grid){
     let type=isRes?3+(rand()*2|0):h>65?rand()*3|0:/commercial|office|retail/.test(f.kind)?rand()*3|0:h<19?3:rand()*5|0;
     if(isRes&&h>125&&dist<1800)type=f.id%2===0?0:1;
     if(!isRes&&h>90&&Math.abs(f.id)%4===0)type=5;
+    if(f.material==='glass'||f.material==='mirror')type=[0,1,2,5][Math.abs(f.id)%4];
+    if(f.material==='concrete'||f.material==='limestone')type=3;
+    if(Number(f.id)===529272469)type=1;
     const scales=[[38,64],[13,13],[27,24],[13,13],[27,25.6],[57,62]];
     const [subdiv,repeatY]=scales[type];
     const colors=type<3?[0xd9ebef,0xbccfd5,0xd8e2df,0xe0cfc2,0xc2d3d3,0xb6c9d2]:[0xe5ded1,0xdae0de,0xd4c7ae,0xe4cfc1,0xcad6d3];
     col.setHex(colors[Math.floor(rand()*colors.length)]).multiplyScalar(.88+rand()*.15);
+    if(f.color&&/^#[a-f\d]{6}$/i.test(f.color))col.lerp(new T.Color(f.color),.28);
     const streetRetail=/retail|commercial/.test(f.kind);
     const retailEligible=start<.9 && (streetRetail && h>3.3 || dist<1600 && h>7 && /office|yes|hotel|apartments/.test(f.kind));
-    const shopH=retailEligible?Math.min(h,Math.max(3.25,Math.min(h*.37,4.7))):start;
-    if(shopH>start+.2){
+    const ruifu=Number(f.id)===529272469;
+    const shopH=ruifu?8.8:retailEligible?Math.min(h,Math.max(3.25,Math.min(h*.37,4.7))):start;
+    if(shopH>start+.2&&!ruifu){
       if(streetRetail&&dist<2150)shopfronts(c.shop,storefrontWalk,headers,columns,f,start,shopH,rand);
       else sideWall(c.shop,f.p,start,shopH,shopH*3.1,shopH);
     }
+    detail.add(f,cx,cz,shopH);
     let cap=f.p;
     if(h>85&&!f.holes?.length&&f.p.length<55){
       const crownHeight=Math.min(8.3,h*.046);
@@ -81,11 +90,12 @@ export function cityBlocks(root,map,m,grid){
       plant.at(cx,h+rh*.5,cz,rw,rh,rd,0);lids.at(cx,h+rh+.04,cz,rw*.82,.12,rd*.75,0);
       if(h>75&&rand()>.50)roofAntennas.at(cx+rw*.3,h+rh+1.9,cz,.085,4,.085,0);
     }
-    if(shopH>0&&dist<880&&f.p.length<28)for(let i=0;i<f.p.length;i++){
+    if(!ruifu&&shopH>0&&dist<880&&f.p.length<28)for(let i=0;i<f.p.length;i++){
       const A=f.p[i],B=f.p[(i+1)%f.p.length],dx=B[0]-A[0],dz=B[1]-A[1],l=Math.hypot(dx,dz);
       if(l>5&&l<70)awnings.at((A[0]+B[0])/2,shopH-.43,(A[1]+B[1])/2,1.05,.13,l,Math.atan2(dx,dz));
     }
   }
+  detail.finish();cultureSquare(root,m,map);
   for(const c of chunks.values()){
     c.walls.forEach((s,i)=>s.mesh(root,m.walls[i],'城区立面 '+i,true));c.roof.mesh(root,m.roof,'建筑屋顶',true);c.shop.mesh(root,m.shop,'沿街商铺',true);
   }
@@ -111,7 +121,8 @@ export function streets(root,map,m,grid){
       grid.roads.add({a,b,width:w,y,rd,rampStart:bridge&&walk&&i===1,rampEnd:bridge&&walk&&i===p.length-1},[Math.min(a[0],b[0])-pad,Math.min(a[1],b[1])-pad,Math.max(a[0],b[0])+pad,Math.max(a[1],b[1])+pad]);
     }
     if(!walk&&!motor&&!bridge&&rd.kind!=='service'){
-      ribbon(curbs,p,w+3.0,.2,4.8);
+      const frontage=rd.id===1436530936||rd.id===1190795443;
+      ribbon(curbs,p,w+(frontage?6.7:3),.2,4.8,frontage?1.85:0);
       if(d<1450&&w>=6){
         for(const side of [-1,1]){
           ribbon(gutter,p,.38,y+.013,3.5,side*(w*.5-.21));

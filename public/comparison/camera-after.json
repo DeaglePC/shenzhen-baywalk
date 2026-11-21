@@ -1,0 +1,48 @@
+[
+  {
+    "view": "bridge",
+    "position": [
+      213.6,
+      4.07,
+      143.5
+    ],
+    "rotation": [
+      0.135,
+      0.6713391097940032,
+      0,
+      "YXZ"
+    ],
+    "fov": 67,
+    "aspect": 1.7777777777777777,
+    "near": 0.16,
+    "far": 32000,
+    "sky": "日落",
+    "seconds": 1.5,
+    "width": 2560,
+    "height": 1440,
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  {
+    "view": "street",
+    "position": [
+      -121.8,
+      1.916,
+      -418.1
+    ],
+    "rotation": [
+      0,
+      1.1269943314939084,
+      0,
+      "YXZ"
+    ],
+    "fov": 67,
+    "aspect": 1.7777777777777777,
+    "near": 0.16,
+    "far": 32000,
+    "sky": "日落",
+    "seconds": 1.5,
+    "width": 2560,
+    "height": 1440,
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  }
+]

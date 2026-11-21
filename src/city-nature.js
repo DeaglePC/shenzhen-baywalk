@@ -1,12 +1,17 @@
 import * as T from 'three';
 import {Instances,Surface,along,random,inArea,segmentDistance,clamp} from './city-geometry.js';
 import {asset,label} from './city-materials.js';
+import {volumetricTrees} from './foliage-volume.js';
+import localCrowns from './foliage-samples.json';
 const TAU=Math.PI*2;
 const leafy=new Set(['grass','park','forest','wood','scrub','garden','nature_reserve','recreation_ground','greenfield','flowerbed','common','golf_course']);
 function makeBillboards(scene,plants,photoName,ratio){
   if(!plants.length)return;
-  const tex=new T.TextureLoader().load(asset(photoName+'.webp'));tex.colorSpace=T.SRGBColorSpace;
-  const mat=new T.MeshBasicMaterial({map:tex,side:T.DoubleSide,alphaTest:.39,transparent:false,color:0xe4ebdc});
+  let finish;
+  const ready=new Promise(resolve=>{finish=resolve;});
+  const tex=new T.TextureLoader().load(asset(photoName+'.webp'),finish,undefined,finish);tex.colorSpace=T.SRGBColorSpace;
+  const mat=new T.MeshBasicMaterial({map:tex,side:T.DoubleSide,alphaTest:.235,transparent:false,color:0xf5f3da});
+  mat.userData.photoReady=ready;
   mat.onBeforeCompile=shader=>{
     shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`
       vec3 plantCenter = instanceMatrix[3].xyz;
@@ -22,7 +27,11 @@ function makeBillboards(scene,plants,photoName,ratio){
   };
   const geometry=new T.PlaneGeometry(1,1);geometry.translate(0,.5,0);
   const mesh=new T.InstancedMesh(geometry,mat,plants.length),M=new T.Matrix4(),color=new T.Color();mesh.name='树冠 · '+photoName;
-  plants.forEach((p,i)=>{M.makeScale(p[2]*ratio*(p[3]>.5?-1:1),p[2],p[2]);M.setPosition(p[0],.05,p[1]);mesh.setMatrixAt(i,M);color.setScalar(.77+.26*p[3]);mesh.setColorAt(i,color);});
+  plants.forEach((p,i)=>{
+    p.photoX=p[2]*ratio*(p[3]>.5?-1:1);p.mesh=mesh;p.slot=i;
+    M.makeScale(p.photoX,p[2],p[2]);M.setPosition(p[0],.05,p[1]);mesh.setMatrixAt(i,M);
+    color.setRGB(.92+.27*p[3],1.03+.24*p[3],.85+.15*p[3]);mesh.setColorAt(i,color);
+  });
   mesh.computeBoundingSphere();scene.add(mesh);return mat;
 }
 function palmGeo(){
@@ -44,6 +53,21 @@ function palmGeo(){
   }
   return surf.geometry();
 }
+function underplanting(){
+  const s=new Surface(),rng=random(9121),color=new T.Color();
+  for(let i=0;i<52;i++){
+    const a=rng()*TAU,r=.10*Math.sqrt(rng()),x=Math.cos(a)*r,z=Math.sin(a)*r;
+    const out=.1+rng()*.19,height=.18+rng()*.22,w=.009+rng()*.009,c=Math.cos(a),d=Math.sin(a);
+    let lx=x,lz=z,ly=0,lw=w*.75;
+    for(let j=1;j<=3;j++){
+      const t=j/3,nx=x+c*out*t*t,nz=z+d*out*t*t,ny=height*Math.sin(t*2.03),nw=w*(1-t*.99);
+      color.setRGB(.025+.046*t,.085+.125*t+rng()*.015,.022+.035*t);
+      s.quad([lx-d*lw,ly,lz+c*lw],[lx+d*lw,ly,lz-c*lw],[nx+d*nw,ny,nz-c*nw],[nx-d*nw,ny,nz+c*nw],undefined,color);
+      lx=nx;lz=nz;ly=ny;lw=nw;
+    }
+  }
+  return s.geometry();
+}
 export function furnishing(root,map,m,grid,canopy=[]){
   const rand=random(70717), species=[[],[],[],[],[]], affected=[];
   const cube=new T.BoxGeometry(1,1,1),cylinder=new T.CylinderGeometry(1,1,1,5,1,true);
@@ -52,22 +76,58 @@ export function furnishing(root,map,m,grid,canopy=[]){
   const trunks=new Instances(new T.CylinderGeometry(.72,1,1,8,3),m.trunk,'棕榈树干');
   const shadows=[],spots=new Set();let palmCount=0;
   const contains=(index,x,z)=>index.query(x,z).some(f=>inArea(x,z,f));
-  function plant(x,z,height,type,allowPalm=false){
+  function plant(x,z,height,type,allowPalm=false,street=false){
     const cell=(x/3|0)+','+(z/3|0);if(spots.has(cell)||contains(grid.water,x,z)||contains(grid.buildings,x,z))return;
     const overlaps=grid.roads.query(x,z).some(s=>s.y<1&&segmentDistance(x,z,s.a,s.b)<s.width/2+.37);
     if(overlaps)return;spots.add(cell);
     if(allowPalm&&palmCount<360&&Math.hypot(x,z)<1750){
       const h=height*.87,r=.19+.07*rand();trunks.at(x,h*.5,z,r,h,r,rand()*TAU);const sz=.83+rand()*.41;palms.at(x,h-.15,z,sz,sz,sz,rand()*TAU);palmCount++;
-    }else species[type].push([x,z,height,rand()]);
+    }else{
+      const tree=[x,z,height,rand()];tree.street=street;if(street)tree.species=tree[3]>.32?1:0;
+      species[type].push(tree);
+    }
     if(type<3&&Math.abs(x)<1700&&Math.abs(z)<1700)shadows.push([x+.55,z+.29,height*(type===0?.35:.47)]);
+    return true;
   }
   if(canopy.length){
-    for(const [x,z,h] of canopy){
+    for(const [x,z,h] of [...canopy,...localCrowns]){
       const nearby=grid.roads.query(x,z);
       const avenue=h<13&&nearby.some(s=>s.width>8&&s.y<1&&segmentDistance(x,z,s.a,s.b)<s.width*.5+7);
       plant(x,z,h,rand()<.7?2:rand()*2|0,avenue&&rand()<.42);
     }
   }
+  // Dengliang Road's main carriageways have separate frontage roads. Place
+  // small roadside trees only on outer landing strips with a clear trunk site.
+  const treeBeds=new Instances(new T.CylinderGeometry(1,1,1,16),
+    new T.MeshStandardMaterial({color:0x49382a,roughness:1}),'行道树种植穴');
+  const edging=new Instances(new T.TorusGeometry(1,.055,5,24).rotateX(-Math.PI/2),
+    new T.MeshStandardMaterial({color:0x9d9786,roughness:.94}),'树池边缘');
+  const stakes=new Instances(new T.CylinderGeometry(.74,1,1,6),
+    new T.MeshStandardMaterial({color:0x795c42,roughness:.98}),'行道树木支撑');
+  const groundCover=new Instances(underplanting(),new T.MeshStandardMaterial({vertexColors:true,
+    roughness:.84,side:T.DoubleSide}),'树下沿阶草');
+  const original=species.slice(0,3).flat().filter(p=>Math.hypot(p[0]+122,p[1]+418)<210);
+  for(const road of map.roads){
+    if(road.id!==1436530936&&road.id!==1190795443)continue;
+    along(road.p,11,7,(x,z,dx,dz,distance)=>{
+      const px=x-dz*(road.width*.5+1.45),pz=z+dx*(road.width*.5+1.45);
+      const d=Math.hypot(px+121.8,pz+418.1);
+      if(d<5.8||d>142||original.some(p=>Math.hypot(px-p[0],pz-p[1])<5.4))return;
+      const height=6.0+.95*Math.sin(distance*.113)+(road.id===1190795443?1.25:0);
+      if(!plant(px,pz,height,0,false,true))return;
+      treeBeds.at(px,.27,pz,.82,.10,.81);edging.at(px,.319,pz,.85,.60,.84);
+      const angle=distance*.357;
+      for(let j=0;j<3;j++){
+        const a=angle+j*TAU/3,s=Math.sin(a),c=Math.cos(a);
+        stakes.between(px+s*.57,.30,pz+c*.57,px+s*.15,1.68,pz+c*.15,.035);
+      }
+      for(let j=0;j<7;j++){
+        const a=j*TAU/7+angle,s=.79+.18*rand();
+        groundCover.at(px+Math.cos(a)*.56,.31,pz+Math.sin(a)*.56,s,s,s,angle+j*2.7);
+      }
+    });
+  }
+  for(const batch of [treeBeds,edging,stakes,groundCover])batch.flush(root,true);
   for(const f of map.land){
     if(!leafy.has(f.kind))continue;const b=f.bbox,bb=(b[2]-b[0])*(b[3]-b[1]);
     let density=['forest','wood','scrub','garden'].includes(f.kind)?1/125:1/430;
@@ -122,6 +182,7 @@ export function furnishing(root,map,m,grid,canopy=[]){
     });
   }
   const ratios=[.93,1.5,1.33,.95,1];['island_tree_01','island_tree_02','jacaranda_tree','shrub_02','shrub_03'].forEach((n,i)=>{const mat=makeBillboards(root,species[i],n,ratios[i]);if(mat)affected.push(mat);});
+  root.userData.foliageReady=Promise.all([volumetricTrees(root,species.slice(0,3).flat()),...affected.map(a=>a.userData.photoReady)]);
   if(shadows.length){
     const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),rad=g.createRadialGradient(32,32,1,32,32,32);rad.addColorStop(0,'rgba(36,40,23,.66)');rad.addColorStop(.32,'rgba(34,44,28,.36)');rad.addColorStop(1,'rgba(32,46,27,0)');g.fillStyle=rad;g.fillRect(0,0,64,64);
     const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;

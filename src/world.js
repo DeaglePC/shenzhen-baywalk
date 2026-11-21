@@ -5,6 +5,7 @@ import {createCity} from './city.js';
 import {createVehicles} from './vehicles.js';
 import {createPedestrians} from './pedestrians.js';
 import {createFilm} from './film.js';
+import {localReflections} from './local-reflections.js';
 
 const skies=[
   {key:'sunset',name:'日落',fog:0xd6b09f,density:.00021,rotation:3.32,dir:[-.884,.086,-.458],light:0xffba80,power:2.36,env:.62,bg:.54,exposure:.94,night:.19},
@@ -18,17 +19,17 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   const software=debug && /swiftshader|llvmpipe|software rasterizer/i.test(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
   renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled=!software;renderer.shadowMap.type=T.PCFSoftShadowMap;
+  renderer.shadowMap.enabled=!software;renderer.shadowMap.type=T.PCFShadowMap;
   let ratio=software?Math.min(1,1000/innerWidth):Math.min(devicePixelRatio,1.45);renderer.setPixelRatio(ratio);container.append(renderer.domElement);
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(67,1,.16,32000),canvas=renderer.domElement;
   const film=software?{render:(s,c)=>renderer.render(s,c)}:createFilm(renderer,camera);
   camera.rotation.order='YXZ';canvas.tabIndex=0;canvas.setAttribute('aria-label','深圳湾实时三维漫游，WASD 移动，拖动环顾');
   const hemi=new T.HemisphereLight(0xd2dff0,0xa59886,.64);scene.add(hemi);
-  const sun=new T.DirectionalLight();scene.add(sun,sun.target);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+  const sun=new T.DirectionalLight();scene.add(sun,sun.target);sun.castShadow=true;sun.shadow.mapSize.set(3072,3072);
   Object.assign(sun.shadow.camera,{left:-82,right:82,top:82,bottom:-82,near:.5,far:860});sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias=-.00027;sun.shadow.normalBias=.045;sun.shadow.autoUpdate=false;sun.shadow.needsUpdate=true;
+  sun.shadow.radius=1.45;sun.shadow.bias=-.00012;sun.shadow.normalBias=.019;sun.shadow.autoUpdate=false;sun.shadow.needsUpdate=true;
   const sunDirection=new T.Vector3(),skiesLoaded=new Map(),loader=new HDRLoader();
-  let city,vehicles,people,skyIndex=0,skyRequest=0,anchorX=1e8,anchorZ=1e8,lastShadow=-1e8;
+  let city,vehicles,people,probes,skyIndex=0,skyRequest=0,anchorX=1e8,anchorZ=1e8,lastShadow=-1e8;
   let playing=false,orbiting=false,pitch=0,yaw=0,elapsed=0,gait=0,stepDist=0,joyX=0,joyZ=0;
   const keys=new Set(),foot=new T.Vector3(),dir=new T.Vector3(),ground=new T.Vector3();
   const orbit=new OrbitControls(camera,canvas);orbit.enabled=false;orbit.enableDamping=true;
@@ -46,13 +47,16 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
     scene.fog=new T.FogExp2(sky.fog,sky.density);hemi.intensity=index===2?.28:.53;
     sun.color.setHex(sky.light);sun.intensity=sky.power;sunDirection.fromArray(sky.dir).normalize();
     city?.setSun?.(sunDirection,sun.color);city?.setNight?.(sky.night);vehicles?.setNight(sky.night);anchorX=1e8;
+    probes?.refresh(elapsed);
   }
   function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
   new ResizeObserver(resize).observe(container);resize();const initialSky=setSky(0);
   progress(30,'构建建筑、步道与湖岸…');await frame();await frame();
   city=createCity(scene,map,{renderer,camera,quality:software?'low':'balanced'});progress(62,'装载深圳出租车与城市车流…');await frame();
-  [vehicles]=await Promise.all([createVehicles(scene,map),initialSky]);await setSky(0);
-  progress(87,'准备湖面倒影与街景…');await frame();
+  [vehicles]=await Promise.all([createVehicles(scene,map),initialSky,city.ready]);
+  progress(84,'采集玻璃与车漆的街区反射…');await frame();
+  probes=localReflections(renderer,scene,city,sun,sunDirection,software);await setSky(0);
+  progress(94,'准备湖面倒影与街景…');await frame();
   createPedestrians(scene,map,city).then(p=>people=p).catch(err=>console.warn('行人资源',err));
   function safePoint(x,z){
     if(city.isWalkable(x,z))return [x,z];
@@ -120,7 +124,8 @@ export async function buildWorld(container,map,{progress,report,step,onCamera}){
     if(Math.hypot(focus.x-anchorX,focus.z-anchorZ)>8||elapsed-lastShadow>.35){
       anchorX=focus.x;anchorZ=focus.z;lastShadow=elapsed;sun.target.position.set(anchorX,1,anchorZ);sun.position.copy(sun.target.position).addScaledVector(sunDirection,540);sun.shadow.needsUpdate=true;
     }
-    city.update(elapsed,camera);vehicles.update(dt,camera.position);people?.update(dt,camera);film.render(scene,camera);
+    city.update(elapsed,camera);vehicles.update(dt,camera.position);people?.update(dt,camera);
+    camera.updateMatrixWorld();city.captureStreet(renderer,scene,camera,elapsed);film.render(scene,camera);
     if(++firstFrames>24&&raw<1){perfTime+=raw;frames++;if(raw>.055)slow++;}
     if(frames>65){
       if(slow/frames>.62 && ratio>.72){ratio=Math.max(.7,ratio-.15);renderer.setPixelRatio(ratio);resize();}

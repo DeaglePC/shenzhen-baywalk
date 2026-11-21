@@ -77,4 +77,9 @@ function updateHud(){
   else $('#locality').textContent=Math.hypot(pos.x,pos.z)<610?'人才公园':'南山后海';
 }
 setInterval(updateHud,250);
-if('requestIdleCallback' in window)requestIdleCallback(()=>geo().catch(()=>{}),{timeout:3000});else setTimeout(()=>geo().catch(()=>{}),1400);
+const requestedView=new URLSearchParams(location.search).get('walk');
+if(['bridge','street'].includes(requestedView)){
+  geo().then(data=>launch(data.views.find(view=>view.id===requestedView)||fallback))
+    .catch(()=>notify('地图读取失败，请点击开始漫游重试。'));
+}else if('requestIdleCallback' in window)requestIdleCallback(()=>geo().catch(()=>{}),{timeout:3000});
+else setTimeout(()=>geo().catch(()=>{}),1400);

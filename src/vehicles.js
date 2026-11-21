@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import {loadHeroTaxi} from './vehicle-hero.js';
 
 // All meshes face +Z. The body width excludes mirrors, the e6 height excludes its taxi sign.
 export const VEHICLE_CATALOG = [
@@ -131,17 +132,19 @@ function makeTraffic(data, options) {
   }
   const hero = { x: -126.8, z: -420.7, yaw: Math.atan2(.30, -.954), model: 'e6' };
   const spots = options.parkedSpots?.length ? options.parkedSpots : [hero];
+  let heroCar;
   for (const spot of spots) {
     const index = VEHICLE_CATALOG.findIndex(m => m.id === spot.model);
     const car = vehicle(null, 0, true, Math.max(0, index), true);
     Object.assign(car, { x: spot.x, z: spot.z, yaw: spot.yaw || 0, y: spot.y });
     cars.push(car);
+    if (!heroCar && spot.model === 'e6') heroCar=car;
   }
   const occupancy = new Map();
   let queueAge=1;
   let moving=[];
   return {
-    cars,
+    cars,heroCar,
     step(dt,eye,horizon) {
       queueAge+=dt;
       if (queueAge>=.22) {
@@ -332,13 +335,22 @@ function contactShadows(group) {
 
 export async function createVehicles(scene, data, options = {}) {
   const group = new THREE.Group(); group.name = 'Shenzhen road traffic';
+  group.userData.excludeFromProbe=true;
   const loader = new GLTFLoader();
   const traffic = makeTraffic(data, options);
-  const assets = await Promise.all(VEHICLE_CATALOG.map(s => loader.loadAsync(modelPath(s.id))));
+  const [assets,hero] = await Promise.all([
+    Promise.all(VEHICLE_CATALOG.map(s => loader.loadAsync(modelPath(s.id)))),
+    traffic.heroCar ? loadHeroTaxi() : null
+  ]);
   const { mat,night } = fleetMaterial();
   const types = assets.map((asset,i) => setupType(asset.scene,VEHICLE_CATALOG[i],mat,group));
   const shadow=contactShadows(group);
   scene.add(group);
+  if(hero){
+    const car=traffic.heroCar;
+    hero.model.position.set(car.x,car.y??options.roadSurfaceY??.30,car.z);
+    hero.model.rotation.y=car.yaw;hero.model.visible=false;scene.add(hero.model);
+  }
   const pos=new THREE.Vector3(), rot=new THREE.Quaternion(), scale=new THREE.Vector3(1,1,1);
   const transform=new THREE.Matrix4(), wheelLocal=new THREE.Matrix4(), wheelWorld=new THREE.Matrix4();
   const wheelRot=new THREE.Quaternion(), flip=new THREE.Quaternion().setFromAxisAngle(UP,Math.PI);
@@ -369,6 +381,11 @@ export async function createVehicles(scene, data, options = {}) {
     const horizon = Math.min(2050, Math.max(560, eye.y * 2.8));
     traffic.step(dt,eye,horizon);
     const floor = options.roadSurfaceY ?? .30;
+    if(hero){
+      const c=traffic.heroCar;
+      hero.model.visible=(eye.x-c.x)**2+(eye.y-floor)**2+(eye.z-c.z)**2<53**2;
+      if(hero.model.visible)hero.setEnvironment(scene.userData.streetProbe);
+    }
     shadow.count=0;
     collisionX=eye.x; collisionZ=eye.z; nearCars.length=0;
     for (const car of traffic.cars) {
@@ -384,7 +401,9 @@ export async function createVehicles(scene, data, options = {}) {
       for (const car of list) {
         pos.set(car.x,car.y??floor,car.z); rot.setFromAxisAngle(UP,car.yaw);
         transform.compose(pos,rot,scale);
-        if (car.distance+eye.y*eye.y < 65*65 && close<45) {
+        if(car === traffic.heroCar && hero?.model.visible) {
+          // The parked close-up uses the clear-coated hero mesh and this same contact shadow.
+        } else if (car.distance+eye.y*eye.y < 65*65 && close<45) {
           t.near.setMatrixAt(close,transform); t.near.setColorAt(close,car.color);
           for (const item of t.extra) item.setMatrixAt(close,transform);
           t.offsets.forEach((off,k) => {
@@ -416,6 +435,7 @@ export async function createVehicles(scene, data, options = {}) {
   }
   function dispose() {
     scene.remove(group);
+    if(hero){scene.remove(hero.model);hero.dispose();}
     const materials=new Set(), geometries=new Set(), textures=new Set();
     for (const source of [group,...assets.map(a=>a.scene)]) {
       source.traverse(n=>{

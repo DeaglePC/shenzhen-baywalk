@@ -558,5 +558,6 @@ def build(model,spec):
             export_texcoords=True,export_normals=True)
     print("WROTE",model, (OUT/(model+".glb")).stat().st_size)
 
-for key,spec in SPECS.items():
-    build(key,spec)
+if __name__ == "__main__":
+    for key,spec in SPECS.items():
+        build(key,spec)
