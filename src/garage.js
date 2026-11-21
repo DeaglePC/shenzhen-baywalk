@@ -10,10 +10,10 @@ import {model3Framing} from './model3-framing.js';
 const types=['出租车','轿车','SUV','MPV','轿车','微型车'];
 const teslaViews={front:'STUD_FRONT34',side:'STUD_SIDE',rear:'STUD_REAR34'};
 function factoryImage(view){
-  const url=new URL('https://static-assets.tesla.cn/configurator/compositor');
-  url.search=new URLSearchParams({context:'design_studio_2',options:'$MT382,$PN01,$W38A,$IPB11',view,
-    model:'m3',size:'1920',bkba_opt:'2',crop:'0,0,0,0',overlay:'0'});
-  return url.href;
+  // The configurator serves this image with literal option separators in its query.
+  return 'https://static-assets.tesla.cn/configurator/compositor?context=design_studio_2'
+    +'&options=$MT382,$PN01,$W38A,$IPB11&view='+encodeURIComponent(view)
+    +'&model=m3&size=1920&bkba_opt=2&crop=0,0,0,0&overlay=0&';
 }
 // Project ambient occlusion from the underbody and four tyre contact patches
 // onto the studio floor, in the same metre coordinate system as the GLB.

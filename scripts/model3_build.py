@@ -10,6 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 import os, shutil, subprocess, sys
 import bpy
+import numpy as np
 from mathutils import Vector
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -140,7 +141,7 @@ def stern_slice(h):
     # reveal tiny discontinuities that cannot be seen in a sampled silhouette.
     weights=[(-.052,.07),(-.028,.20),(0,.46),(.028,.20),(.052,.07)]
     return Spline([(f,sum(w*col(h+dh) for dh,w in weights)) for f,col in zip(tail_fractions,rear_longitudinal)])
-def stern_station(f,h):
+def original_stern(f,h):
     x=f*side_width(SR,h)
     section=stern_slice(h);q=.022*sin(pi*f)**.7
     sheet=-(.22*section(f-q)+.56*section(f)+.22*section(f+q))
@@ -159,6 +160,109 @@ def stern_station(f,h):
     pocket=soft((pocket_width-x)/.095)*soft((h-lower)/.046)*soft((upper-h)/.033)
     plane=-2.299+.237*(h-.746)+.036*(x/.59)**2
     return lerp(sheet,plane,pocket)
+
+def apron_ease(q):
+    t=np.clip(q,0,1)
+    return t**3*(10-15*t+6*t*t)
+
+class RearApron:
+    """Radial loft from the tail-lamp flange to the lower bumper, in metres.
+
+    Each angular section has a quadratic upper panel, a 5 mm rolled crease
+    and an inward-tapering lower panel. Position and tangent at its lower
+    join come from the original body. The same forming surface places the
+    registration basin, panel seams, reflector and lower diffuser.
+    """
+    def __init__(self):
+        self.fraction=np.linspace(0,1,801)
+        self.heights=np.unique(np.r_[np.linspace(.192,.821,270),np.arange(.495,.60,.00075)])
+        # Measure the existing editable blank onto uniform station rings.
+        stock_h=.170+.003*np.arange(278)
+        stock_f=np.linspace(0,1,650)
+        stock=np.array([[original_stern(f,h) for f in stock_f] for h in stock_h])
+        width_h=.170+.002*np.arange(427)
+        widths=np.array([side_width(SR,h) for h in width_h])
+        def station(f,h):
+            t=np.clip((h-stock_h[0])/.003,0,len(stock_h)-1)
+            i=min(int(t),len(stock_h)-2)
+            return np.interp(f,stock_f,lerp(stock[i],stock[i+1],t-i))
+        def width(h):return float(np.interp(h,width_h,widths))
+        # Locate the measured angles in the calibrated body-coordinate frame.
+        # Store only the longitudinal displacement back in design coordinates;
+        # the full vehicle and all attached components receive adjust() once.
+        scale_x,scale_s,datum=.99015488,.99724267,-1.90
+        cx,cs=.550,-1.945
+        dense_f=np.linspace(0,1,1297)
+        angles=np.deg2rad(np.arange(-45,136,.5))
+        def ring(h):
+            x=dense_f*width(h)*scale_x
+            s=datum+(station(dense_f,h)-datum)*scale_s
+            return x,s,np.arctan2(x-cx,cs-s),np.hypot(x-cx,s-cs)
+        def radii(h):
+            _,_,a,r=ring(h)
+            return np.interp(angles,a,r)
+        top,sole=.802,.215
+        cap=radii(top);top_slope=(radii(top-.012)-radii(top+.012))/.024
+        foot=radii(sole);foot_slope=(radii(sole+.012)-radii(sole-.012))/.024
+        # A broad fairing of the entire angular guide removes section knots
+        # below the optical flange while its actual boundary remains exact.
+        bins=np.arange(-39,40)
+        weights=np.exp(-.5*(bins/14.)**2);weights/=weights.sum()
+        def smooth_guide(values):
+            return np.convolve(np.pad(values,39,mode="edge"),weights,"valid")
+        cap_fair=smooth_guide(cap);slope_fair=smooth_guide(top_slope)
+        self.delta=[]
+        for h in self.heights:
+            if h<=sole or h>=.808:
+                self.delta.append(np.zeros_like(self.fraction))
+                continue
+            x,s,angle,r=ring(h)
+            degrees=np.rad2deg(angle)
+            weight=(apron_ease((degrees+5)/46)*apron_ease((100-degrees)/28)
+                    *apron_ease((h-sole)/.012)*apron_ease((.808-h)/.043))
+            edge=.540-.056*(np.sin(angle)-.64)
+            height=top-edge;fillet=.005
+            above=.5*(np.hypot(h-edge,fillet)+h-edge)
+            below=.5*(np.hypot(h-edge,fillet)-h+edge)
+            along=above-height
+            fair=apron_ease((top-h)/.145)
+            radius_top=np.interp(angle,angles,lerp(cap,cap_fair,fair))
+            slope_top=np.interp(angle,angles,lerp(top_slope,slope_fair,fair))
+            slope_edge=.19
+            radius_edge=radius_top+.5*(slope_top+slope_edge)*height
+            radius_foot=np.interp(angle,angles,foot)
+            slope_foot=np.interp(angle,angles,foot_slope)
+            span=edge-sole
+            easing=np.clip(.47*np.maximum(.010,radius_edge-radius_foot)/np.maximum(.02,slope_foot),.007,.032)
+            run=easing*(1-np.exp(-span/easing))
+            slope_lower=(radius_edge-radius_foot-slope_foot*run)/(span-run)
+            distance=np.clip(span-below,0,span)
+            lower=radius_foot+slope_lower*distance+(slope_foot-slope_lower)*easing*(1-np.exp(-distance/easing))
+            upper=radius_top-slope_top*along+(slope_edge-slope_top)*along**2/(2*height)
+            travel=(upper+lower-radius_edge-r)*weight
+            formed_x=x+np.sin(angle)*travel
+            formed_s=s-np.cos(angle)*travel
+            increasing=np.r_[True,np.diff(np.maximum.accumulate(formed_x))>1e-8]
+            sheet=np.interp(self.fraction*width(h)*scale_x,formed_x[increasing],formed_s[increasing])
+            self.delta.append((sheet-datum)/scale_s+datum-station(self.fraction,h))
+        self.delta=np.array(self.delta)
+        h=.540
+        a=np.arctan2(self.fraction*side_width(SR,h)*scale_x-cx,
+                     cs-np.array([original_stern(f,h) for f in self.fraction]))
+        self.crease=.540-.056*(np.sin(a)-.64)
+
+    @lru_cache(maxsize=90000)
+    def offset(self,f,h):
+        if not self.heights[0]<h<self.heights[-1]:return 0.
+        i=int(np.searchsorted(self.heights,h))-1
+        t=(h-self.heights[i])/(self.heights[i+1]-self.heights[i])
+        return lerp(float(np.interp(f,self.fraction,self.delta[i])),
+                    float(np.interp(f,self.fraction,self.delta[i+1])),t)
+
+apron=RearApron()
+def stern_station(f,h):
+    return original_stern(f,h)+apron.offset(f,h)
+
 front_upper=Spline([(0,.537),(.20,.541),(.46,.557),(.60,.585),(.70,.634),(.77,.680),
                     (.82,.726),(.866,.765),(.899,belt(SF))])
 rear_crown=Spline([(0,1.018),(.40,1.020),(.72,1.020),(.86,1.020),(.92,1.014),
@@ -370,6 +474,7 @@ for g,side in [(-1,"Left"),(1,"Right")]:
         lambda t,q:"trim" if q>.85 else "frit",(g,0,0))
     ellipsoid(handles,flank(g,ss-.026,hh+.001,.005),(.0026,.009,.007),"lens",14,6)
 
+fleet_apron={False:[],True:[]}
 for k,label in [(1,"Unbroken shark-nose front bumper"),(-1,"Liftgate face and rear bumper")]:
     shell=part(label)
     for g in (-1,1):
@@ -379,7 +484,22 @@ for k,label in [(1,"Unbroken shark-nose front bumper"),(-1,"Liftgate face and re
             return cap(k,g*u,lerp(floor,top,q))
         if k>0:
             cut_panel(shell,samples(0,1,73),samples(0,1,57),bumper,g,"paint",(g*.5,k,0))
-        else:shell.patch(samples(0,1,80),samples(0,1,83),bumper,"paint",(g*.5,k,0))
+        else:
+            # The rolled shoulder is its own set of aligned topology rows.
+            # A uniform 10 mm mesh would smooth away its small tooling radius.
+            def rearrow(u,j):
+                f=sin(abs(u)*pi/2);edge=float(np.interp(f,apron.fraction,apron.crease))
+                low=lerp(.190,sill_p(SR),f*f);high=captop(-1,g*u)[2]
+                if j<=31:h=lerp(low,edge-.020,j/31)
+                elif j<=50:h=edge-.018+.002*(j-32)
+                else:h=lerp(edge+.021,high,(j-51)/50)
+                return cap(-1,g*u,h)
+            shell.patch(samples(0,1,118),list(range(102)),rearrow,"paint",(g*.5,-1,0))
+            for far,divisions,rows in [(False,30,[0,5,14,23,30,35,38,40,42,45,50,55,65,75,87,101]),
+                                       (True,15,[0,12,25,36,40,43,53,70,86,101])]:
+                lod=Surface()
+                lod.patch(samples(0,1,divisions),rows,rearrow,"paint",(g*.5,-1,0))
+                fleet_apron[far].append(lod)
 
 GLASS_REAR,GLASS_FRONT=S(649),S(190)
 def deck(k,u,t):
@@ -652,15 +772,19 @@ for g in (-1,1):
         tube(intake,[add(inlet(u,v),(0,.0022,0)) for v in (.03,.95)],.0037,"trim")
     def diff(u,v):
         x=.839*u;lo=.202+.026*(1-u*u)-.014*bell(u-.77,.2)
-        hi=.393-.021*u*u-.186*soft((u-.69)/.31)
+        hi=.393-.016*u*u-.191*soft((u-.798)/.202)
         h=lerp(lo,hi,v);out=.006+.009*sin(pi*v)
         return fascia(-1,g*x,h,out)
     intake.patch(samples(0,1,68),samples(0,1,22),diff,
                lambda u,v:"rubber" if v<.37 else "trim",(g*.3,-1,-.15))
     tube(intake,[diff(u,.982) for u in samples(.001,.993,72)],.0046,"trim",8)
     def marker(t,q):
-        x=lerp(.366,.677,t);h=.374-.009*t+q*.015*(1-(2*t-1)**8)
-        return fascia(-1,g*x,h,.018)
+        x=lerp(.366,.677,t);h=.370-.007*t+q*.0115*(1-(2*t-1)**8)
+        u=x/.839;lo=.202+.026*(1-u*u)-.014*bell(u-.77,.2)
+        hi=.393-.016*u*u-.191*soft((u-.798)/.202)
+        v=clamp((h-lo)/max(.006,hi-lo))
+        backing=(.006+.009*sin(pi*v))*(1-soft((h-hi+.0035)/.008))
+        return fascia(-1,g*x,h,backing+.0016)
     intake.patch(samples(0,1,37),[-1,-.7,.70,1],marker,
                lambda t,q:"red" if abs(q)<.72 else "tailShell",(g*.35,-1,0))
     tube(intake,[add(fascia(1,g*.806*u,.154+.013*u*u,.002),(0,0,-.003)) for u in samples(0,1,31)],.0034,"trim",7)
@@ -946,6 +1070,7 @@ for k,label,hc in [(1,"Front",.403),(-1,"Rear",.746)]:
     for u in (-.78,.78):
         for v in (-.79,.79):
             c=platepoint(u,v,.0046);ellipsoid(mesh,c,(.0041,.0022,.0041),"chrome",10,5)
+    if k<0:mesh.vertices=[adjust(v,"registration carrier") for v in mesh.vertices]
     ob=mesh.export_object("StreetPlate "+label,mats)
     ob["street_plate"]=True;ob["registration_type"]="Fictional Shenzhen small new-energy plate"
     collect(ob,"07 • Removable Shenzhen road registration");plates.append(ob)
@@ -965,6 +1090,7 @@ for k,label,hc in [(1,"Front",.403),(-1,"Rear",.746)]:
             for stroke in display_letters.get(char,[]):
                 tube(display,[platepoint((idx-3.47)*.133+x*.108,(v-.5)*.48,-.0009)
                                for x,v in stroke],.0008,"trim",6)
+        display.vertices=[adjust(v,"registration carrier") for v in display.vertices]
         ob=display.export_object("Recessed rear MODEL 3 configurator plaque",mats)
         collect(ob,"01 • Coachwork pressings");coach.append(ob)
 placements=[("wheel_LF",-1,FA),("wheel_RF",1,FA),("wheel_LR",-1,RA),("wheel_RR",1,RA)]
@@ -1061,7 +1187,7 @@ def simplified(far):
     batch=Batch()
     for o in coach:
         n=o.name.lower()
-        if "wraparound smoked lamp" in n:continue
+        if "wraparound smoked lamp" in n or "liftgate face and rear bumper" in n:continue
         if any(k in n for k in ("central display","steering","rearview","defroster","emblem")):continue
         if far and any(k in n for k in ("textile","safety belt","flanges","door mirror","handles","cowl","battery")):continue
         clothes=("front wing","quarter pressing","rear door","front door","bumper","lip spoiler","front luggage lid")
@@ -1078,9 +1204,9 @@ def simplified(far):
             if far and mat in (mats["door_glass"],mats["glass"],mats["backglass"],mats["quarterGlass"],mats["headerGlass"],mats["roof_glass"]):mat=mats["frit"]
             batch.face([o.matrix_world@mesh.vertices[j].co for j in f.vertices],mat)
         e.to_mesh_clear();o.modifiers.remove(mod)
-    for lamp in fleet_lamps[far]:
-        for face,key in zip(lamp.faces,lamp.names):
-            batch.face([adjust(lamp.vertices[j],"road lamp") for j in face],mats[key])
+    for profile in fleet_lamps[far]+fleet_apron[far]:
+        for face,key in zip(profile.faces,profile.names):
+            batch.face([adjust(profile.vertices[j],"road profile") for j in face],mats[key])
     return batch
 near=simplified(False).object("Coachwork")
 near["design_reference"]="Tesla Model 3 RWD / 18-inch Photon";near["body_dimensions_m"]=[L,W,H];near["wheelbase_m"]=WB

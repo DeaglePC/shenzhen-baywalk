@@ -23,7 +23,7 @@
     <span class="tag old-tag">优化前</span><span class="tag new-tag">优化后</span><span aria-hidden="true" class="divider"><b>‹ ›</b></span>
     <input type="range" min="0" max="100" step=".1" value="50" class="slider" aria-label="拖动调整优化前与优化后画面的分界">
   </div>
-  <div class="row"><div class="details" aria-label="查看局部"></div><div class="links"><a id="photoStreet" href="../?walk=street&amp;photo=1" hidden>从实车照片角度看出租车</a><a id="originalA" target="_blank" rel="noopener">优化前原图</a><a id="originalB" target="_blank" rel="noopener">优化后原图</a></div></div>
+  <div class="row"><div class="details" aria-label="查看局部"></div><div class="links"><a id="photoStreet" href="../?walk=street&amp;photo=1" hidden>从实车照片角度看出租车</a><a id="rearReference" href="https://static-assets.tesla.cn/configurator/compositor?context=design_studio_2&amp;options=$MT382,$PN01,$W38A,$IPB11&amp;view=STUD_REAR34&amp;model=m3&amp;size=1920&amp;bkba_opt=2&amp;crop=0,0,0,0&amp;overlay=0&amp;" target="_blank" rel="noopener" hidden>官网后 3/4 原图</a><a id="originalA" target="_blank" rel="noopener">优化前原图</a><a id="originalB" target="_blank" rel="noopener">优化后原图</a></div></div>
   <div class="technical" id="technical"></div>
 </main>
 <script type="module">
@@ -34,7 +34,7 @@
     rolling:{caption:'1440 × 810 · 午后',href:'../?walk=street&photo=1',link:'去登良路看车流',note:'登良路附近的同一辆行驶出租车。两张截图锁定车轮转角、车辆位置、机位和午后光照，垂直视野 29.2°。',areas:[['整车',1,50,50],['蓝白腰线',2.3,47,47],['前轮与大灯',2.5,22,66]]},
     model3:{view:'STUD_FRONT34',caption:'1440 × 810 · 图鉴',note:'车辆图鉴的 WebGL 截图。两版使用相同的前 3/4 机位，按特斯拉中国配置器 STUD_FRONT34 取景。',areas:[['整车',1,50,50],['前灯与前轮',2.6,40,57],['侧窗与车顶',2.6,57,42]]},
     'tail-side':{view:'STUD_SIDE',caption:'正侧面 · 车尾局部',note:'同一正侧机位的实机截图，从 2560 × 1440 原始画幅等量裁切。',areas:[['车尾',1,50,50],['尾灯与盖沿',2.4,70,36],['后轮拱与下摆',1.9,62,65]]},
-    'tail-rear':{view:'STUD_REAR34',caption:'后 3/4 · 车尾局部',note:'同一后 3/4 机位的实机截图，从 2560 × 1440 原始画幅等量裁切。',areas:[['车尾',1,50,50],['尾灯转角',2.4,47,35],['尾门与保险杠',1.9,65,55]]},
+    'tail-rear':{view:'STUD_REAR34',caption:'后 3/4 · 牌照槽左侧',note:'两张图均从 3840 × 2160 的 Three.js 实机画面等量裁切。镜头、棚光、曝光与车漆相同，可拖动分隔线查看左尾灯下方的反光。',areas:[['车尾',1,50,50],['牌照槽左侧',3.15,45.5,60.8],['尾灯转角',2.4,47,35],['尾门与保险杠',1.9,65,55]]},
     'tail-detail':{view:'REAR_DETAIL',link:'打开可旋转的车尾特写',ratio:'1182 / 724',caption:'侧后方 · 车尾特写',note:'从正侧转向车尾约 23°。两版使用相同的相机位置、镜头和裁切范围。',areas:[['车尾',1,50,50],['后盖唇与尾灯',2.5,72,34],['后翼子板',2,58,59]]}
   };
   function split(){frame.style.setProperty('--split',slider.value+'%');}
@@ -55,6 +55,7 @@
     $('.back').href=shot.view?'../?inspect=model3&view='+shot.view:shot.href??'../?walk='+id;
     $('.back').textContent=shot.link??(shot.view?'打开同机位 Model 3 图鉴':'从这个机位开始漫游');
     const tail=id.startsWith('tail-'),streetLink=$('#photoStreet');
+    $('#rearReference').hidden=id!=='tail-rear';
     streetLink.hidden=id!=='street'&&!tail;
     streetLink.href=tail?'../?walk=model3&view=REAR_DETAIL':'../?walk=street&photo=1';
     streetLink.textContent=tail?'去登良路看车尾':'从实车照片角度看出租车';
@@ -64,9 +65,10 @@
     document.querySelectorAll('[data-shot]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.shot===id));
     slider.value=50;split();const details=$('.details');details.replaceChildren();
     const label=document.createElement('span');label.textContent='查看';details.append(label);
-    for(const [i,level] of shot.areas.entries()){
-      const b=document.createElement('button');b.textContent=level[0];b.setAttribute('aria-pressed',!i);
-      b.onclick=()=>zoom(level,b);details.append(b);if(!i)zoom(level,b);
+    const focus=id==='tail-rear'&&new URLSearchParams(location.search).get('focus')==='plate'?'牌照槽左侧':shot.areas[0][0];
+    for(const level of shot.areas){
+      const b=document.createElement('button');b.textContent=level[0];b.setAttribute('aria-pressed','false');
+      b.onclick=()=>zoom(level,b);details.append(b);if(level[0]===focus)zoom(level,b);
     }
     $('#technical').textContent=shot.note+(shot.caption?'':'　·　垂直视野 67°　·　同一台 RTX 5080，1.50 秒模拟时刻。拖动分隔线比较，选择局部可放大同一片区域。');
     const a=id+'-before.png',b=id+'-after.png';$('#originalA').href=a;$('#originalB').href=b;
