@@ -66,7 +66,10 @@ export function showGarage(body,initialId='e6',initialView){
     camera.updateProjectionMatrix();
   }
   function angle(id){
-    selectedAngle=id;controls.autoRotate=false;camera.up.set(0,1,0);controls.minDistance=id==='wheel'?.48:id==='tail'?1.4:2.8;
+    selectedAngle=id;controls.autoRotate=false;
+    // Finish any pending orbit before placing the camera at a measured preset.
+    controls.enableDamping=false;controls.update();controls.enableDamping=true;
+    camera.up.set(0,1,0);controls.minDistance=id==='wheel'?.48:id==='tail'?1.4:2.8;
     const shot=vehicleId==='model3'&&model3Framing(id,camera.aspect);
     source.hidden=!shot;
     if(shot){

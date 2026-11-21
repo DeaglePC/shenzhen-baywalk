@@ -12,6 +12,7 @@ import os, shutil, subprocess, sys
 import bpy
 import numpy as np
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
@@ -242,6 +243,16 @@ class RearApron:
             travel=(upper+lower-radius_edge-r)*weight
             formed_x=x+np.sin(angle)*travel
             formed_s=s-np.cos(angle)*travel
+            active_inner=apron_ease((formed_x-.290)/(0.59-.290))
+            active_flank=apron_ease((-formed_s-1.817)/(2.035-1.817))
+            def cap_integral(v,w):
+                t=np.clip(v/w,0,1)
+                return w*(t**3-.5*t**4)+np.maximum(0,v-w)
+            q=.805-h
+            ramp=cap_integral(q,.055)-cap_integral(q-(.805-0.546),.040)
+            active_height=ramp/(.805-0.546-.0075)*apron_ease((h-.218)/.187)
+            preserve_pocket=1-apron_ease((.605-formed_x)/.082)*apron_ease((h-.600)/.060)
+            formed_s-=0.041*active_inner*active_flank*active_height*preserve_pocket
             increasing=np.r_[True,np.diff(np.maximum.accumulate(formed_x))>1e-8]
             sheet=np.interp(self.fraction*width(h)*scale_x,formed_x[increasing],formed_s[increasing])
             self.delta.append((sheet-datum)/scale_s+datum-station(self.fraction,h))
@@ -1023,18 +1034,85 @@ def collect(o,k):
         collections[k]=bpy.data.collections.new(k);bpy.context.scene.collection.children.link(collections[k])
     for c in list(o.users_collection):c.objects.unlink(o)
     collections[k].objects.link(o)
-def adjust(v,name):
+def calibrated_vertex(v,name):
     x,y,z=v
     if -y>SF:y-=((L/2-actual_front)*clamp((-y-SF)/(actual_front-SF)))
     if y> -SR:y+=(L/2-actual_rear)*clamp((y+SR)/(actual_rear+SR))
     x*=((2.089/2)/actual_mirror if "door mirror" in name else (W/2)/actual_body)
     if z>1.30:z+=((H-actual_height)*clamp((z-1.30)/(actual_height-1.30)))
+    # Once calibrated, round out the lower shoulder by at most 11.2 mm.
+    # A linear change in rearward depth across the upper sheet preserves
+    # its broad reflection. Both ends of the draw have a C2 transition.
+    if y>1.86 and .208<z<.811:
+        depth=max(0.,L*.5-y)
+        def ease(v):
+            t=clamp(v);return t**3*(10+t*(-15+6*t))
+        def ramp(v,w):
+            t=clamp(v/w);return w*(t**3-.5*t**4)+max(0.,v-w)
+        q=.810-z
+        height=(ramp(q,.080)-ramp(q-.190,.070))/.185
+        gate=ease(abs(x)/.55)*ease((.485-depth)/.255)*ease((z-.210)/.147)
+        y+=.0112*(1-exp(-depth/.017))*gate*height
     return (x,y,z)
 actual_front=max(-y for _,_,a in parts for x,y,z in a.vertices)
 actual_rear=max(y for _,_,a in parts for x,y,z in a.vertices)
 actual_mirror=max(abs(x) for _,name,a in parts if "door mirror" in name for x,y,z in a.vertices)
 actual_body=max(abs(x) for _,name,a in parts if "door mirror" not in name for x,y,z in a.vertices)
 actual_height=max(z for _,_,a in parts for x,y,z in a.vertices)
+class PocketReturn:
+    """Tooling surface between the registration recess and bumper shoulder.
+
+    Read the current full-size pressing, including its mounting flange. Each
+    longitudinal section joins that flange to the measured lower crease on a
+    single gradually turning curve. Adjacent hardware follows the same draw.
+    """
+    def __init__(self,blank):
+        vertices=[calibrated_vertex(p,"rear pressing") for p in blank.vertices]
+        self.surface=BVHTree.FromPolygons(vertices,blank.faces,all_triangles=False)
+
+    @lru_cache(maxsize=65536)
+    def station(self,x,h):
+        point,_,_,_=self.surface.ray_cast((x,3.25,h),(0,-1,0),2.0)
+        if point is None:
+            raise ValueError("Rear pressing has no transverse section at %r" % ((x,h),))
+        return -point.y
+
+    @lru_cache(maxsize=65536)
+    def draw(self,x,h):
+        # Both sides are cut from the same tool. The shoulder-to-pocket web
+        # spans 405 mm transversely; the ends blend into the existing sheet.
+        top=.733146
+        if not (.371685<x<.776177 and .31<h<top+.002):return 0.
+        theta=atan2(x-.550,-1.945-self.station(x,h))
+        crease=.548550-.056*(sin(theta)-.64)
+        span=top-crease
+        rise=h-crease
+        above=.5*(hypot(rise,.005)+rise)
+        below=above-rise
+        if above>=span:return 0.
+        high=self.station(x,top)
+        low=self.station(x,crease)
+        flange_slope=.819986*(self.station(x,top+.012)-self.station(x,top-.012))/.024
+        average=(high-low)/span
+        t=1.-above/span
+        ruled=high-span*(flange_slope*t+(average-flange_slope)*t**1.479228)
+        lateral=ease_scalar((x-.371685)/.127087)*ease_scalar((.776177-x)/.127938)
+        release=exp(-(below/.046739)**2)*ease_scalar((top+.002-h)/.028)
+        return .936226*lateral*release*(ruled-self.station(x,crease+above))
+
+def ease_scalar(v):
+    t=clamp(v)
+    return t**3*(10+t*(-15+6*t))
+
+cover=next(mesh for _,name,mesh in parts if name=="Liftgate face and rear bumper")
+pocket_return=PocketReturn(cover)
+
+def adjust(v,name):
+    x,y,h=calibrated_vertex(v,name)
+    if y>1.83:
+        y-=pocket_return.draw(abs(x),h)
+    return x,y,h
+
 coach=[]
 for group,name,a in parts:
     a.vertices=[adjust(v,name) for v in a.vertices]
