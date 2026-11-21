@@ -1,4 +1,5 @@
-import {personView} from './talent-bridge.js';
+import {columnsOnBridge,personView} from './talent-bridge.js';
+import {columnReader} from './talent-reading.js';
 import {applyIcons,icon} from './icons.js';
 import {showAtlas,drawMini} from './atlas.js';
 import {createAmbience} from './ambience.js';
@@ -10,6 +11,7 @@ const audio=createAmbience();let map,geoRequest,world,place,loading=false,panelI
 let mode='home',locationName='人才星光桥',currentPanel='';
 const fallback={id:'bridge',name:'人才星光桥',x:213.6,z:143.5,lookX:-263.3,lookZ:-456.8};
 const route=new URLSearchParams(location.search);
+let updateReader;
 const climate=climateControls(()=>world,notify,setting=>audio.setWeather(setting.weather));
 const stadiumFlight={eye:[486,210,-535],target:[82,20,-790],fov:49};
 place=fallback;
@@ -23,6 +25,8 @@ function geo(){
       {id:'garden',name:'人才公园 · 林间步道',x:-253,z:-119,lookX:-269,lookZ:-137},model3Street());
     const talent=personView(d,route.get('person')||undefined,route.get('detail'))||personView(d);
     if(talent)d.views.push(talent);
+    const bridge=d.roads.find(r=>Number(r.id)===562534109);
+    if(bridge)updateReader=columnReader($('#talentReader'),columnsOnBridge(bridge.p));
     d.views.push({id:'onebay',name:'深圳湾一号 · 空中',x:246.66,z:-20,lookX:-680,lookZ:413,flight:{eye:[246.66,38,-20],target:[-680,144,413],fov:24}},
       {id:'t7',name:'深圳湾一号 · T7 临湖面',x:-565,z:525,lookX:-680,lookZ:538,flight:{eye:[-565,312,525],target:[-679,313,538],fov:33}},
       {id:'pavilion',name:'求贤阁',x:-424,z:244,lookX:-451,lookZ:228,portrait:{height:3.3,target:[-451,5.15,228],fov:52}},
@@ -64,7 +68,8 @@ async function launch(v=place,fly=false){
   }
   try{world.moveTo(v);if(v.flight||fly)world.toggleDrone(v.flight??(v.id==='stadium'?stadiumFlight:undefined));await world.prepareView();}catch(e){notify(e.message);loading=false;load.hidden=true;return;}
   mode='world';document.body.dataset.mode=mode;world.setPlaying(true);world.setBlocked(false);home.hidden=true;hud.hidden=false;$('#locality').textContent=v.name;
-  updateHud();progress(100,'进入漫游');await new Promise(requestAnimationFrame);loading=false;load.hidden=true;showHint();
+  updateHud();if(v.readOnArrival)updateReader?.(world.position(),v.personId);
+  progress(100,'进入漫游');await new Promise(requestAnimationFrame);loading=false;load.hidden=true;showHint();
 }
 function goHome(){closePanel();world?.setPlaying(false);mode='home';document.body.dataset.mode='home';hud.hidden=true;home.hidden=false;load.hidden=true;$('#start').innerHTML=icon('play')+(world?'继续漫游':'开始漫游');}
 function resume(){
@@ -82,7 +87,7 @@ async function openPanel(key,vehicleId){
       cleanup=showAtlas(body,data,place,mode==='world'?world.position():null,launch);
     }else if(key==='talent'){
       const [data,{showTalentGuide}]=await Promise.all([geo(),import('./talent-guide.js')]);if(version!==panelId)return;
-      showTalentGuide(body,data,launch);
+      showTalentGuide(body,data,launch,mode==='home' && route.get('collection')==='documents');
     }else if(key==='garage'){
       const {showGarage}=await import('./garage.js');if(version!==panelId)return;
       const focusedCar=vehicleId??(mode==='world'&&place.id==='model3'?'model3':'e6');
@@ -118,6 +123,7 @@ pad.onpointerdown=e=>{finger=e.pointerId;pad.setPointerCapture(finger);steer(e);
 pad.onlostpointercapture=pad.onpointercancel=pad.onpointerup=()=>{finger=null;puck.style.transform='';world?.joystick(0,0);};
 function updateHud(){
   if(mode!=='world'||panel.open||!world)return;const pos=world.position(),deg=(pos.heading*180/Math.PI+360)%360;
+  updateReader?.(world.flying||world.aerial?{x:Infinity,z:Infinity}:pos);
   if(audio.enabled)audio.setSheltered(world.sheltered);
   if(world.flying)$('#altitude').textContent=Math.round(pos.height)+' m';
   $('#heading').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];$('#bearing').textContent=Math.round(deg)+'°';drawMini($('#mini'),map,pos);

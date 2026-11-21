@@ -2,6 +2,7 @@
 import {bridgeSurvey} from './talent-survey.js';
 import {academicEvidence} from './talent-evidence-academics.js';
 import {publicEvidence,publicMembers} from './talent-evidence-public.js';
+import {literature} from './talent-literature.js';
 
 export const talentSources = {
   puiUniversity: {title:'香港中文大学（深圳） · 裴有康（David Y. H. Pui）',url:'https://sse.cuhk.edu.cn/faculty/puiyouhong'},
@@ -34,6 +35,7 @@ export const talentBridgePhotos = [
 const licensedPortraitIds = new Set([
   'robert-grubbs', 'shuji-nakamura', 'arieh-warshel', 'paul-lauterbur',
   'barry-marshall', 'andre-geim', 'brian-kobilka', 'ma-huateng',
+  'wang-jian',
 ]);
 
 function member(id, name, english, role, sourceIds, details = {}) {
@@ -101,6 +103,7 @@ const existingRecords = [
   }),
   member('esteban-busso', '埃斯特班·布索', 'Esteban Pedro Busso', '英国皇家工程院院士，哈尔滨工业大学（深圳）教授', ['chenBusso', 'busso']),
   member('fang-binxing', '方滨兴', 'Fang Binxing', '中国工程院院士', ['fang','hitszFang','baseSlogan'], {
+    faceTexture: '/talent/fang-binxing-face.webp',
     image: '/talent/fang-binxing-site.webp',
     portrait: '/talent/fang-binxing-engraving.png',
     portraitKind: 'site-engraving',
@@ -133,11 +136,14 @@ for(const mark of bridgeSurvey.columns){
 for(const collection of [academicEvidence,publicEvidence]){
   for(const [id,entry] of Object.entries(collection)){
     const record=recordFor(id,entry);
-    for(const key of ['portrait','portraitKind','sourceSize','inscription','inscriptionFragments','physicalImage','photoCrop','evidenceNote','role','english','readingNote']){
+    for(const key of ['portrait','portraitKind','faceTexture','sourceSize','inscription','inscriptionFragments','physicalImage','photoCrop','evidenceNote','role','english','readingNote']){
       if(entry[key]!=null)record[key]=entry[key];
     }
     linkEvidence(record,entry.sourceTitle,entry.sourceUrl);
     for(const ref of entry.corroboration||[])linkEvidence(record,ref.sourceTitle,ref.sourceUrl);
   }
+}
+for(const [id,entry] of Object.entries(literature)){
+  registry.get(id).literature=entry;
 }
 export const talentRecords=[...registry.values()].sort((a,b)=>(a.survey?.number??Infinity)-(b.survey?.number??Infinity));

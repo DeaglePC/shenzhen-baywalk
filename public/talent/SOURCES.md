@@ -18,6 +18,10 @@
 
 ## 据现场观察重新绘制的刻像
 
+2017 年 11 月 3 日的图集中有袁庚日间正面和朱世平夜间近景，摄影与撰文署名为深圳微时光 · k君。站内两张开园原照保留完整画幅与作者水印，袁庚头肩纹样按圆柱曲面展开。朱世平的暗色职衔只重绘原片能辨认的部分，园标形状另参照上列方滨兴实拍。二维码从原片校正后核对了版本、掩模和载荷，旧导览页面的内容未能取得。2021 年蓝牌编号 A-36 与开园原片的拍摄时间分别记录。[深圳微时光原图集](https://www.sohu.com/a/202156935_355785) · [2021 年桥头名录](https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=2886s)
+
+蔡志明的半侧刻像取自同年 11 月南山大吃货发布的图集，图文资料标注深圳吃喝玩乐。侧拍可辨姓名开头、笑容、西服和领带，铭文朝向背面的一段尚待核对。[开园图集](https://www.sohu.com/a/202035237_99931338) · [深圳大学图书馆记载](https://www.sohu.com/a/283345806_771119)
+
 十幅 `*-study.png` 是本项目逐人以矢量曲线重绘的透明头肩图。其中九人的发线、眼镜、脸部朝向、肩领、明暗留白依据2022年实拍中的各自刻像观察绘制，线条与细部为绘制者的简化。短片帧只用于观察，未作为纹理分发。每幅的取景秒数可在人物数据的 `sourceTime` 字段查阅。吴云东一幅另依单柱现场照片观察绘制。[星光桥柱面特写原片](https://www.youtube.com/watch?v=2SPTI3Ex_FQ) · [吴云东现场原拍](https://touch.travel.qunar.com/comment/10161936709)
 
 实物中文名可在九段画面中分辨。录入数据的 `inscription` 为能直接读出的刻字，`videoCaption` 单独保留拍摄者叠加说明的行序。陈晓红的四行铭文另以游客近摄交叉核读，吴云东四行由独立实物近摄辨认。埃斯特班·布索的现场侧拍可见英文姓名首部、院名与哈尔滨工业大学字样，同哈工大官方个人资料相符。[陈晓红与布索实物相册](https://www.meipian.cn/5g8pbtxq) · [吴云东实拍](https://touch.travel.qunar.com/comment/10161936709) · [哈工大教师主页](https://homepage.hit.edu.cn/estebanpedrobusso)
@@ -34,7 +38,7 @@
 
 ## 据授权人物肖像制作的纹理
 
-以下八幅刻像使用可再利用的人物摄影。人物确已列入桥上名录，头部角度与衣着取自表中的照片。处理包括人像裁切、手工剪影蒙版、局部明度分离与透明化。各改编文件依本表所列许可分发。源照片、摄影者和许可证可从对应链接查阅。
+以下演示肖像使用可再利用的人物摄影。上柱姓名由名录或报道核对，头部角度与衣着取自表中的照片。处理包括人像裁切、手工剪影蒙版、局部明度分离与透明化。各改编文件依本表所列许可分发。源照片、摄影者和许可证可从对应链接查阅。
 
 | 本地文件 | 原作 | 摄影者 | 许可 |
 | --- | --- | --- | --- |
@@ -46,3 +50,4 @@
 | andre-geim-portrait.png | [Andre Geim 10.jpg](https://commons.wikimedia.org/wiki/File:Andre_Geim_10.jpg) | Bengt Oberger | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | brian-kobilka-portrait.png | [Brian Kobilka 361726 by Christopher Michel 6-20-24.jpg](https://commons.wikimedia.org/wiki/File:Brian_Kobilka_361726_by_Christopher_Michel_6-20-24.jpg) | Christopher Michel | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
 | ma-huateng-portrait.png | [马化腾 Pony Ma 2019.jpg](https://commons.wikimedia.org/wiki/File:%E9%A9%AC%E5%8C%96%E8%85%BE_Pony_Ma_2019.jpg) | 中国新闻网 | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0) |
+| wang-jian-portrait.png 与对照页 wang-jian-2010.jpg | [Wang Jian showing Sydney Brenner around BGI](https://commons.wikimedia.org/wiki/File:Wang_Jian_showing_Sydney_Brenner_around_BGI.jpg)，2010 年 11 月 4 日拍于深圳华大总部，取合影右侧灰衣的汪建。实机纹样经头肩剪影、明暗分色和透明化，对照页保留彩色裁切 | Scotted400 | 原作与改编均按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 分发 |

@@ -110,5 +110,58 @@
     "credit": "孙文喜 · 深圳市人才公园实拍相册",
     "note": "侧拍看得到一侧眉眼、胡须与领带。英文姓名、英国皇家及哈尔滨工业等字样只有部分绕柱可见。",
     "referenceAction": "打开孙文喜的原相册 · 陈晓红前一张"
+  },
+  {
+    "id": "yuan-geng",
+    "name": "袁庚",
+    "detail": "portrait",
+    "image": "plaque-yuan-geng.jpg",
+    "before": "before-yuan-geng.jpg",
+    "source": "https://www.sohu.com/a/202156935_355785",
+    "refImage": "/talent/research-public/yuan-geng-opening.webp",
+    "sourceSize": [1600,1013],
+    "refCrop": [100,65,650,940],
+    "credit": "深圳微时光 · k君，2017 年 11 月 3 日。开园当周的袁庚实柱原照。",
+    "note": "脸部两侧的留白、眼角、耳缘及衣领取自圆柱实拍。中文与英文两行可以逐字核对，原柱编号仍待确认。"
+  },
+  {
+    "id": "zhu-shiping",
+    "name": "朱世平",
+    "code": "A-36",
+    "detail": "inscription",
+    "image": "plaque-zhu-shiping.jpg",
+    "before": "before-zhu-shiping.jpg",
+    "source": "https://www.sohu.com/a/202156935_355785",
+    "refImage": "/talent/research-public/zhu-shiping-opening.webp",
+    "sourceSize": [1600,1074],
+    "refCrop": [163,0,420,304],
+    "credit": "深圳微时光 · k君，2017 年 11 月 3 日。夜间原照上沿裁去了肖像。",
+    "note": "中英文姓名透光；下方可读到「加拿大皇家科学院院士」和「香港中文大学（深圳）」。两行末端绕向柱后。园标下方二维码按开园原照校正。"
+  },
+  {
+    "id": "cai-zhiming",
+    "name": "蔡志明",
+    "detail": "portrait",
+    "image": "plaque-cai-zhiming.jpg",
+    "before": "before-cai-zhiming.jpg",
+    "source": "https://www.sohu.com/a/202035237_99931338",
+    "refImage": "https://5b0988e595225.cdn.sohucs.com/images/20171103/153642d50fbc4023a021a037bf6aa48c.jpeg",
+    "sourceSize": [1280,853],
+    "refCrop": [398,125,250,500],
+    "credit": "南山大吃货 / 深圳吃喝玩乐 · 2017 年 11 月开园图集，侧拍蔡志明。",
+    "note": "实柱可读到「蔡志」「Cai」及下行「深圳市第」。肖像只画出实拍能辨认的一侧，完整中文姓名由校方记载核实。"
+  },
+  {
+    "id": "wang-jian",
+    "name": "汪建",
+    "code": "",
+    "detail": "portrait",
+    "image": "plaque-wang-jian.jpg",
+    "before": "before-wang-jian.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Wang_Jian_showing_Sydney_Brenner_around_BGI.jpg",
+    "refImage": "wang-jian-2010.jpg",
+    "referenceAlt": "汪建在深圳华大总部与来访者交谈，裁自 2010 年合影",
+    "credit": "汪建人物资料照 · 2010 年 11 月 4 日，深圳华大总部。摄影 Scotted400，CC BY-SA 4.0，裁切自合影右侧。",
+    "note": "开园报道点名汪建。实机中的演示肖像取自左侧人物资料照，现场柱面的肖像、铭文和柱号仍待核对。"
   }
 ]

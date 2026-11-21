@@ -51,11 +51,12 @@ export function personView(map,id='fang-binxing',detail=null){
   const bridge=map.roads.find(r=>Number(r.id)===562534109);if(!bridge)return null;
   for(const col of columnsOnBridge(bridge.p)){
     const face=col.faces.findIndex(r=>r?.id===id);if(face<0)continue;
-    const close=['inscription','left','right'].includes(detail);
+    const lower=detail==='seal'&&id==='zhu-shiping';
+    const close=lower||['inscription','left','right'].includes(detail);
     const angle=Math.atan2(col.dz,-col.dx)+face*Math.PI+(detail==='left'?-.82:detail==='right'?.82:0);
     const portrait=detail==='portrait';
-    const radius=close?.89:portrait?1.7:2.06,h=close?4.028:portrait?4.44:4.17;
-    return {id:'talent',name:'星光桥 · '+col.faces[face].name,x:col.x+Math.sin(angle)*radius,z:col.z+Math.cos(angle)*radius,
+    const radius=close?.89:portrait?1.7:2.06,h=lower?3.635:close?4.028:portrait?4.44:4.17;
+    return {id:'talent',personId:id,readOnArrival:detail==='record',name:'星光桥 · '+col.faces[face].name,x:col.x+Math.sin(angle)*radius,z:col.z+Math.cos(angle)*radius,
       lookX:col.x,lookZ:col.z,portrait:{height:h,target:[col.x,h,col.z],fov:close?30:portrait?43:54}};
   }
   return null;

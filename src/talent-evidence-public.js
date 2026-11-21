@@ -29,6 +29,11 @@ const yangcheng = {
   sourceUrl: 'https://ycpai.ycwb.com/ycppad/content/2021-10/22/content_40344700.html',
 };
 
+const openingPhotos = {
+  sourceTitle: '深圳微时光 · k君，2017 年 11 月 3 日开园实拍',
+  sourceUrl: 'https://www.sohu.com/a/202156935_355785',
+};
+
 export const publicEvidence = {
   'xu-yangsheng': {
     ...yangcheng, sourceTime: 25.6, sourceSize: [1920, 1080],
@@ -56,9 +61,38 @@ export const publicEvidence = {
     inscriptionFragments: [{line: 1, text: '唐', rightMissing: true}],
     evidenceNote: '2021 年 A-21。镜头依次经过 A-20 郑健超、刻「唐」字的眼镜人像与 A-23 伯纳德·罗兹曼。保留实拍可见的发梢、半边镜框和西服，柱面远侧透明。',
   },
-  'zhu-shiping': {...university, corroboration: [opening]},
-  'yuan-geng': {...opening},
+  'zhu-shiping': {
+    ...openingPhotos, corroboration: [university, opening], sourceSize: [1600,1074],
+    physicalImage: '/talent/research-public/zhu-shiping-opening.webp',
+    photoCrop: [249,0,544,211], faceTexture: '/talent/zhu-shiping-face.webp',
+    inscription: ['朱世平', 'Zhu Shiping'],
+    inscriptionFragments: [
+      {line:3,text:'加拿大皇家科学院院士',rightMissing:true},
+      {line:4,text:'香港中文大学（深圳）',rightMissing:true},
+    ],
+    evidenceNote: '开园夜景可见发光的中英文姓名。下方两行是暗色刻字，右端绕过柱面。照片还留有园标和当年的二维码，头像在画面上沿之外。',
+  },
+  'yuan-geng': {
+    ...openingPhotos, corroboration: [opening], sourceSize: [1600,1013],
+    physicalImage: '/talent/research-public/yuan-geng-opening.webp',
+    photoCrop: [213,131,610,670], portrait:'/talent/yuan-geng-study.png', portraitKind:'site-study',
+    faceTexture: '/talent/yuan-geng-face.webp',
+    inscription: ['袁庚', 'Yuan Geng'],
+    evidenceNote: '开园实拍完整呈现袁庚的刻像、中文姓名及拼写，身后可见深圳湾。具体柱号尚待核对。',
+  },
   'zhou-chuangbin': {...artisans, corroboration: [skillsWeek]},
+  'cai-zhiming': {
+    sourceTitle:'2017 年 11 月开园图集 · 蔡志明柱面侧拍',
+    sourceUrl:'https://www.sohu.com/a/202035237_99931338',
+    physicalImage:'https://5b0988e595225.cdn.sohucs.com/images/20171103/153642d50fbc4023a021a037bf6aa48c.jpeg',
+    sourceSize:[1280,853],photoCrop:[471,160,578,594],
+    portrait:'/talent/research-public/cai-zhiming-visible.png',portraitKind:'site-study-partial',
+    inscriptionFragments:[
+      {line:1,text:'蔡志',rightMissing:true},{line:2,text:'Cai',rightMissing:true},
+      {line:4,text:'深圳市第',rightMissing:true},
+    ],
+    evidenceNote:'照片从侧面拍到部分眉眼、笑容、领带和一侧肩部。中文姓名可读到「蔡志」，另一面转出镜头；全名由开园报道与深圳大学图书馆的文字核准。',
+  },
   'wang-jiantao': {...artisans, corroboration: [skillsWeek]},
   'xu-zhenghe': {
     ...opening, portrait:'/talent/research-public/xu-zhenghe-visible.png',portraitKind:'site-study-partial',

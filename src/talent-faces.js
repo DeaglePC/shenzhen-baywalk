@@ -5,12 +5,12 @@ const faceBottom=3.282, faceTop=5.046;
 const brushedSteel='#adb1ae';
 const font='"Microsoft YaHei","PingFang SC",sans-serif';
 
-function plateMaterial(tex,rows,materials){
+function plateMaterial(tex,rows,materials,nameLightOnly=false){
   const mat=new T.MeshPhysicalMaterial({map:tex,metalness:.84,roughness:.25,clearcoat:.14,clearcoatRoughness:.21,
     side:T.FrontSide,emissive:0xffefbc,emissiveIntensity:0});
   mat.userData.cityProbe='bridge';
   materials.walls.push(mat);
-  mat.customProgramCacheKey=()=>'starlight-engraving-'+rows;
+  mat.customProgramCacheKey=()=>'starlight-engraving-'+rows+'-'+nameLightOnly;
   mat.onBeforeCompile=shader=>{
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
       float steelPlate=smoothstep(.037,.32,dot(diffuseColor.rgb,vec3(.22,.68,.10)));
@@ -19,7 +19,7 @@ function plateMaterial(tex,rows,materials){
       metalnessFactor*=steelPlate;`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
       float row=1.-fract(vMapUv.y*${rows.toFixed(1)});
-      float lettering=(1.-smoothstep(.07,.27,dot(diffuseColor.rgb,vec3(.22,.68,.10))))*smoothstep(.462,.50,row)*(1.-smoothstep(.69,.74,row));
+      float lettering=(1.-smoothstep(.07,.27,dot(diffuseColor.rgb,vec3(.22,.68,.10))))*smoothstep(.462,${nameLightOnly?'.48':'.50'},row)*(1.-smoothstep(${nameLightOnly?'.573,.581':'.69,.74'},row));
       totalEmissiveRadiance*=lettering*.90;`);
   };
   return mat;
@@ -29,7 +29,7 @@ function drawIdentification(ctx,record,x,y,w,h){
   ctx.fillStyle=brushedSteel;ctx.fillRect(x,y,w,h);ctx.textAlign='center';ctx.fillStyle='#232827';
   const text=record.inscription?.length?[...record.inscription]:[record.name];
   const fragments=record.inscriptionFragments||[];
-  const observed=fragments.filter(f=>!(f.line===1 && record.survey && record.name.startsWith(f.text)));
+  const observed=fragments.filter(f=>!(f.line===1 && (record.survey||record.literature) && record.name.startsWith(f.text)));
   for(const piece of observed)text[piece.line-1]=piece.text;
   for(const [i,line] of text.entries()){
     if(!line)continue;
@@ -73,7 +73,7 @@ export function engravedFaces(root,columns,materials){
     batch.forEach(({c,record,side},i)=>{
       const x=(i%cols)*w,y=Math.floor(i/cols)*h;
       drawIdentification(ctx,record,x,y,w,h);
-      const url=full?'/talent/fang-binxing-face.webp':record.portrait;
+      const url=record.faceTexture||record.portrait;
       if(url){
         const img=new Image();
         jobs.push(new Promise(resolve=>{
@@ -81,9 +81,9 @@ export function engravedFaces(root,columns,materials){
             if(full)ctx.drawImage(img,x,y,w,h);
             else {
               const naturalWidth=Math.min(w*.71,h*.37*img.width/img.height);
-              const isSiteStudy=record.portraitKind?.startsWith('site-study');
-              const width=naturalWidth*(isSiteStudy?1.20:1);
-              const height=naturalWidth*img.height/img.width*(isSiteStudy ? .86 : 1);
+              const compensate=record.portraitKind?.startsWith('site-study')||record.id==='wang-jian';
+              const width=naturalWidth*(compensate?1.20:1);
+              const height=naturalWidth*img.height/img.width*(compensate?.86:1);
               ctx.drawImage(img,x+(w-width)/2,y+h*.429-height,width,height);
             }
             tex.needsUpdate=true;resolve();
@@ -93,7 +93,7 @@ export function engravedFaces(root,columns,materials){
       }
       addCurvedFace(surface,normals,c,side,full?3.06:2.64,x,y,w,h,canvas);
     });
-    const mesh=surface.mesh(root,plateMaterial(tex,rows,materials),'弧面人物铭牌');
+    const mesh=surface.mesh(root,plateMaterial(tex,rows,materials,full&&batch[0].record.id==='zhu-shiping'),'弧面人物铭牌');
     mesh.geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));tex.needsUpdate=true;
   }
   // Small inventory stickers are visible above the steel sleeve on the 2021 walk.
@@ -114,8 +114,8 @@ export function engravedFaces(root,columns,materials){
     const mesh=surface.mesh(root,mat,'2021 年 A 区柱号标签');
     mesh.geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
   }
-  page(faces.filter(f=>f.record.id==='fang-binxing'),true);
-  const others=faces.filter(f=>f.record.id!=='fang-binxing');
+  for(const face of faces.filter(f=>f.record.faceTexture))page([face],true);
+  const others=faces.filter(f=>!f.record.faceTexture);
   // Short pages keep the long side under the WebGL2 minimum maximum texture size.
   for(let i=0;i<others.length;i+=12)page(others.slice(i,i+12));
   return Promise.all(jobs);

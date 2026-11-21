@@ -47,3 +47,19 @@ dialog{background:#1a2022;color:#f4f3ec;border:1px solid #ffffff38;border-radius
 .talent-plot{position:relative;width:min(100%,270px);height:1170px;margin:12px auto;background:linear-gradient(90deg,#4c8b9a 0 6%,#5f5348 6% 100%);border:1px solid #81968a;border-radius:4px}
 .talent-plot button{position:absolute;transform:translate(-50%,-50%);width:29px;height:25px;border-radius:12px;border:1px solid #b1c6b5;background:#24332e;color:#f0eee1;font:600 12px Arial;cursor:pointer;padding:0}
 .talent-plot button:hover,.talent-plot button:focus-visible{background:#cb9a62;color:#142724;z-index:1}
+.talent-scope,.reading-links{display:flex;align-items:center;gap:.5rem 1rem;flex-wrap:wrap}
+.talent-scope{margin:0 0 1rem;gap:.45rem}
+.talent-scope button{background:transparent;color:#d9dfda;border:1px solid #64726c;border-radius:4px;padding:.45rem .85rem;font:inherit;cursor:pointer}
+.talent-scope button[aria-pressed=true]{background:#e2c7a4;color:#182321;border-color:#e2c7a4}
+#talentReader{pointer-events:auto;position:absolute;left:var(--edge);top:96px;width:min(310px,calc(100vw - 32px));max-height:calc(100% - 290px);overflow:auto;color:#f5f2e9;background:rgb(16 28 27 / 95%);border:1px solid #83918b;border-radius:5px;box-shadow:0 4px 20px #0005;font-size:1rem}
+#talentReader:not([open]){width:auto}
+#talentReader summary{padding:.65rem .95rem;font-weight:600;cursor:pointer;letter-spacing:.04em}
+#talentReader[open] summary{border-bottom:1px solid #4e6159}
+#talentReader>div{padding:.6rem .95rem .9rem}
+#talentReader p{margin:0 0 .6rem;line-height:1.6}
+#talentReader .reading-location{font-size:.875rem;color:#f2c996}
+#talentReader .reading-evidence,.talent-results .reading-evidence{color:#cad4cc;font-size:.875rem}
+#talentReader .reading-links{margin-bottom:0}
+.reading-links a{color:#f3cda7;text-underline-offset:.18em;font-size:.875rem}
+@media(max-width:760px){#talentReader{top:90px;max-height:calc(100% - 260px);max-height:min(44dvh,370px);width:min(295px,calc(100vw - 32px))}}
+@media(max-height:540px){#talentReader{top:64px;max-height:calc(100% - 140px)}}
