@@ -21,7 +21,7 @@ function geo(){
     if(entrance)Object.assign(entrance,{x:79,z:-658,lookX:83,lookZ:-790});
     d.views.push({id:'field',name:'春茧 · 场内',x:271,z:-730,lookX:205,lookZ:-816},
       {id:'garden',name:'人才公园 · 林间步道',x:-253,z:-119,lookX:-269,lookZ:-137},model3Street());
-    const talent=personView(d,route.get('person')||undefined)||personView(d);
+    const talent=personView(d,route.get('person')||undefined,route.get('detail'))||personView(d);
     if(talent)d.views.push(talent);
     d.views.push({id:'onebay',name:'深圳湾一号 · 空中',x:246.66,z:-20,lookX:-680,lookZ:413,flight:{eye:[246.66,38,-20],target:[-680,144,413],fov:24}},
       {id:'t7',name:'深圳湾一号 · T7 临湖面',x:-565,z:525,lookX:-680,lookZ:538,flight:{eye:[-565,312,525],target:[-679,313,538],fov:33}},
@@ -122,7 +122,7 @@ function updateHud(){
   if(world.flying)$('#altitude').textContent=Math.round(pos.height)+' m';
   $('#heading').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];$('#bearing').textContent=Math.round(deg)+'°';drawMini($('#mini'),map,pos);
   const near=map.views.find(v=>Math.hypot(v.x-pos.x,v.z-pos.z)<110);
-  if(place.id==='model3'&&Math.hypot(place.x-pos.x,place.z-pos.z)<30)$('#locality').textContent=place.name;
+  if((place.id==='model3'||place.id==='talent')&&Math.hypot(place.x-pos.x,place.z-pos.z)<(place.id==='talent'?3:30))$('#locality').textContent=place.name;
   else if(pos.x>-235&&pos.x<385&&pos.z>-1000&&pos.z< -595)$('#locality').textContent='深圳湾体育中心';
   else if(near)$('#locality').textContent=near.name;else if(place.id==='custom'&&Math.hypot(pos.x-place.x,pos.z-place.z)<120)$('#locality').textContent=place.name;
   else $('#locality').textContent=Math.hypot(pos.x,pos.z)<610?'人才公园':'南山后海';

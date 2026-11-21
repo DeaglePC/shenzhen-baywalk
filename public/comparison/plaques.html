@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#152120"><title>星光桥 · 原照与实机</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#152120;color:#f4f4ed;font:16px/1.6 "Microsoft YaHei",system-ui,sans-serif}main{max-width:1360px;margin:auto;padding:24px clamp(15px,4vw,54px) 60px}header,nav,.links{display:flex;gap:10px 20px;align-items:center;flex-wrap:wrap}header{justify-content:space-between;border-bottom:1px solid #40504b;padding-bottom:14px}a{color:#edcba0;text-underline-offset:4px}h1{font-size:clamp(26px,4vw,46px);font-weight:550;line-height:1.2;margin:32px 0 12px}p{margin:8px 0 16px;color:#c1cfc8}button{cursor:pointer;color:#e7ebe7;border:1px solid #5e7168;border-radius:3px;padding:6px 13px;background:transparent;font:inherit}button[aria-pressed=true]{background:#e2ca9e;color:#172923;border-color:#e2ca9e}.pair{margin:18px 0;display:grid;grid-template-columns:1fr 1fr;gap:14px}.pair figure{margin:0;background:#0e1817;border:1px solid #46574e}.pair img,.pair iframe{display:block;border:0;width:100%;height:clamp(340px,39vw,495px);object-fit:contain}.pair .live{object-fit:cover}.pair figcaption{padding:11px 14px;color:#d4ddd3;font-size:.9rem}.fallback{padding:48px 24px;min-height:340px;display:grid;align-content:center;justify-items:center;text-align:center}.links{margin:0 0 26px}.sides{margin-top:18px}.sides img{width:49%;vertical-align:top}.sides summary{cursor:pointer;margin-bottom:10px}.proof-link{display:inline-block}.caption{color:#bac8c0;margin-top:12px;font-size:.9rem}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #f0cb8a;outline-offset:2px}@media(max-width:670px){.pair{grid-template-columns:1fr}.pair img,.pair iframe{height:320px}.sides img{width:100%}.links{gap:8px 14px}main{padding-top:12px}}
+</style></head><body><main><header><a href="../?inspect=talent">星光桥人物名录</a><a href="./#lettering">同机位前后滑动对比</a></header>
+<h1>星光桥铭牌近照</h1><p>点选人物，对照现场原照或走桥镜头。右侧是 Three.js 漫游的实机截图。</p><nav id="people" aria-label="选择人物"></nav>
+<div class="pair"><figure><div id="ref"></div><figcaption id="credit"></figcaption></figure><figure><img id="render" class="live" alt="星光柱实机近照"><figcaption id="renderCaption"></figcaption></figure></div>
+<p id="note"></p><div class="links"><a id="openRef" target="_blank" rel="noopener">打开摄影者原图或原片</a><a id="openWorld">进入这个实机机位</a><a id="full" target="_blank" rel="noopener">未裁切实机截图</a></div>
+<details class="sides" id="sides"><summary>方滨兴下行左右两端</summary><a href="../?walk=talent&person=fang-binxing&detail=left"><img src="lettering-left.jpg" alt="下行左端，哈尔滨工业大学（深圳）"></a> <a href="../?walk=talent&person=fang-binxing&detail=right"><img src="lettering-right.jpg" alt="下行右端，计算机科学与技术学院"></a></details>
+<div class="caption"><a href="https://www.youtube.com/watch?v=YaOHuAAV-lQ&amp;t=2882s" target="_blank" rel="noopener">桥头 A 区 55 人名录及点位图</a>　<a href="https://www.youtube.com/watch?v=YaOHuAAV-lQ&amp;t=1200s" target="_blank" rel="noopener">从北端开始走桥</a>　<a href="https://www.youtube.com/watch?v=Qshw0gnMrck&amp;t=774s" target="_blank" rel="noopener">从南端开始走桥</a></div>
+</main><script type="module">
+const $=id=>document.getElementById(id);
+const rows=await fetch('plaque-views.json').then(r=>r.json());
+function show(r){
+ for(const b of $('people').children)b.setAttribute('aria-pressed',String(b.dataset.id===r.id));
+ $('ref').replaceChildren();
+ const media=document.createElement(r.refImage?'img':r.clip?'iframe':'div');
+ if(r.refImage){media.alt=r.name+'现场原照';media.src=r.refImage;}
+ else if(r.clip){media.title=r.name+'现场走桥原片';media.allowFullscreen=true;media.src='https://www.youtube-nocookie.com/embed/YaOHuAAV-lQ?start='+r.clip+'&end='+(r.clip+6);media.referrerPolicy='strict-origin-when-cross-origin';}
+ else{media.className='fallback';const a=document.createElement('a');a.href=r.source;a.target='_blank';a.rel='noopener';a.textContent=r.referenceAction;media.append(a);}
+ $('ref').append(media);$('credit').textContent=r.credit;$('render').src=r.image;$('render').alt=r.name+'实机近照';$('renderCaption').textContent=r.name+' · '+(r.code||'柱号待核')+' · 实机';
+ $('note').textContent=r.note;$('openRef').href=r.source;$('openWorld').href='../?walk=talent&person='+r.id+'&detail='+r.detail+'&weather=clear&season=summer';$('full').href=r.image;$('sides').hidden=r.id!=='fang-binxing';
+}
+for(const r of rows){const b=document.createElement('button');b.type='button';b.textContent=r.name;b.dataset.id=r.id;b.onclick=()=>{location.hash=r.id;};$('people').append(b);}
+function read(){show(rows.find(r=>r.id===location.hash.slice(1))||rows[0]);}window.addEventListener('hashchange',read);read();
+</script></body></html>

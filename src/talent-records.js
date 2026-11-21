@@ -1,5 +1,11 @@
 /** On-site observations and published membership evidence for the Shenzhen Talent Park Starlight Bridge. */
+import {bridgeSurvey} from './talent-survey.js';
+import {academicEvidence} from './talent-evidence-academics.js';
+import {publicEvidence,publicMembers} from './talent-evidence-public.js';
+
 export const talentSources = {
+  puiUniversity: {title:'香港中文大学（深圳） · 裴有康（David Y. H. Pui）',url:'https://sse.cuhk.edu.cn/faculty/puiyouhong'},
+  board2021: bridgeSurvey.source,
   design: { title: '深圳市城市设计促进中心 · 公园设计师实地导览', url: 'https://www.szdesigncenter.com/tgspy' },
   hk2024: { title: '香港商报 · 春笋凌空去 英才逐浪来，2024-05-12 A8', url: 'https://www.hkcd.com.hk/pdf/202405/0512/ha08512c.pdf' },
   launch: { title: '现场报道 · 深圳人才公园开园了，到人才星光桥上见', url: 'https://k.sina.com.cn/article_6630392851_18b33c41300100bpzl.html' },
@@ -12,6 +18,8 @@ export const talentSources = {
   chenBusso: { title: '游客相册 · 陈晓红正面与 Esteban Pedro Busso 侧面实物', url: 'https://www.meipian.cn/5g8pbtxq' },
   busso: { title: '哈尔滨工业大学个人主页 · Esteban Pedro Busso', url: 'https://homepage.hit.edu.cn/estebanpedrobusso' },
   walk2025: { title: 'Walking Log · 2025年7月27日实地步行', url: 'https://www.youtube.com/watch?v=zT0Reiyb-nQ&t=1597s' },
+  baseSlogan:{title:'白天走桥实拍 · 柱脚「圳等您来」，14:46',url:'https://www.youtube.com/watch?v=Qshw0gnMrck&t=886s'},
+  hitszFang: {title:'哈尔滨工业大学（深圳） · 计算机科学与技术学院方滨兴教授',url:'https://csen.hitsz.edu.cn/info/1026/1916.htm'},
   fang: { title: 'Wargaz · 方滨兴星光柱现场摄影，2022年12月19日', url: 'https://commons.wikimedia.org/wiki/File:Fang_Binxing_portrait_in_Shenzhen_Talent_Park.jpg' },
   wu: { title: '游客实拍 · 吴云东星光柱', url: 'https://touch.travel.qunar.com/comment/10161936709' },
   walkway: { title: 'Dinkun Chen · 桥面与跑道，2024年12月1日', url: 'https://commons.wikimedia.org/wiki/File:SHENZHEN_TALENTS_PARK_(58).jpg' },
@@ -46,7 +54,7 @@ function filmed(id, name, english, role, second, subtitle, inscription = [name],
 
 // role is a concise identification. Only inscription contains directly read plaque lettering.
 // The array order is for the index; it does not encode the physical order of the columns.
-export const talentRecords = [
+const existingRecords = [
   member('robert-grubbs', '罗伯特·格拉布斯', 'Robert H. Grubbs', '2005年诺贝尔化学奖得主', ['city'], {
     position: { reportedOrder: 1, basis: '现场记者记为第一位，未指明桥端或侧面。' },
   }),
@@ -81,7 +89,8 @@ export const talentRecords = [
   filmed('ma-mingzhe', '马明哲', 'Ma Mingzhe', '中国平安保险集团董事长', 10, ['平安保险集团董事长']),
   filmed('teng-jinguang', '滕锦光', 'Teng Jinguang', '中国科学院院士，曾任南方科技大学副校长', 15, ['中国科学院院士', '南方科技大学副校长']),
   filmed('wang-haijiang', '王海江', 'Wang Haijiang', '加拿大工程院院士，南方科技大学讲席教授', 18, ['加拿大工程院院士', '南方科技大学讲席教授']),
-  filmed('pei-youkang', '裴友康', 'Pei Youkang', '美国国家工程院院士，香港中文大学（深圳）教授', 21, ['美国国家工程院院士', '香港中文大学（深圳）教授']),
+  {...filmed('pei-youkang','裴友康','David Y. H. Pui','美国国家工程院院士，香港中文大学（深圳）教授',21,['美国国家工程院院士','香港中文大学（深圳）教授'],['裴友康'],['puiUniversity']),
+    aliases:['裴有康'],readingNote:'2021 年桥头名录与现场短片写作「裴友康」，校方教师主页写作「裴有康」。'},
   filmed('chen-xiaohong', '陈晓红', 'Chen Xiaohong', '中国工程院院士', 25, ['中国工程院院士'], ['陈晓红', 'Chen Xiaohong', '中国工程院院士', '深圳大学教授'], ['chenBusso']),
   filmed('yu-qifeng', '于起峰', 'Yu Qifeng', '中国科学院院士', 28, ['中国科学院院士', '深圳大学教授']),
   member('wu-yundong', '吴云东', 'Wu Yundong', '中国科学院院士', ['wu'], {
@@ -91,13 +100,44 @@ export const talentRecords = [
     position: { side: 'west', basis: '实物照片中柱后为春笋及湖面。' },
   }),
   member('esteban-busso', '埃斯特班·布索', 'Esteban Pedro Busso', '英国皇家工程院院士，哈尔滨工业大学（深圳）教授', ['chenBusso', 'busso']),
-  member('fang-binxing', '方滨兴', 'Fang Binxing', '中国工程院院士', ['fang'], {
+  member('fang-binxing', '方滨兴', 'Fang Binxing', '中国工程院院士', ['fang','hitszFang','baseSlogan'], {
     image: '/talent/fang-binxing-site.webp',
     portrait: '/talent/fang-binxing-engraving.png',
     portraitKind: 'site-engraving',
-    inscription: ['方滨兴', 'Fang Binxing', '中国工程院院士'],
+    inscription: ['方滨兴', 'Fang Binxing', '中国工程院院士', '哈尔滨工业大学（深圳）计算机科学与技术学院'],
+    readingNote: '下行中段据实照，机构全称据哈工大核对，转角外的职衔待核。柱脚「深爱人才　圳等您来」据方、徐两柱所见及当年公开标语补全。',
     position: { side: 'west', cameraLonLat: [113.946403,22.513033], cameraXZ: [229.8,69.4], date: '2022-12-19', basis: 'EXIF为相机坐标；面朝后海岸拍摄，桥心附近的西侧柱。' },
   }),
   member('zhou-chuangbin', '周创彬', 'Zhou Chuangbin', '中国广核集团高技能人才，中华技能大奖获得者', ['skills']),
   member('wang-jiantao', '王建涛', 'Wang Jiantao', '中国广核集团高技能人才，中华技能大奖获得者', ['skills']),
 ];
+
+const registry=new Map(existingRecords.map(record=>[record.id,record]));
+function recordFor(id,fields){
+  if(!registry.has(id))registry.set(id,member(id,fields.name,fields.english||'',fields.role||'',[]));
+  return registry.get(id);
+}
+function linkEvidence(record,title,url){
+  if(!url || record.sourceIds.some(key=>talentSources[key]?.url===url))return;
+  const id='reference-'+record.id+'-'+record.sourceIds.length;
+  talentSources[id]={title,url};record.sourceIds.push(id);
+}
+for(const entry of publicMembers){
+  const record=recordFor(entry.id,entry);
+  linkEvidence(record,entry.sourceTitle,entry.sourceUrl);
+}
+for(const mark of bridgeSurvey.columns){
+  const record=recordFor(mark.id,mark);
+  record.survey=mark;record.sourceIds.push('board2021');
+}
+for(const collection of [academicEvidence,publicEvidence]){
+  for(const [id,entry] of Object.entries(collection)){
+    const record=recordFor(id,entry);
+    for(const key of ['portrait','portraitKind','sourceSize','inscription','inscriptionFragments','physicalImage','photoCrop','evidenceNote','role','english','readingNote']){
+      if(entry[key]!=null)record[key]=entry[key];
+    }
+    linkEvidence(record,entry.sourceTitle,entry.sourceUrl);
+    for(const ref of entry.corroboration||[])linkEvidence(record,ref.sourceTitle,ref.sourceUrl);
+  }
+}
+export const talentRecords=[...registry.values()].sort((a,b)=>(a.survey?.number??Infinity)-(b.survey?.number??Infinity));

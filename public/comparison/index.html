@@ -14,7 +14,7 @@
 <body><main>
   <header><a class="brand" href="../"><img src="../media/mark.svg" alt="">BAYWALK</a><a class="back" href="../?walk=bridge">从这个机位开始漫游</a></header>
   <section class="toolbar"><div class="title"><h1>同机位实机对比</h1><small>2560 × 1440 · 日落</small></div>
-    <div class="buttons" aria-label="选择机位"><button data-view="talent" aria-pressed="false">方滨兴星光柱</button><button data-view="pavilion" aria-pressed="false">求贤阁</button><button data-view="hall" aria-pressed="false">群英荟</button><button data-view="sail" aria-pressed="false">风帆塔</button><button data-view="onebay" aria-pressed="false">深圳湾一号</button><button data-view="t7" aria-pressed="false">T7 临湖面</button><button data-view="venue" aria-pressed="false">春茧</button><button data-view="bridge" aria-pressed="true">星光桥看春笋</button><button data-view="street" aria-pressed="false">登良路街景</button><button data-view="rolling" aria-pressed="false">行驶中的出租车</button><button data-view="model3" aria-pressed="false">Model 3</button></div>
+    <div class="buttons" aria-label="选择机位"><button data-view="lettering" aria-pressed="false">方滨兴下行铭文</button><button data-view="talent" aria-pressed="false">方滨兴星光柱</button><button data-view="pavilion" aria-pressed="false">求贤阁</button><button data-view="hall" aria-pressed="false">群英荟</button><button data-view="sail" aria-pressed="false">风帆塔</button><button data-view="onebay" aria-pressed="false">深圳湾一号</button><button data-view="t7" aria-pressed="false">T7 临湖面</button><button data-view="venue" aria-pressed="false">春茧</button><button data-view="bridge" aria-pressed="true">星光桥看春笋</button><button data-view="street" aria-pressed="false">登良路街景</button><button data-view="rolling" aria-pressed="false">行驶中的出租车</button><button data-view="model3" aria-pressed="false">Model 3</button></div>
   </section>
   <div class="buttons model-shots" aria-label="Model 3 对比机位" hidden>
     <button data-shot="model3">前 3/4</button><button data-shot="tail-side">正侧面</button><button data-shot="tail-rear">后 3/4</button><button data-shot="tail-detail">侧后特写</button>
@@ -23,13 +23,14 @@
     <span class="tag old-tag">优化前</span><span class="tag new-tag">优化后</span><span aria-hidden="true" class="divider"><b>‹ ›</b></span>
     <input type="range" min="0" max="100" step=".1" value="50" class="slider" aria-label="拖动调整优化前与优化后画面的分界">
   </div>
-  <div class="row"><div class="details" aria-label="查看局部"></div><div class="links"><a id="photoStreet" href="../?walk=street&amp;photo=1" hidden>从实车照片角度看出租车</a><a id="rearReference" href="https://static-assets.tesla.cn/configurator/compositor?context=design_studio_2&amp;options=$MT382,$PN01,$W38A,$IPB11&amp;view=STUD_REAR34&amp;model=m3&amp;size=1920&amp;bkba_opt=2&amp;crop=0,0,0,0&amp;overlay=0&amp;" target="_blank" rel="noopener" hidden>官网后 3/4 原图</a><a id="originalA" target="_blank" rel="noopener">优化前原图</a><a id="originalB" target="_blank" rel="noopener">优化后原图</a></div></div>
+  <div class="row"><div class="details" aria-label="查看局部"></div><div class="links"><a id="plaqueReview" href="./plaques.html" hidden>星光桥原照与实机近照</a><a id="photoStreet" href="../?walk=street&amp;photo=1" hidden>从实车照片角度看出租车</a><a id="rearReference" href="https://static-assets.tesla.cn/configurator/compositor?context=design_studio_2&amp;options=$MT382,$PN01,$W38A,$IPB11&amp;view=STUD_REAR34&amp;model=m3&amp;size=1920&amp;bkba_opt=2&amp;crop=0,0,0,0&amp;overlay=0&amp;" target="_blank" rel="noopener" hidden>官网后 3/4 原图</a><a id="originalA" target="_blank" rel="noopener">优化前原图</a><a id="originalB" target="_blank" rel="noopener">优化后原图</a></div></div>
   <div class="technical" id="technical"></div>
 </main>
 <script type="module">
   const $=s=>document.querySelector(s),frame=$('.images'),slider=$('.slider');
   const parkShot=(note,areas,href)=>({caption:'1600 × 900 · 晴天午后',note,areas,href,ext:'jpg'});
   const shots={
+    lettering:parkShot('A-29 下行刻字。相机中心、距离、30° 视野、天气和曝光完全相同。',[['全景',1,50,50],['下行刻字',1.45,50,69]],'../?walk=talent&person=fang-binxing&detail=inscription'),
     talent:parkShot('从桥面向湖拍摄。两版使用同一位置、54° 视野和夏季晴天光照。方滨兴的图案取自 Wargaz 拍摄的现场铭牌。',[['全景',1,50,50],['人物刻像',2.2,50,33],['姓名与刻字',3.2,50,58]]),
     pavilion:parkShot('从湖边步道看求贤阁的阅览空间、通高玻璃和露台。两版相机参数相同。',[['全景',1,50,50],['玻璃与书架',2.25,47,59],['栏杆与檐口',2.3,60,40]]),
     hall:parkShot('沿步道看群英荟的弧形雨棚、外廊和退台。',[['全景',1,50,50],['弧形外廊',2.1,75,48]]),
@@ -62,6 +63,7 @@
     frame.style.aspectRatio=shot.ratio??'16 / 9';
     $('.back').href=shot.view?'../?inspect=model3&view='+shot.view:shot.href??'../?walk='+id;
     $('.back').textContent=shot.link??(shot.view?'打开同机位 Model 3 图鉴':'从这个机位开始漫游');
+    $('#plaqueReview').hidden=!['talent','lettering'].includes(id);
     const tail=id.startsWith('tail-'),streetLink=$('#photoStreet');
     $('#rearReference').hidden=id!=='tail-rear';
     streetLink.hidden=id!=='street'&&!tail;

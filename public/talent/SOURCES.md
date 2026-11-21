@@ -9,9 +9,12 @@
 | bridge-walkway-2024.webp | Dinkun Chen，2024-12-01 | [SHENZHEN TALENTS PARK (58)](https://commons.wikimedia.org/wiki/File:SHENZHEN_TALENTS_PARK_(58).jpg) · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | 缩小并转为 WebP |
 | bridge-elevation-2024.webp | Dinkun Chen，2024-12-01 | [SHENZHEN TALENTS PARK (25)](https://commons.wikimedia.org/wiki/File:SHENZHEN_TALENTS_PARK_(25).jpg) · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | 缩小并转为 WebP |
 
-画面中的现场标识和人物刻像依摄影时的实物呈现。方滨兴图片的地理标签定位的是拍摄点。近景柱位依湖岸方向和相机位置估计。
+画面中的现场标识和人物刻像依摄影时的实物呈现。方滨兴图片的地理标签定位的是拍摄点。A-29 同时参考桥头号序和相机位置。
 
-`fang-binxing-face.webp` 由 Wargaz 的同一原照按金属柱面展开，减去拍摄反光及周围环境。肖像取自真实刻像，三行可辨铭文按照片重新排字，下方第二段在柱面侧缘处仅保留照片中可见的内容。此改编纹理同样采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)。
+方滨兴柱面采用 Wargaz 原片复核。用于核对的原文件标示为 2889 × 3852，站内实物照保留这一分辨率。本版独立 1152 × 3072 弧面纹理保留原物刻像、镂空字形和园标；“中国工程院院士”及其下行重新排版。下行可见部分对照实照，机构全称由[哈尔滨工业大学（深圳）](https://csen.hitsz.edu.cn/info/1026/1916.htm)核对。转角外的职衔未能逐字核实。柱脚通用标语「深爱人才　圳等您来」另由[开园徐政和实拍](https://k.sina.com.cn/article_6630392851_18b33c41300100bpzl.html)及[白天走桥 14:46](https://www.youtube.com/watch?v=Qshw0gnMrck&t=886s)核对。方滨兴实拍改编贴图及对照图原照部分采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)。
+
+2021 年 A 区蓝牌、绿牌与走桥录像由 Time Walker 发布。[桥头两牌停留镜头](https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=2882s)可核对 A-1 至 A-55 姓名。绿牌各点按区内通行方向配对，左右及实地米数有估算。新增人物取材见[学术人物原照记录](research-academics/SOURCES.md)。徐扬生另见[羊城晚报记者王磊的原片](https://ycpai.ycwb.com/ycppad/content/2021-10/22/content_40344700.html)，罗智泉及唐叔贤可在 Time Walker 的 20:33、49:27 分别核对。徐政和开园实拍与 21:46 的走桥侧像分别用于核字和图形比照。
+
 
 ## 据现场观察重新绘制的刻像
 

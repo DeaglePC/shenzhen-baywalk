@@ -10,38 +10,53 @@ const point=(path,distance,offset)=>{
   }
 };
 export function columnsOnBridge(path){
-  const columns=[];
-  // The three staggered tracks stay in the timber portion of the deck.
-  // The May 2024 Hong Kong Commercial Daily field report counts 80
-  // columns. Individual track spacings are reconstructed from photographs.
-  for(const [count,start,step,offset] of [[25,5,9.2,5.52],[28,3.8,8.12,2.02],[27,7.4,8.35,-1.5]]){
-    for(let i=0;i<count;i++)columns.push(point(path,start+step*i,offset));
+  // The printed diagram gives order and transverse position. Register its
+  // length against the ends of the deck and the 2022 photo-located A-29.
+  const length=path.slice(1).reduce((total,p,i)=>total+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0);
+  const surveyed=talentRecords.filter(r=>r.survey);
+  const pivot=surveyed.find(r=>r.id==='fang-binxing').survey.station;
+  const anchor=length*(143/Math.hypot(45.5,226)); // previously photo-located centre, not a surveyed station
+  const begin=5, end=length-5;
+  const columns=surveyed.map(record=>{
+    const {station,across}=record.survey;
+    const distance=station<=pivot?begin+(anchor-begin)*station/pivot:anchor+(end-anchor)*(station-pivot)/(1-pivot);
+    const column=point(path,distance,-1.45+(6.97/.99)*across);
+    column.faces[0]=record;return column;
+  });
+  // Preserve the later field count. Only the A-series dots were localised.
+  // Place additional columns in the space between them, away from the lane.
+  const candidates=[];
+  for(const offset of [-1.45,1.95,5.52]){
+    for(let s=4;s<length-2;s+=2.25)candidates.push(point(path,s,offset));
   }
-  const west=columns.slice(0,25),rest=columns.slice(25);
-  const fang=talentRecords.find(r=>r.id==='fang-binxing');west[15].faces[0]=fang;
-  // Preserve only documented facts about neighbourhood and side. These
-  // locations are illustrative unless the record supplies a camera fix.
-  const lakeside=talentRecords.filter(r=>r!==fang&&r.position?.side==='west');
-  const openWest=west.filter(c=>!c.faces[0]);
-  const assign=(slots,people,face)=>people.slice(0,slots.length).forEach((r,i)=>{slots[Math.floor(i*slots.length/Math.min(slots.length,people.length))].faces[face]=r;});
-  assign(openWest,lakeside,0);
-  const others=talentRecords.filter(r=>r!==fang&&!lakeside.includes(r));
-  const available=[...rest,...openWest.filter(c=>!c.faces[0])].sort((a,b)=>a.station-b.station);
-  const pairCount=Math.min(Math.ceil(others.length/2),available.length);
-  for(let i=0;i<pairCount;i++){
-    const c=available[Math.floor(i*available.length/pairCount)];
-    c.faces[0]=others[2*i];if(others[2*i+1])c.faces[1]=others[2*i+1];
+  const otherColumns=[];
+  while(columns.length<80 && candidates.length){
+    let best=0,score=-1;
+    for(let i=0;i<candidates.length;i++){
+      const p=candidates[i];let gap=Infinity;
+      for(const c of columns)gap=Math.min(gap,(c.x-p.x)**2+(c.z-p.z)**2);
+      if(gap>score){score=gap;best=i;}
+    }
+    const [next]=candidates.splice(best,1);columns.push(next);otherColumns.push(next);
   }
-  if(others.length>pairCount*2)assign(west.filter(c=>c.faces[0]),others.slice(pairCount*2),1);
+  otherColumns.sort((a,b)=>a.station-b.station);
+  const unlocated=talentRecords.filter(r=>!r.survey);
+  for(const [i,record] of unlocated.entries()){
+    const column=otherColumns[i%otherColumns.length];
+    column.faces[Math.floor(i/otherColumns.length)]=record;
+  }
   return columns;
 }
-export function personView(map,id='fang-binxing'){
+export function personView(map,id='fang-binxing',detail=null){
   const bridge=map.roads.find(r=>Number(r.id)===562534109);if(!bridge)return null;
   for(const col of columnsOnBridge(bridge.p)){
     const face=col.faces.findIndex(r=>r?.id===id);if(face<0)continue;
-    const sign=face===0?1:-1;
-    return {id:'talent',name:'星光桥 · '+col.faces[face].name,x:col.x+sign*col.dz*2.06,z:col.z-sign*col.dx*2.06,
-      lookX:col.x,lookZ:col.z,portrait:{height:4.17,target:[col.x,4.17,col.z],fov:54}};
+    const close=['inscription','left','right'].includes(detail);
+    const angle=Math.atan2(col.dz,-col.dx)+face*Math.PI+(detail==='left'?-.82:detail==='right'?.82:0);
+    const portrait=detail==='portrait';
+    const radius=close?.89:portrait?1.7:2.06,h=close?4.028:portrait?4.44:4.17;
+    return {id:'talent',name:'星光桥 · '+col.faces[face].name,x:col.x+Math.sin(angle)*radius,z:col.z+Math.cos(angle)*radius,
+      lookX:col.x,lookZ:col.z,portrait:{height:h,target:[col.x,h,col.z],fov:close?30:portrait?43:54}};
   }
   return null;
 }

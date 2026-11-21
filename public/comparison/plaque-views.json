@@ -1,0 +1,114 @@
+[
+  {
+    "id": "fang-binxing",
+    "name": "方滨兴",
+    "code": "A-29",
+    "detail": "inscription",
+    "image": "lettering-after.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Fang_Binxing_portrait_in_Shenzhen_Talent_Park.jpg",
+    "refImage": "lettering-source.webp",
+    "credit": "Wargaz · 2022-12-19，CC BY-SA 4.0，裁切自现场原照",
+    "note": "原片与游戏均可辨「（深圳）计算机科学与技术」。机构全称按哈工大资料补正；转角外是否另有职衔仍待侧拍。"
+  },
+  {
+    "id": "xu-yangsheng",
+    "name": "徐扬生",
+    "code": "A-15",
+    "clip": 1228,
+    "detail": "portrait",
+    "image": "plaque-xu-yangsheng.jpg",
+    "source": "https://ycpai.ycwb.com/ycppad/content/2021-10/22/content_40344700.html",
+    "credit": "羊城晚报 · 王磊，00:25.6；左侧播放器另见 Time Walker 20:28",
+    "note": "两向实拍可见双眼、微笑、衬衫、领带和肩线。职衔长行的侧面仍待补拍。"
+  },
+  {
+    "id": "luo-zhiquan",
+    "name": "罗智泉",
+    "code": "A-16",
+    "clip": 1233,
+    "detail": "portrait",
+    "image": "plaque-luo-zhiquan.jpg",
+    "source": "https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=1233s",
+    "credit": "Time Walker · 20:33.5",
+    "note": "刻像正面可见，点纹领带和眼角已据近景绘制。姓名按蓝牌核全；下行小字仍待正面近照。"
+  },
+  {
+    "id": "chen-shiyi",
+    "name": "陈十一",
+    "code": "A-17",
+    "clip": 1235,
+    "detail": "portrait",
+    "image": "plaque-chen-shiyi.jpg",
+    "source": "https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=1236s",
+    "credit": "Time Walker · 20:36 及 49:16.5",
+    "note": "四行铭文可读。两次经过可见下半脸、衣领及一侧眉眼，另一侧脸部暂留空。"
+  },
+  {
+    "id": "chen-guoliang",
+    "name": "陈国良",
+    "code": "A-9",
+    "clip": 1210,
+    "detail": "portrait",
+    "image": "plaque-chen-guoliang.jpg",
+    "source": "https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=1211s",
+    "credit": "Time Walker · 20:11.3",
+    "note": "实拍可见一侧脸及托腮的手。读到的机构和姓名片段可在人物索引逐行核对。"
+  },
+  {
+    "id": "deng-xingwang",
+    "name": "邓兴旺",
+    "code": "A-13",
+    "clip": 1222,
+    "detail": "portrait",
+    "image": "plaque-deng-xingwang.jpg",
+    "source": "https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=1223s",
+    "credit": "Time Walker · 20:23",
+    "note": "一侧眉眼、西服和领带据实柱重绘；机构一行能读到「深圳作物分子设计」。"
+  },
+  {
+    "id": "fan-dianyuan",
+    "name": "范滇元",
+    "code": "A-14",
+    "clip": 1223,
+    "detail": "portrait",
+    "image": "plaque-fan-dianyuan.jpg",
+    "source": "https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=1223s",
+    "credit": "Time Walker · 20:23.9，后方柱",
+    "note": "可辨「范滇」、侧分发、下颌和敞领，其余部分待更近的正面实照。"
+  },
+  {
+    "id": "tang-shuxian",
+    "name": "唐叔贤",
+    "code": "A-21",
+    "clip": 2966,
+    "detail": "portrait",
+    "image": "plaque-tang-shuxian.jpg",
+    "source": "https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=2966s",
+    "credit": "Time Walker · 49:27",
+    "note": "近摄可见「唐」、镜框、头发和西服一侧。柱号另与蓝牌及前后柱的顺序核对。"
+  },
+  {
+    "id": "xu-zhenghe",
+    "name": "徐政和",
+    "code": "A-35",
+    "clip": null,
+    "detail": "inscription",
+    "image": "plaque-xu-zhenghe.jpg",
+    "source": "https://k.sina.com.cn/article_6630392851_18b33c41300100bpzl.html",
+    "credit": "开园现场实拍 · 升职文化，另见 21:46 徐姓人物侧面",
+    "note": "开园照片完整保留「徐政和 / Xu Zhenghe / 加拿大工程院院士」。半面刻像据 A-32 后经过的徐姓柱与桥头名录配对。",
+    "refImage": "https://k.sinaimg.cn/n/front/292/w640h452/20181105/wb9K-hnknmqx0100251.jpg/w700d1q75cms.jpg?by=cms_fixed_width"
+  },
+  {
+    "id": "esteban-busso",
+    "name": "埃斯特班·布索",
+    "code": "",
+    "clip": null,
+    "detail": "portrait",
+    "image": "plaque-esteban-busso.jpg",
+    "source": "https://www.meipian.cn/5g8pbtxq",
+    "credit": "孙文喜 · 深圳市人才公园实拍相册",
+    "note": "侧拍看得到一侧眉眼、胡须与领带。英文姓名、英国皇家及哈尔滨工业等字样只有部分绕柱可见。",
+    "referenceAction": "打开孙文喜的原相册 · 陈晓红前一张"
+  }
+]
