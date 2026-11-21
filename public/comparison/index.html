@@ -8,6 +8,7 @@
     @font-face{font-family:Barlow;src:url('../media/barlow-black-italic.font');font-weight:900;font-style:italic}
     :root{color-scheme:dark;--orange:#ff925a;--split:50%;--zoom:1;--focus:50% 50%;font-family:"Microsoft YaHei UI","PingFang SC",sans-serif;color:#f6f1e9;background:#161c1e}*{box-sizing:border-box}body{margin:0}main{width:min(94vw,1660px);margin:0 auto;padding:23px 0 30px}header,.toolbar,.row,.buttons,.links,.details{display:flex;align-items:center}.brand{display:inline-flex;align-items:center;gap:8px;font:italic 900 27px Barlow,sans-serif;color:white;text-decoration:none}.brand img{width:35px}.back,.links a{color:#d0d0c9;text-underline-offset:4px;font-size:13px}header,.toolbar,.row{justify-content:space-between;gap:16px}.toolbar{margin:27px 0 15px}.title{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap}h1{font-size:clamp(21px,2vw,32px);margin:0;line-height:1.24;letter-spacing:-.04em}small{font-size:12px;color:#a9b1ad}.buttons,.details{flex-wrap:wrap;gap:6px}button{appearance:none;font:inherit;font-size:13px;padding:8px 13px;color:#e9e7df;background:#242c2e;border:1px solid #ffffff2b;border-radius:4px;cursor:pointer}button[aria-pressed="true"]{color:#211c17;background:var(--orange);border-color:var(--orange)}button:hover{border-color:#ffa979}button:focus-visible,a:focus-visible{outline:2px solid var(--orange);outline-offset:3px}.images{position:relative;aspect-ratio:16/9;overflow:hidden;border:1px solid #536064;border-radius:5px;background:#111717}.layer,.layer img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.layer img{display:block;object-fit:cover;transform:scale(var(--zoom));transform-origin:var(--focus)}.new{clip-path:inset(0 0 0 var(--split))}.tag{position:absolute;top:13px;background:#111819d6;padding:5px 9px;border-radius:3px;color:white;font-size:12px}.old-tag{left:13px}.new-tag{right:13px;color:#ffc598}.divider{pointer-events:none;position:absolute;top:0;bottom:0;left:var(--split);width:2px;transform:translateX(-50%);background:#fff;box-shadow:0 1px 7px #0009}.divider b{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:35px;height:35px;background:#fff;color:#172124;border-radius:50%;font-size:16px;line-height:1}.slider{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:ew-resize;touch-action:pan-y}.images:focus-within{outline:2px solid var(--orange);outline-offset:2px}.row{padding:13px 0 12px;flex-wrap:wrap}.details span{font-size:13px;color:#a9b1ad;margin-right:5px}.details button{padding:5px 10px}.links{gap:15px}.technical{border-top:1px solid #ffffff21;padding-top:11px;font-size:12px;color:#a9b1ad;line-height:1.65}.images[data-loading="true"]::after{content:'读取原始截图…';position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:#172124d9;padding:5px 10px;border-radius:3px;font-size:12px;pointer-events:none}
     @media(max-width:760px){main{width:94vw;padding-top:15px}.toolbar{align-items:start;flex-direction:column;margin-top:23px;gap:12px}.row{gap:11px}.tag{top:6px;font-size:10px;padding:3px 6px}.old-tag{left:6px}.new-tag{right:6px}.divider b{width:26px;height:26px}.buttons button{font-size:12px}.technical{font-size:11px}}
+    .model-shots{margin:-4px 0 12px}.model-shots[hidden]{display:none}.links{flex-wrap:wrap}
   </style>
 </head>
 <body><main>
@@ -15,6 +16,9 @@
   <section class="toolbar"><div class="title"><h1>同机位实机对比</h1><small>2560 × 1440 · 日落</small></div>
     <div class="buttons" aria-label="选择机位"><button data-view="bridge" aria-pressed="true">星光桥看春笋</button><button data-view="street" aria-pressed="false">登良路街景</button><button data-view="rolling" aria-pressed="false">行驶中的出租车</button><button data-view="model3" aria-pressed="false">Model 3</button></div>
   </section>
+  <div class="buttons model-shots" aria-label="Model 3 对比机位" hidden>
+    <button data-shot="model3">前 3/4</button><button data-shot="tail-side">正侧面</button><button data-shot="tail-rear">后 3/4</button><button data-shot="tail-detail">侧后特写</button>
+  </div>
   <div class="images" data-loading="true"><div class="layer"><img id="before" alt="优化前的实机截图"></div><div class="layer new"><img id="after" alt="优化后的实机截图"></div>
     <span class="tag old-tag">优化前</span><span class="tag new-tag">优化后</span><span aria-hidden="true" class="divider"><b>‹ ›</b></span>
     <input type="range" min="0" max="100" step=".1" value="50" class="slider" aria-label="拖动调整优化前与优化后画面的分界">
@@ -24,8 +28,15 @@
 </main>
 <script type="module">
   const $=s=>document.querySelector(s),frame=$('.images'),slider=$('.slider');
-  const spots={bridge:[['全景',1,50,50],['春笋幕墙',3.2,50,45],['湖面倒影',3,46,68],['岸线树冠',4,37,60]],street:[['全景',1,50,50],['车门漆面',3,50,65],['轮毂与轮拱',4,39.4,70.7],['行道树',3,8,24]],rolling:[['整车',1,50,50],['蓝白腰线',2.3,47,47],['前轮与大灯',2.5,22,66]],model3:[['整车',1,50,50],['前灯与前轮',2.6,40,57],['侧窗与车顶',2.6,57,42]]};
-  const metadata={bridge:'星光桥 · 世界坐标 (213.6, 4.07, 143.5)',street:'登良路 · 世界坐标 (−121.8, 1.916, −418.1)'};
+  const shots={
+    bridge:{note:'星光桥 · 世界坐标 (213.6, 4.07, 143.5)',areas:[['全景',1,50,50],['春笋幕墙',3.2,50,45],['湖面倒影',3,46,68],['岸线树冠',4,37,60]]},
+    street:{note:'登良路 · 世界坐标 (−121.8, 1.916, −418.1)',areas:[['全景',1,50,50],['车门漆面',3,50,65],['轮毂与轮拱',4,39.4,70.7],['行道树',3,8,24]]},
+    rolling:{caption:'1440 × 810 · 午后',href:'../?walk=street&photo=1',link:'去登良路看车流',note:'登良路附近的同一辆行驶出租车。两张截图锁定车轮转角、车辆位置、机位和午后光照，垂直视野 29.2°。',areas:[['整车',1,50,50],['蓝白腰线',2.3,47,47],['前轮与大灯',2.5,22,66]]},
+    model3:{view:'STUD_FRONT34',caption:'1440 × 810 · 图鉴',note:'车辆图鉴的 WebGL 截图。两版使用相同的前 3/4 机位，按特斯拉中国配置器 STUD_FRONT34 取景。',areas:[['整车',1,50,50],['前灯与前轮',2.6,40,57],['侧窗与车顶',2.6,57,42]]},
+    'tail-side':{view:'STUD_SIDE',caption:'正侧面 · 车尾局部',note:'同一正侧机位的实机截图，从 2560 × 1440 原始画幅等量裁切。',areas:[['车尾',1,50,50],['尾灯与盖沿',2.4,70,36],['后轮拱与下摆',1.9,62,65]]},
+    'tail-rear':{view:'STUD_REAR34',caption:'后 3/4 · 车尾局部',note:'同一后 3/4 机位的实机截图，从 2560 × 1440 原始画幅等量裁切。',areas:[['车尾',1,50,50],['尾灯转角',2.4,47,35],['尾门与保险杠',1.9,65,55]]},
+    'tail-detail':{view:'REAR_DETAIL',link:'打开可旋转的车尾特写',ratio:'1182 / 724',caption:'侧后方 · 车尾特写',note:'从正侧转向车尾约 23°。两版使用相同的相机位置、镜头和裁切范围。',areas:[['车尾',1,50,50],['后盖唇与尾灯',2.5,72,34],['后翼子板',2,58,59]]}
+  };
   function split(){frame.style.setProperty('--split',slider.value+'%');}
   slider.addEventListener('input',split);
   function zoom(level,button){
@@ -38,19 +49,26 @@
   let request=0,selected='';
   async function select(id){
     if(id===selected)return;selected=id;
+    const shot=shots[id];
     const token=++request;location.hash=id;frame.dataset.loading='true';
-    $('.back').href=id==='rolling'?'../?walk=street&photo=1':id==='model3'?'../?inspect=model3':'../?walk='+id;
-    $('.back').textContent=id==='model3'?'打开 Model 3 图鉴':id==='rolling'?'去登良路看车流':'从这个机位开始漫游';
-    $('#photoStreet').hidden=id!=='street';
-    $('.title small').textContent=id==='rolling'?'1440 × 810 · 午后':id==='model3'?'1440 × 810 · 图鉴':'2560 × 1440 · 日落';
-    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===id));
+    frame.style.aspectRatio=shot.ratio??'16 / 9';
+    $('.back').href=shot.view?'../?inspect=model3&view='+shot.view:shot.href??'../?walk='+id;
+    $('.back').textContent=shot.link??(shot.view?'打开同机位 Model 3 图鉴':'从这个机位开始漫游');
+    const tail=id.startsWith('tail-'),streetLink=$('#photoStreet');
+    streetLink.hidden=id!=='street'&&!tail;
+    streetLink.href=tail?'../?walk=model3&view=REAR_DETAIL':'../?walk=street&photo=1';
+    streetLink.textContent=tail?'去登良路看车尾':'从实车照片角度看出租车';
+    $('.title small').textContent=shot.caption??'2560 × 1440 · 日落';
+    $('.model-shots').hidden=!shot.view;
+    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===(shot.view?'model3':id)));
+    document.querySelectorAll('[data-shot]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.shot===id));
     slider.value=50;split();const details=$('.details');details.replaceChildren();
     const label=document.createElement('span');label.textContent='查看';details.append(label);
-    for(const [i,level] of spots[id].entries()){
+    for(const [i,level] of shot.areas.entries()){
       const b=document.createElement('button');b.textContent=level[0];b.setAttribute('aria-pressed',!i);
       b.onclick=()=>zoom(level,b);details.append(b);if(!i)zoom(level,b);
     }
-    $('#technical').textContent=id==='rolling'?'登良路附近的同一辆行驶出租车。两张截图锁定车轮转角、车辆位置、机位和午后光照，垂直视野 29.2°。':id==='model3'?'车辆图鉴的 WebGL 截图。两版使用相同的前 3/4 机位，按特斯拉中国配置器 STUD_FRONT34 取景。':metadata[id]+'　·　垂直视野 67°　·　同一台 RTX 5080，1.50 秒模拟时刻。拖动分隔线比较，选择局部可放大同一片区域。';
+    $('#technical').textContent=shot.note+(shot.caption?'':'　·　垂直视野 67°　·　同一台 RTX 5080，1.50 秒模拟时刻。拖动分隔线比较，选择局部可放大同一片区域。');
     const a=id+'-before.png',b=id+'-after.png';$('#originalA').href=a;$('#originalB').href=b;
     const images=[new Image(),new Image()];images[0].src=a;images[1].src=b;
     try{await Promise.all(images.map(img=>img.decode()));if(token!==request)return;$('#before').src=a;$('#after').src=b;}
@@ -58,7 +76,8 @@
     finally{if(token===request)frame.dataset.loading='false';}
   }
   document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>select(b.dataset.view));
-  function fromHash(){const id=location.hash.slice(1);select(Object.hasOwn(spots,id)?id:'bridge');}
+  document.querySelectorAll('[data-shot]').forEach(b=>b.onclick=()=>select(b.dataset.shot));
+  function fromHash(){const id=location.hash.slice(1);select(Object.hasOwn(shots,id)?id:'bridge');}
   window.addEventListener('hashchange',fromHash);
   fromHash();
 </script>

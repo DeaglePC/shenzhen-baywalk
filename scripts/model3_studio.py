@@ -51,6 +51,29 @@ value*=gains
 # A pale low front card defines the shallow, grilleless bumper's front face.
 value+=.31*step(z-.68,.23)*band(y,-.14,.16,.115)
 colour=np.stack((value*.989,value*.992,value*1.022),axis=-1)
+
+# A single broad grey diffuser wraps around the side/rear of the sweep.
+# The near end of the scrim receives the main lamp and the fabric attenuates
+# the ceiling return at its far end. All directions are fixed in the room.
+def panel_angles(yaw_degrees, pitch_degrees):
+    yaw,pitch=np.radians([yaw_degrees,pitch_degrees])
+    forward=x*np.cos(yaw)+z*np.sin(yaw)
+    facing=forward*np.cos(pitch)+y*np.sin(pitch)
+    right=z*np.cos(yaw)-x*np.sin(yaw)
+    up=y*np.cos(pitch)-forward*np.sin(pitch)
+    return np.arctan2(right,facing),np.arctan2(up,facing),facing
+
+wall_x,wall_y,wall_face=panel_angles(92,17)
+wall_edge=np.clip(wall_face/.24,0,1)
+wall_edge=wall_edge*wall_edge*(3.-2.*wall_edge)
+coverage=.475*wall_edge*np.exp(-.5*((wall_x/np.radians(78))**4
+                                  +(wall_y/np.radians(57))**4))
+lamp_x,lamp_y,lamp_face=panel_angles(32,-1.25)
+light=np.where(lamp_face>0,np.exp(-.5*((lamp_x/np.radians(21))**2
+                   +((lamp_y+.068*lamp_x)/np.radians(11))**2)),0.)
+diffuser=.047+2.43*light
+colour+=coverage[:,:,None]*(diffuser[:,:,None]-colour)
+
 target.parent.mkdir(parents=True,exist_ok=True)
 mantissa,exponent=np.frexp(colour.max(axis=-1))
 channels=np.zeros((height,width,4),np.uint8)

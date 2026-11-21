@@ -19,13 +19,19 @@ function factoryImage(view){
 // onto the studio floor, in the same metre coordinate system as the GLB.
 function model3ShadowMap(){
   const w=192,h=384,data=new Uint8Array(w*h*4);
+  function footprint(x,z,halfWidth,halfLength,falloff){
+    const radius=.22,qx=Math.abs(x)-halfWidth+radius,qz=Math.abs(z)-halfLength+radius;
+    const edge=Math.max(0,Math.hypot(Math.max(0,qx),Math.max(0,qz))+Math.min(0,Math.max(qx,qz))-radius);
+    return Math.exp(-.5*(edge/falloff)**2);
+  }
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     const side=(x+.5-w/2)*2.9/w,z=(h/2-y-.5)*5.65/h;
-    const qx=Math.abs(side)-.54,qz=Math.abs(z)-1.82;
-    const edge=Math.max(0,Math.hypot(Math.max(0,qx),Math.max(0,qz))+Math.min(0,Math.max(qx,qz))-.24);
-    const chassis=.59*Math.exp(-.5*(edge/.16)**2)+.20*Math.exp(-.5*(edge/.32)**2);
+    // Two floor shadows fitted in metres across all three studio views. The
+    // bumper overhang leaves visible floor outside the narrower underbody.
+    const fill=.326*footprint(side+.011,z+.004,.61,1.92,.096);
+    const key=.593*footprint(side-.161,z+.05,.50,2.134,.07);
     const contact=Math.exp(-.5*(((Math.abs(side)-.792)/.12)**2+(Math.min(Math.abs(z-1.492),Math.abs(z+1.383))/.12)**2));
-    data.set([255,255,255,Math.round(255*(1-(1-chassis)*(1-contact*.9)))],(y*w+x)*4);
+    data.set([255,255,255,Math.round(255*(1-(1-fill)*(1-key)*(1-contact*.9)))],(y*w+x)*4);
   }
   const map=new T.DataTexture(data,w,h);map.magFilter=map.minFilter=T.LinearFilter;map.needsUpdate=true;
   return map;
@@ -46,7 +52,7 @@ export function showGarage(body,initialId='e6',initialView){
   const shadow=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshBasicMaterial({map:roundShadow,transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=-.005;scene.add(shadow);
   const angles=document.createElement('div');angles.className='taxi-angles';stage.append(angles);
   const source=document.createElement('a');source.className='garage-source';source.target='_blank';source.rel='noopener';source.hidden=true;
-  let firstShot=Object.keys(teslaViews).find(k=>teslaViews[k]===initialView)||'front';
+  let firstShot=initialView==='REAR_DETAIL'?'tail':Object.keys(teslaViews).find(k=>teslaViews[k]===initialView)||'front';
   const cache=new Map(),detailAssets=new Map(),loader=new GLTFLoader();let token=0,active=true,current=null,raf,vehicleId='',selectedAngle='';
   const environments=new Map();
   function studio(id){
@@ -60,12 +66,13 @@ export function showGarage(body,initialId='e6',initialView){
     camera.updateProjectionMatrix();
   }
   function angle(id){
-    selectedAngle=id;controls.autoRotate=false;camera.up.set(0,1,0);controls.minDistance=id==='wheel'?.48:2.8;
+    selectedAngle=id;controls.autoRotate=false;camera.up.set(0,1,0);controls.minDistance=id==='wheel'?.48:id==='tail'?1.4:2.8;
     const shot=vehicleId==='model3'&&model3Framing(id,camera.aspect);
     source.hidden=!shot;
     if(shot){
-      source.href=factoryImage(teslaViews[id]);
-      source.textContent='查看官网'+({front:'前 3/4',side:'正侧面',rear:'后 3/4'})[id]+'原图 ↗';
+      const factoryView=id==='tail'?'rear':id;
+      source.href=factoryImage(teslaViews[factoryView]);
+      source.textContent='查看官网'+({front:'前 3/4',side:'正侧面',rear:'后 3/4'})[factoryView]+'原图 ↗';
       camera.position.fromArray(shot.eye);controls.target.fromArray(shot.target);
     }else if(id==='photo'){
       camera.position.fromArray(referencePose.eye);camera.up.fromArray(referencePose.up);
@@ -82,7 +89,7 @@ export function showGarage(body,initialId='e6',initialView){
     controls.update();resize();
     for(const b of angles.children)b.setAttribute('aria-pressed',b.dataset.angle===id);
   }
-  for(const [id,text] of [['photo','照片角度'],['front','前 3/4'],['side','正侧面'],['rear','后 3/4'],['wheel','轮毂']]){
+  for(const [id,text] of [['photo','照片角度'],['front','前 3/4'],['side','正侧面'],['rear','后 3/4'],['tail','车尾特写'],['wheel','轮毂']]){
     const b=document.createElement('button');b.type='button';b.dataset.angle=id;b.textContent=text;
     b.addEventListener('click',()=>angle(id));angles.append(b);
   }
@@ -106,6 +113,7 @@ export function showGarage(body,initialId='e6',initialView){
       angles.querySelector('[data-angle=photo]').hidden=v.id!=='e6';
       angles.querySelector('[data-angle=front]').hidden=v.id==='e6';
       angles.querySelector('[data-angle=wheel]').hidden=v.id!=='model3';
+      angles.querySelector('[data-angle=tail]').hidden=v.id!=='model3';
       vehicleId=v.id;
       const configurator=v.id==='model3';
       shadow.material.map=configurator?studioShadow:roundShadow;

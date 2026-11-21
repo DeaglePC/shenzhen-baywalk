@@ -78,6 +78,20 @@ export async function loadDetailedVehicle(id='e6') {
       mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-1;
     }
     if(lacquer.test(mat.name)) finishPaint(mat);
+    if(!taxi&&mat.name==='Heated rear windscreen'&&mat.transparent){
+      mat.depthWrite=false;
+      // BLEND glass otherwise transmits a constant fraction even edge-on. Use
+      // the two glass/air interfaces for the transmitted alpha. The physical
+      // material still computes its own specular reflections from the scene.
+      mat.onBeforeCompile=shader=>{
+        shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+          float backlightCosine=clamp(dot(normal,normalize(vViewPosition)),0.,1.);
+          float backlightTransmission=1.-pow(1.-backlightCosine,5.);
+          diffuseColor.a=1.-(1.-diffuseColor.a)*backlightTransmission*backlightTransmission;
+        `);
+      };
+      mat.customProgramCacheKey=()=> 'model3-backlight-fresnel';
+    }
     if(taxi&&glaze.test(mat.name) && mat.transparent) {
       mat.side=T.FrontSide;mat.depthWrite=false;mat.envMapIntensity=1.09;
       const automotiveGlass=!/lens/i.test(mat.name);

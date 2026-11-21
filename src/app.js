@@ -1,7 +1,7 @@
 import {applyIcons,icon} from './icons.js';
 import {showAtlas,drawMini} from './atlas.js';
 import {createAmbience} from './ambience.js';
-import {photoStreet,model3Street} from './taxi-framing.js';
+import {photoStreet,model3Street,model3RearStreet} from './taxi-framing.js';
 import {climateControls,climateFromQuery} from './climate-controls.js';
 applyIcons();
 const $=s=>document.querySelector(s),panel=$('#panel'),body=$('#panelBody'),load=$('#loading'),home=$('#home'),hud=$('#hud');
@@ -73,7 +73,9 @@ async function openPanel(key,vehicleId){
       const data=await geo();if(version!==panelId)return;
       cleanup=showAtlas(body,data,place,mode==='world'?world.position():null,launch);
     }else if(key==='garage'){
-      const {showGarage}=await import('./garage.js');if(version!==panelId)return;cleanup=showGarage(body,vehicleId,route.get('view'));
+      const {showGarage}=await import('./garage.js');if(version!==panelId)return;
+      const focusedCar=vehicleId??(mode==='world'&&place.id==='model3'?'model3':'e6');
+      cleanup=showGarage(body,focusedCar,route.get('view'));
     }else if(key==='help'){
       body.innerHTML='<div class="panel-pad"><div class="help-row"><span><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / 方向键</span><span>步行移动</span></div><div class="help-row"><span><kbd>Shift</kbd> + 移动</span><span>快步</span></div><div class="help-row"><span>拖动鼠标 / 触屏</span><span>环顾四周</span></div><div class="help-row"><span>双击街景 / <kbd>Esc</kbd></span><span>锁定 / 释放鼠标</span></div><div class="help-row"><span><kbd>M</kbd> / <kbd>V</kbd></span><span>区域地图 / 鸟瞰</span></div><div class="help-row"><span>鸟瞰时拖动 / 滚轮</span><span>环绕 / 缩放</span></div><div class="help-row"><span>鸟瞰时右键拖动</span><span>平移落地点</span></div><div class="help-row"><span><kbd>F</kbd></span><span>起飞 / 退出自由无人机</span></div><div class="help-row"><span><kbd>E</kbd> / <kbd>Q</kbd></span><span>无人机上升 / 下降</span></div><div class="help-row"><span>季节与天气按钮</span><span>选择四季、雨雪和极光夜</span></div><p class="note">手机使用左侧摇杆移动，飞行时右侧可调节高度。通过区域地图可以前往其他街区。日照按钮可切换午后、日落和蓝调时刻。</p><div class="credits">地理数据 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap 贡献者</a>。卫星影像来自 Copernicus Sentinel。建筑高度部分按楼层及用途估算，车辆为按公开尺寸重建的外观模型。启动画面为生成式概念美术。<br><a href="/credits.html" target="_blank" rel="noopener">查看数据与素材来源</a></div></div>';
     }else{
@@ -118,7 +120,12 @@ setInterval(updateHud,250);
 const requestedView=route.get('walk'),vehicleView=route.get('inspect');
 if(['taxi','model3'].includes(vehicleView))openPanel('garage',vehicleView==='model3'?'model3':'e6');
 else if(['bridge','street','stadium','field','garden','model3'].includes(requestedView)){
-  geo().then(data=>launch(requestedView==='street'&&route.get('photo')==='1'?photoStreet():data.views.find(view=>view.id===requestedView)||fallback,route.get('camera')==='drone'))
+  geo().then(data=>{
+    let place=data.views.find(view=>view.id===requestedView)||fallback;
+    if(requestedView==='street'&&route.get('photo')==='1')place=photoStreet();
+    if(requestedView==='model3'&&route.get('view')==='REAR_DETAIL')place=model3RearStreet();
+    return launch(place,route.get('camera')==='drone');
+  })
     .catch(()=>notify('地图读取失败，请点击开始漫游重试。'));
 }else if('requestIdleCallback' in window)requestIdleCallback(()=>geo().catch(()=>{}),{timeout:3000});
 else setTimeout(()=>geo().catch(()=>{}),1400);

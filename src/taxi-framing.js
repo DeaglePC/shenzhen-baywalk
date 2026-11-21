@@ -6,6 +6,13 @@ export function model3Street(){
   return {id:'model3',name:'登良路 · Model 3',x:-126.8,z:-441.5,lookX:curbModel3.x,lookZ:curbModel3.z,
     portrait:{height:1.82,target:[curbModel3.x,.90,curbModel3.z],fov:29}};
 }
+export function model3RearStreet(){
+  const {x,z,yaw,floor}=curbModel3,c=Math.cos(yaw),s=Math.sin(yaw);
+  const at=(side,along)=>[x+side*c+along*s,z-side*s+along*c];
+  const [eyeX,eyeZ]=at(3.3,-3.7),[lookX,lookZ]=at(.20,-1.35);
+  return {id:'model3',name:'登良路 · Model 3 车尾',x:eyeX,z:eyeZ,lookX,lookZ,
+    portrait:{height:floor+1.36,target:[lookX,floor+.72,lookZ],fov:33}};
+}
 export const referencePose={
   eye:[-2.578866,1.046449,3.599124],direction:[.655855,-.034160,-.754114],
   up:[.034842,.999281,-.014964],fov:43.6445,aspect:4/3
