@@ -14,8 +14,24 @@ dialog{background:#1a2022;color:#f4f3ec;border:1px solid #ffffff38;border-radius
 @media(pointer:coarse){.touchpad{display:block;position:absolute;left:var(--edge);bottom:145px;width:86px;height:86px;background:#17202166;border:1px solid #fffa;border-radius:100%;touch-action:none}.touchpad span{position:absolute;left:26px;top:26px;width:32px;height:32px;border-radius:100%;background:#fffa;pointer-events:none}.aim{display:none}}
 @media(max-width:400px){:root{--edge:16px}.garage-link span:nth-child(2){display:none}.fact{padding:0 10px}.fact strong{font-size:13px}.fact em{font-size:15px}.intro h1{font-size:60px}.brand small{letter-spacing:1px}}
 @media(max-height:550px) and (orientation:landscape){.intro{align-self:center;margin-bottom:0;padding:22px 0 15px}.intro h1{font-size:53px}.english-title{font-size:21px}.lead{margin:7px 0 12px}.large{height:37px}.landing-footer{bottom:9px;padding-top:8px}.fact small{font-size:9px}.fact strong,.fact em{font-size:12px}.panel-head{padding:8px 15px}.map-grid,.garage-grid{grid-template-columns:1fr 220px}.map-stage,.garage-stage{min-height:240px}.atlas-side,.garage-side{display:flex;padding:8px}.place,.model-choice{padding:5px 8px}.map-hint{font-size:10px}}
-.compare-entry{display:inline-block;margin-top:15px;color:#edeae4;font-size:14px;text-decoration:underline;text-underline-offset:4px;text-decoration-color:#eee9;text-shadow:0 1px 5px #181919}
-.compare-entry:hover{color:#ffb583}
+.compare-entry,.flight-entry{display:inline-block;margin-top:15px;color:#edeae4;font-size:14px;text-decoration:underline;text-underline-offset:4px;text-decoration-color:#eee9;text-shadow:0 1px 5px #181919}
+.compare-entry:hover,.flight-entry:hover{color:#ffb583}
 .taxi-angles{position:absolute;top:12px;right:12px;display:flex;gap:4px;z-index:1}
 .taxi-angles[hidden]{display:none}.taxi-angles button{font:inherit;font-size:12px;color:#fff;background:#172023cf;border:1px solid #ffffff40;border-radius:4px;padding:5px 9px}
 .taxi-angles button[aria-pressed=true]{color:#251a12;background:#ffae7c;border-color:#ffae7c}
+.scene-entries{display:flex;gap:22px;align-items:center}
+#climatePanel{position:absolute;pointer-events:auto;right:var(--edge);bottom:82px;width:min(300px,calc(100vw - 32px));box-sizing:border-box;background:#172123ed;backdrop-filter:blur(18px);border:1px solid #ffffff47;border-radius:8px;padding:15px 17px 18px;box-shadow:0 10px 36px #10171370}
+.climate-head{display:flex;align-items:center;justify-content:space-between;font-size:17px}
+.climate-head .icon-button{width:30px;height:30px}
+#climatePanel fieldset{border:0;border-top:1px solid #ffffff26;margin:12px 0 0;padding:8px 0 0}
+#climatePanel legend{font-size:13px;color:#d5dcd9;padding:0 8px 0 0}
+.climate-options{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.climate-options button{min-height:37px;background:#ffffff09;border:1px solid #ffffff30;border-radius:4px;font-size:14px}
+.climate-options button[aria-pressed=true],.world-tools button[aria-pressed=true],.world-tools button[aria-expanded=true]{color:#ffe2c9;border-color:#eaa16f;background:#50392cde}
+#flightInfo{position:absolute;top:67px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:5px 10px;color:#edf2ed;background:#172024cc;border:1px solid #fff3;border-radius:4px;font-size:12px;white-space:nowrap}
+#flightInfo svg{width:15px;height:15px;color:#ffab76}#flightInfo output{font:12px Plex,monospace;font-variant-numeric:tabular-nums;min-width:4ch;text-align:right}
+#flightLift{display:none}.world-tools button:disabled{cursor:default}
+@media(min-width:761px){#walkHint{bottom:82px}#climatePanel:not([hidden])~#walkHint{opacity:0!important}}
+@media(max-width:760px){#flightInfo{top:107px}#climatePanel{bottom:58px;right:14px;z-index:3}.world-tools{display:grid;grid-template-columns:repeat(2,auto);width:max-content}.world-tools #pause{grid-column:2}.world-tools #period{grid-column:1}.world-tools button{min-height:33px}#walkHint{bottom:auto;top:143px}}
+@media(pointer:coarse){#flightLift:not([hidden]){position:absolute;right:var(--edge);bottom:153px;display:grid;gap:6px;pointer-events:auto}#flightLift button{width:44px;height:42px;touch-action:none;user-select:none}}
+@media(max-height:540px){#climatePanel{max-height:75svh;overflow:auto}#walkHint{display:none}.touchpad{bottom:100px}#flightInfo{top:60px}}

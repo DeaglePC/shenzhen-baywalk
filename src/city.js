@@ -7,6 +7,7 @@ import {materials,asset} from './city-materials.js';
 import {landmarks} from './city-landmarks.js';
 import {streets,cityBlocks} from './city-blocks.js';
 import {furnishing} from './city-nature.js';
+import {buildWeatherCover} from './precipitation-cover.js';
 
 const canopyData=fetch(import.meta.env.BASE_URL+'data/houhai-canopy.json')
   .then(response=>response.ok?response.json():null).then(data=>data?.trees||[]).catch(()=>[]);
@@ -60,13 +61,22 @@ function farTerrain(root){
       idx.push(k,k+n,k+1,k+1,k+n,k+n+1);
     }
     const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setAttribute('color',new T.Float32BufferAttribute(cols,3));g.setIndex(idx);g.computeVertexNormals();
-    const mountains=new T.Mesh(g,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));mountains.name='真实高程 · 香港与南山山脊';root.add(mountains);
+    const ground=new T.MeshStandardMaterial({vertexColors:true,roughness:1,transparent:true,depthWrite:false});
+    ground.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec2 terrainXZ;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nterrainXZ=position.xz;');
+      shader.fragmentShader='varying vec2 terrainXZ;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>',
+        '#include <alphamap_fragment>\ndiffuseColor.a*=1.-smoothstep(8500.,21100.,max(abs(terrainXZ.x),abs(terrainXZ.y)));');
+    };
+    const mountains=new T.Mesh(g,ground);mountains.renderOrder=-100;mountains.name='真实高程 · 香港与南山山脊';root.add(mountains);
   }).catch(e=>console.warn('Regional terrain unavailable',e));return state;
 }
 export function createCity(scene,map,options={}){
   const root=new T.Group();root.name='深圳人才公园与后海城区';scene.add(root);
   const m=materials(),grid={buildings:new Grid(100),water:new Grid(100),roads:new Grid(72)};
-  terrain(root,map,m,grid);cityBlocks(root,map,m,grid);streets(root,map,m,grid);landmarks(root,map.roads,m);
+  terrain(root,map,m,grid);cityBlocks(root,map,m,grid);streets(root,map,m,grid);
+  const stadium=landmarks(root,map,m);
+  let weatherCover;
+  const getWeatherCover=()=>weatherCover??=buildWeatherCover(map.buildings,stadium);
   let foliage=[],night=0;
   const far=farTerrain(root),water=makeLake(root,map,options);
   const ground=streetSurface(root,m,options,map.roads);
@@ -90,12 +100,18 @@ export function createCity(scene,map,options={}){
     }
     return height;
   }
-  function groundHeight(x,z){return Math.max(.15,roadAt(x,z));}
+  function groundHeight(x,z){return Math.max(.15,roadAt(x,z),stadium?.groundHeight(x,z)??0);}
+  function flightBlocked(x,y,z){
+    const stands=stadium?.flightBlocked(x,y,z);
+    if(stands)return true;
+    return grid.buildings.query(x,z).some(f=>!stadium?.ownsFootprint(f)&&y>(f.minH||0)-.25&&y<(f.h||3)+.35&&inArea(x,z,f));
+  }
   function isWalkable(x,z){
     if(!Number.isFinite(x+z)||Math.hypot(x,z)>map.radius)return false;
+    const venue=stadium?.walkable(x,z);if(venue!=null)return venue;
     const h=roadAt(x,z);if(h>1.2)return true;
     if(grid.water.query(x,z).some(f=>inArea(x,z,f)))return false;
-    if(grid.buildings.query(x,z).some(f=>inArea(x,z,f)))return false;
+    if(grid.buildings.query(x,z).some(f=>!stadium?.ownsFootprint(f)&&inArea(x,z,f)))return false;
     return true;
   }
   let lastTone=-1;const lastDetailEye=new T.Vector3(Infinity,0,0);let detailCount=-1;
@@ -114,12 +130,12 @@ export function createCity(scene,map,options={}){
     const intensity=(1-.75*night)*(typeof scene.environmentIntensity==='number'?clamp(scene.environmentIntensity,.18,1.2):1);
     if(Math.abs(lastTone-intensity)>.02){for(const a of foliage)a.color.setHex(0xe4ebdc).multiplyScalar(.67+.3*intensity);lastTone=intensity;}
   }
-  function setNight(fraction){
-    night=clamp(fraction,0,1);if(water)water.material.uniforms.night.value=night;for(const wall of m.walls)wall.emissiveIntensity=night*1.14;
+  function setNight(fraction,officeOccupancy=1){
+    night=clamp(fraction,0,1);if(water)water.material.uniforms.night.value=night;for(const wall of m.walls)wall.emissiveIntensity=night*1.14*officeOccupancy;
     m.lamp.emissiveIntensity=.36+night*2.6;
     m.shop.emissiveIntensity=.16+night*.69;
   }
   function setSun(direction,color){ground.invalidate();if(!water)return;water.material.uniforms.sunDirection.value.copy(direction).normalize();if(color)water.material.uniforms.sunColor.value.set(color);}
-  function dispose(){ground.dispose();water?.dispose();far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
-  return {root,ready,update,captureStreet:ground.capture,groundHeight,isWalkable,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
+  function dispose(){weatherCover?.texture.dispose();ground.dispose();water?.dispose();far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
+  return {root,ready,update,captureStreet:ground.capture,groundHeight,isWalkable,flightBlocked,getWeatherCover,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
 }

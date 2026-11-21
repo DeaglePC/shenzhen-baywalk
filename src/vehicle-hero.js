@@ -3,7 +3,6 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 
-const heroURL = () => `${import.meta.env.BASE_URL}models/e6-pengcheng.glb`;
 const glaze = /glass|windscreen|clear lens/i;
 const lacquer = /Ocean Blue clearcoat|Pearl White clearcoat|Fleet side enamel/;
 const NOISE = `
@@ -56,9 +55,10 @@ function finishPaint(material, origin) {
   material.customProgramCacheKey=()=> 'pengcheng-pearl';
 }
 
-export async function loadHeroTaxi() {
+export async function loadDetailedVehicle(id='e6') {
   const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-  const {scene:model}=await loader.loadAsync(heroURL());
+  const taxi=id==='e6',file=taxi?'e6-pengcheng':'model3-detail';
+  const {scene:model}=await loader.loadAsync(import.meta.env.BASE_URL+'models/'+file+'.glb');
   const origin=new T.Vector3(), reflective=[],materials=new Set();
   model.traverse(node=>{
     if (!node.isMesh) return;
@@ -72,7 +72,7 @@ export async function loadHeroTaxi() {
       mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-1;
     }
     if(lacquer.test(mat.name)) finishPaint(mat,origin);
-    if(glaze.test(mat.name) && mat.transparent) {
+    if(taxi&&glaze.test(mat.name) && mat.transparent) {
       mat.side=T.FrontSide;mat.depthWrite=false;mat.envMapIntensity=1.09;
       const automotiveGlass=!/lens/i.test(mat.name);
       if(automotiveGlass){
@@ -91,7 +91,7 @@ export async function loadHeroTaxi() {
     }
     if(mat.isMeshStandardMaterial) reflective.push(mat);
   });
-  model.name='深圳巴士集团鹏程出租车 · AT-099';
+  model.name=taxi?'深圳巴士集团鹏程出租车 · AT-099':'特斯拉 Model 3 · 后轮驱动版';
   model.userData.excludeFromProbe=true;
   let environment;
   return {

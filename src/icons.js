@@ -1,4 +1,6 @@
 const shapes = {
+  cloud:'<path d="M6.5 18a4.5 4.5 0 0 1-.3-9A6 6 0 0 1 17.8 8a5 5 0 1 1 .4 10Z"/>',
+  drone:'<path d="m6 6 4.5 4.5m3 3L18 18m0-12-4.5 4.5m-3 3L6 18"/><circle cx="5.5" cy="5.5" r="3"/><circle cx="18.5" cy="5.5" r="3"/><circle cx="5.5" cy="18.5" r="3"/><circle cx="18.5" cy="18.5" r="3"/><rect x="9" y="9" width="6" height="6" rx="2"/>',
   play:'<path d="m7 4 13 8-13 8z"/>', pause:'<path d="M8 5v14m8-14v14" stroke-width="4"/>',
   map:'<path d="m2 5 6-2 8 3 6-2v15l-6 2-8-3-6 2zM8 3v15m8-12v15"/>',
   pin:'<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.8"/>',

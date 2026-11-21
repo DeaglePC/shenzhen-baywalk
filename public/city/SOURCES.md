@@ -1,8 +1,12 @@
 # 渲染素材与重建说明
 
+春茧屋盖、东侧体育场开口、跑道与两座室内场馆的位置参照本项目的 OpenStreetMap 场地多边形。银白色镂空外壳、中央广场和沿屋盖渐变的网孔参考设计方照片及项目介绍。局部剖面、坐席排布与构件断面属于外观重建。[佐藤综合计画设计档案](https://www.axscom.jp/legacy/en/project/no03341/) · [深圳市南山区政府场馆资料](https://www.szns.gov.cn/mlns/whns/tycg/content/post_12589347.html)。
+
+特斯拉 Model 3 采用中国官网后轮驱动版。车长、宽（带镜及不带镜）、车高、轴距、前后悬和轮距均以厂家尺寸表为基准；玻璃、覆盖件、灯具及光子轮毂在 Blender 中参考官方图重新塑形。街头车型使用场景编排的车牌。[车型官网](https://www.tesla.cn/model3) · [特斯拉中国车主手册尺寸表](https://www.tesla.cn/ownersmanual/model3/zh_cn/GUID-56562137-FC31-4110-A13C-9A9FC6657BF0.html) · [原厂外观照片](https://digitalassets.tesla.com/tesla-contents/image/upload/Model-3-Exterior-Desktop-NA.jpg)。
+
 城市建筑平面、道路、岸线、卫星正射底图和树冠观测来源见 [地理数据说明](../data/SOURCES.md)。
 
-* 近景铺装使用 Poly Haven 发布的 CC0 材质，分别为 [Asphalt 04](https://polyhaven.com/a/asphalt_04)、[Rectangular Paving](https://polyhaven.com/a/rectangular_paving)、[Grass Ground](https://polyhaven.com/a/grass_ground) 和 [Concrete Floor 02](https://polyhaven.com/a/concrete_floor_02)。项目中的本地 WebP 做过压缩与调色。
+* 近景铺装使用 Poly Haven 发布的 CC0 材质，分别为 [Asphalt 04](https://polyhaven.com/a/asphalt_04)、[Rectangular Paving](https://polyhaven.com/a/rectangular_paving)、[Grass Ground](https://polyhaven.com/a/grass_ground) 和 [Concrete Floor 02](https://polyhaven.com/a/concrete_floor_02)。项目中的本地 WebP 做过压缩与调色。春茧球场草纹衍生自 Grass Ground，海之门铺装衍生自 Rectangular Paving；近处草丝与跑道胶粒通过程序着色。
 * 近景阔叶树来自 Poly Haven 两株扫描树木，按距离显示树干、分枝和有深度的叶簇，棕榈采用三维叶片与树干。远景采用 [Jacaranda Tree](https://polyhaven.com/a/jacaranda_tree)、[Island Tree 01](https://polyhaven.com/a/island_tree_01)、[Island Tree 02](https://polyhaven.com/a/island_tree_02)、[Shrub 02](https://polyhaven.com/a/shrub_02) 和 [Shrub 03](https://polyhaven.com/a/shrub_03) 的透明图像。[树木加工和来源说明](../foliage/SOURCES.md)
 * 天际线以外的山地采用 [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) 的 Terrarium 高程图层，在公园中心外延约 22 公里，按 220 米网格采样。图源包括 Mapzen 以及该数据集列出的上游机构。
 * 湖面和登良路近景积水使用 [Three.js Reflector](https://github.com/mrdoob/three.js/blob/dev/examples/jsm/objects/Reflector.js) 投影场景倒影。湖面的细波叠加了 [waternormals.jpg](https://github.com/mrdoob/three.js/blob/dev/examples/textures/waternormals.jpg)。湖岸深浅采用地图岸线及七个岛屿轮廓计算，岛缘石块和草丛为程序布置。
