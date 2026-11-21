@@ -7,7 +7,6 @@ const glaze = /glass|windscreen|clear lens/i;
 const lacquer = /Ocean Blue clearcoat|Pearl White clearcoat|Fleet side enamel/;
 const NOISE = `
   varying vec3 vTaxiMeters;
-  uniform vec3 taxiOrigin;
   float taxiHash(vec3 p) {
     p = fract(p * .1031);
     p += dot(p, p.yzx + 33.33);
@@ -23,7 +22,7 @@ const NOISE = `
   }
 `;
 
-function finishPaint(material, origin) {
+function finishPaint(material) {
   material.clearcoat=1;
   material.clearcoatRoughness=.065;
   material.envMapIntensity=1.17;
@@ -31,11 +30,10 @@ function finishPaint(material, origin) {
     material.roughness=.205;material.metalness=.59;
   }
   material.onBeforeCompile=shader=>{
-    shader.uniforms.taxiOrigin={value:origin};
     shader.vertexShader=shader.vertexShader.replace('#include <common>',
-      '#include <common>\nvarying vec3 vTaxiMeters; uniform vec3 taxiOrigin;')
+      '#include <common>\nattribute vec3 taxiMeters; varying vec3 vTaxiMeters;')
       .replace('#include <project_vertex>',
-        '#include <project_vertex>\nvTaxiMeters=(modelMatrix*vec4(transformed,1.)).xyz-taxiOrigin;');
+        '#include <project_vertex>\nvTaxiMeters=taxiMeters;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\n'+NOISE)
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
         float taxiGrain=taxiNoise(vTaxiMeters*185.);
@@ -59,11 +57,19 @@ export async function loadDetailedVehicle(id='e6') {
   const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const taxi=id==='e6',file=taxi?'e6-pengcheng':'model3-detail';
   const {scene:model}=await loader.loadAsync(import.meta.env.BASE_URL+'models/'+file+'.glb');
-  const origin=new T.Vector3(), reflective=[],materials=new Set();
+  const reflective=[],materials=new Set(),paintMeshes=new Set(),point=new T.Vector3();
+  model.updateMatrixWorld(true);
   model.traverse(node=>{
     if (!node.isMesh) return;
     node.castShadow=true; node.receiveShadow=true;
     const mat=node.material;
+    if(lacquer.test(mat.name)){
+      if(paintMeshes.has(node.geometry))node.geometry=node.geometry.clone();
+      paintMeshes.add(node.geometry);
+      const position=node.geometry.attributes.position,meters=new Float32Array(position.count*3);
+      for(let i=0;i<position.count;i++)point.fromBufferAttribute(position,i).applyMatrix4(node.matrixWorld).toArray(meters,3*i);
+      node.geometry.setAttribute('taxiMeters',new T.BufferAttribute(meters,3));
+    }
     if(materials.has(mat)) return;
     materials.add(mat);
     if(mat.map) mat.map.anisotropy=8;
@@ -71,7 +77,7 @@ export async function loadDetailedVehicle(id='e6') {
       mat.transparent=false;mat.alphaToCoverage=true;mat.depthWrite=true;
       mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-1;
     }
-    if(lacquer.test(mat.name)) finishPaint(mat,origin);
+    if(lacquer.test(mat.name)) finishPaint(mat);
     if(taxi&&glaze.test(mat.name) && mat.transparent) {
       mat.side=T.FrontSide;mat.depthWrite=false;mat.envMapIntensity=1.09;
       const automotiveGlass=!/lens/i.test(mat.name);
@@ -97,7 +103,6 @@ export async function loadDetailedVehicle(id='e6') {
   return {
     model,
     setEnvironment(texture,rotation=0) {
-      origin.copy(model.position);
       if(texture===environment)return;
       environment=texture;
       for(const mat of reflective) {
@@ -118,8 +123,9 @@ export async function loadDetailedVehicle(id='e6') {
 }
 
 // Use one measured, overcast courtyard for the rotating catalogue inspection.
-export async function taxiStudio(renderer,isActive){
-  const texture=await new HDRLoader().loadAsync(import.meta.env.BASE_URL+'media/courtyard.hdr');
+export async function vehicleStudio(renderer,isActive,id){
+  const file=id==='model3'?'models/model3-studio.hdr':'media/courtyard.hdr';
+  const texture=await new HDRLoader().loadAsync(import.meta.env.BASE_URL+file);
   if(!isActive()){texture.dispose();return null;}
   const pmrem=new T.PMREMGenerator(renderer);
   try{return pmrem.fromEquirectangular(texture);}

@@ -13,7 +13,7 @@
 <body><main>
   <header><a class="brand" href="../"><img src="../media/mark.svg" alt="">BAYWALK</a><a class="back" href="../?walk=bridge">从这个机位开始漫游</a></header>
   <section class="toolbar"><div class="title"><h1>同机位实机对比</h1><small>2560 × 1440 · 日落</small></div>
-    <div class="buttons" aria-label="选择机位"><button data-view="bridge" aria-pressed="true">星光桥看春笋</button><button data-view="street" aria-pressed="false">登良路看出租车</button></div>
+    <div class="buttons" aria-label="选择机位"><button data-view="bridge" aria-pressed="true">星光桥看春笋</button><button data-view="street" aria-pressed="false">登良路街景</button><button data-view="rolling" aria-pressed="false">行驶中的出租车</button><button data-view="model3" aria-pressed="false">Model 3</button></div>
   </section>
   <div class="images" data-loading="true"><div class="layer"><img id="before" alt="优化前的实机截图"></div><div class="layer new"><img id="after" alt="优化后的实机截图"></div>
     <span class="tag old-tag">优化前</span><span class="tag new-tag">优化后</span><span aria-hidden="true" class="divider"><b>‹ ›</b></span>
@@ -24,7 +24,7 @@
 </main>
 <script type="module">
   const $=s=>document.querySelector(s),frame=$('.images'),slider=$('.slider');
-  const spots={bridge:[['全景',1,50,50],['春笋幕墙',3.2,50,45],['湖面倒影',3,46,68],['岸线树冠',4,37,60]],street:[['全景',1,50,50],['车门漆面',3,50,65],['轮毂与轮拱',4,39.4,70.7],['行道树',3,8,24]]};
+  const spots={bridge:[['全景',1,50,50],['春笋幕墙',3.2,50,45],['湖面倒影',3,46,68],['岸线树冠',4,37,60]],street:[['全景',1,50,50],['车门漆面',3,50,65],['轮毂与轮拱',4,39.4,70.7],['行道树',3,8,24]],rolling:[['整车',1,50,50],['蓝白腰线',2.3,47,47],['前轮与大灯',2.5,22,66]],model3:[['整车',1,50,50],['前灯与前轮',2.6,40,57],['侧窗与车顶',2.6,57,42]]};
   const metadata={bridge:'星光桥 · 世界坐标 (213.6, 4.07, 143.5)',street:'登良路 · 世界坐标 (−121.8, 1.916, −418.1)'};
   function split(){frame.style.setProperty('--split',slider.value+'%');}
   slider.addEventListener('input',split);
@@ -38,8 +38,11 @@
   let request=0,selected='';
   async function select(id){
     if(id===selected)return;selected=id;
-    const token=++request;location.hash=id;frame.dataset.loading='true';$('.back').href='../?walk='+id;
+    const token=++request;location.hash=id;frame.dataset.loading='true';
+    $('.back').href=id==='rolling'?'../?walk=street&photo=1':id==='model3'?'../?inspect=model3':'../?walk='+id;
+    $('.back').textContent=id==='model3'?'打开 Model 3 图鉴':id==='rolling'?'去登良路看车流':'从这个机位开始漫游';
     $('#photoStreet').hidden=id!=='street';
+    $('.title small').textContent=id==='rolling'?'1440 × 810 · 午后':id==='model3'?'1440 × 810 · 图鉴':'2560 × 1440 · 日落';
     document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===id));
     slider.value=50;split();const details=$('.details');details.replaceChildren();
     const label=document.createElement('span');label.textContent='查看';details.append(label);
@@ -47,7 +50,7 @@
       const b=document.createElement('button');b.textContent=level[0];b.setAttribute('aria-pressed',!i);
       b.onclick=()=>zoom(level,b);details.append(b);if(!i)zoom(level,b);
     }
-    $('#technical').textContent=metadata[id]+'　·　垂直视野 67°　·　同一台 RTX 5080，1.50 秒模拟时刻。拖动分隔线比较，选择局部可放大同一片区域。';
+    $('#technical').textContent=id==='rolling'?'登良路附近的同一辆行驶出租车。两张截图锁定车轮转角、车辆位置、机位和午后光照，垂直视野 29.2°。':id==='model3'?'车辆图鉴的 WebGL 截图。两版使用相同的前 3/4 机位，按特斯拉中国配置器 STUD_FRONT34 取景。':metadata[id]+'　·　垂直视野 67°　·　同一台 RTX 5080，1.50 秒模拟时刻。拖动分隔线比较，选择局部可放大同一片区域。';
     const a=id+'-before.png',b=id+'-after.png';$('#originalA').href=a;$('#originalB').href=b;
     const images=[new Image(),new Image()];images[0].src=a;images[1].src=b;
     try{await Promise.all(images.map(img=>img.decode()));if(token!==request)return;$('#before').src=a;$('#after').src=b;}
@@ -55,7 +58,8 @@
     finally{if(token===request)frame.dataset.loading='false';}
   }
   document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>select(b.dataset.view));
-  window.addEventListener('hashchange',()=>select(location.hash==='#street'?'street':'bridge'));
-  select(location.hash==='#street'?'street':'bridge');
+  function fromHash(){const id=location.hash.slice(1);select(Object.hasOwn(spots,id)?id:'bridge');}
+  window.addEventListener('hashchange',fromHash);
+  fromHash();
 </script>
 </body></html>

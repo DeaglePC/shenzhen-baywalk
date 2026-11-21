@@ -35,3 +35,6 @@ dialog{background:#1a2022;color:#f4f3ec;border:1px solid #ffffff38;border-radius
 @media(max-width:760px){#flightInfo{top:107px}#climatePanel{bottom:58px;right:14px;z-index:3}.world-tools{display:grid;grid-template-columns:repeat(2,auto);width:max-content}.world-tools #pause{grid-column:2}.world-tools #period{grid-column:1}.world-tools button{min-height:33px}#walkHint{bottom:auto;top:143px}}
 @media(pointer:coarse){#flightLift:not([hidden]){position:absolute;right:var(--edge);bottom:153px;display:grid;gap:6px;pointer-events:auto}#flightLift button{width:44px;height:42px;touch-action:none;user-select:none}}
 @media(max-height:540px){#climatePanel{max-height:75svh;overflow:auto}#walkHint{display:none}.touchpad{bottom:100px}#flightInfo{top:60px}}
+.garage-stage.model3-studio .model-status{color:#32363a}.garage-stage.model3-studio .model-caption{background:#fffffff2;color:#262b31}
+.garage-source{color:#e7e8e2;font-size:13px;text-underline-offset:3px;margin-top:6px}.garage-source[hidden]{display:none}
+@media(max-width:760px){.garage-stage:has(.taxi-angles:not([hidden])) .model-status{top:48px}.garage-source{grid-column:1/-1}}

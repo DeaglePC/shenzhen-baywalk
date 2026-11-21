@@ -21,6 +21,32 @@ d.ellipse((245,114,281,150),outline=(36,81,49),width=4)
 d.polygon([(252,135),(266,121),(263,132),(274,130),(260,145),(264,135)],fill=(49,95,58))
 plate.save(out/"model3-street-plate.png",optimize=True)
 
+# A purpose-drawn standby screen, lit like the IPB11 reference. The schematic
+# map, car plan and icon strip are model artwork and do not use website pixels.
+screen=Image.new("RGB",(768,432),(225,226,228));ui=ImageDraw.Draw(screen)
+ui.rectangle((252,0,768,386),fill=(212,214,217))
+for j in range(7):
+    pts=[(251,22+j*62),(303,42+j*49),(385,35+j*53),(450,30+j*54),
+         (514,52+j*50),(601,59+j*51),(717,46+j*51),(774,77+j*49)]
+    ui.line(pts,fill=(232,233,234),width=5,joint="curve")
+for j in range(6):
+    pts=[(282+j*83,-5),(261+j*84,74),(286+j*81,152),(309+j*75,210),(283+j*86,312),(308+j*88,391)]
+    ui.line(pts,fill=(230,231,231),width=4,joint="curve")
+ui.line([(291,299),(352,236),(420,214),(461,158),(505,148),(557,116),(643,100),(721,57)],
+        fill=(152,171,185),width=6,joint="curve")
+ui.rounded_rectangle((274,22,557,52),14,fill=(246,246,246))
+ui.text((294,28),"Search",font=font("arial.ttf",16),fill=(83,85,89))
+ui.text((22,19),"P",font=font("arialbd.ttf",27),fill=(53,55,59))
+ui.text((53,27),"R  N  D",font=font("arial.ttf",15),fill=(118,121,124))
+ui.rounded_rectangle((83,90,161,255),34,fill=(78,82,86),outline=(66,67,70),width=3)
+ui.rounded_rectangle((94,125,149,205),20,fill=(44,49,54),outline=(123,126,128),width=3)
+ui.rounded_rectangle((30,312,211,353),16,fill=(205,210,216))
+ui.text((73,321),"Model 3",font=font("arial.ttf",17),fill=(72,75,79))
+ui.rectangle((0,386,768,432),fill=(26,27,29))
+for j in range(9):
+    x=103+j*69;ui.rounded_rectangle((x,398,x+15,413),4,fill=(133+6*(j%3),143+5*(j%4),153+5*(j%3)))
+screen.save(out/"model3-touchscreen.png",optimize=True)
+
 n=1152;cx=cy=n/2;rad=n/2
 height=Image.new("L",(n,n),128);hdraw=ImageDraw.Draw(height)
 def ringtext(label,angle,radius,sz,spacing=1.5):

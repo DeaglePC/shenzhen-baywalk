@@ -3,12 +3,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import {loadDetailedVehicle} from './vehicle-hero.js';
+import {detailedFleet} from './detailed-fleet.js';
 import {curbTaxi,curbModel3} from './taxi-framing.js';
 
 // All meshes face +Z. The body width excludes mirrors, the e6 height excludes its taxi sign.
 export const VEHICLE_CATALOG = [
   { id: 'e6', name: '比亚迪 e6 · 深圳巴士集团鹏程出租车', size: [4.695, 1.810, 1.670], wheelbase: 2.8, radius: .325, colors: ['#3982BC'] },
-  { id: 'model3', name: '特斯拉 Model 3 · 后轮驱动版', size: [4.720, 1.848, 1.442], wheelbase: 2.875, radius: .326, colors: ['#535861', '#D4DADA', '#333D49', '#933335'] },
+  { id: 'model3', name: '特斯拉 Model 3 · 后轮驱动版', size: [4.720, 1.848, 1.442], wheelbase: 2.875, radius: .326, colors: ['#464650'] },
   { id: 'tang', name: '比亚迪 唐', size: [4.87, 1.95, 1.725], wheelbase: 2.82, radius: .373, colors: ['#324C5F', '#D7D8D1', '#48545F', '#53383C'] },
   { id: 'mifa9', name: '上汽大通 大家9', size: [5.27, 2, 1.84], wheelbase: 3.2, radius: .354, colors: ['#70596B', '#505D6A', '#C7C1B2', '#343B42'] },
   { id: 'civic', name: '东风本田 思域', size: [4.685, 1.802, 1.415], wheelbase: 2.735, radius: .324, colors: ['#B73337', '#DFDCDA', '#344558', '#979B9D'] },
@@ -134,19 +135,17 @@ function makeTraffic(data, options) {
   }
   const hero = {x:curbTaxi.x,z:curbTaxi.z,yaw:curbTaxi.yaw,y:curbTaxi.floor,model:'e6'};
   const spots = options.parkedSpots?.length ? options.parkedSpots : [hero,{...curbModel3,y:curbModel3.floor,model:'model3'}];
-  const detailCars=new Map();
   for (const spot of spots) {
     const index = VEHICLE_CATALOG.findIndex(m => m.id === spot.model);
     const car = vehicle(null, 0, true, Math.max(0, index), true);
-    Object.assign(car, { x: spot.x, z: spot.z, yaw: spot.yaw || 0, y: spot.y });
+    Object.assign(car, { x: spot.x, z: spot.z, yaw: spot.yaw || 0, y: spot.y, wheel:0 });
     cars.push(car);
-    if(['e6','model3'].includes(spot.model)&&!detailCars.has(spot.model))detailCars.set(spot.model,car);
   }
   const occupancy = new Map();
   let queueAge=1;
   let moving=[];
   return {
-    cars,detailCars,
+    cars,
     step(dt,eye,horizon) {
       queueAge+=dt;
       if (queueAge>=.22) {
@@ -341,34 +340,15 @@ export async function createVehicles(scene, data, options = {}) {
   group.userData.excludeFromProbe=true;
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const traffic = makeTraffic(data, options);
-  const [assets,taxi] = await Promise.all([
+  const [assets,taxi,tesla] = await Promise.all([
     Promise.all(VEHICLE_CATALOG.map(s => loader.loadAsync(modelPath(s.id)))),
-    traffic.detailCars.has('e6')?loadDetailedVehicle('e6'):null
+    loadDetailedVehicle('e6'),loadDetailedVehicle('model3')
   ]);
   const { mat,night } = fleetMaterial();
   const types = assets.map((asset,i) => setupType(asset.scene,VEHICLE_CATALOG[i],mat,group));
   const shadow=contactShadows(group);
   scene.add(group);
-  const details=new Map();
-  let disposed=false,teslaRequest,retryAt=0;
-  function installDetail(car,asset){
-    if(disposed){asset.dispose();return;}
-    details.set(car,asset);
-    car.detail=asset;asset.model.position.set(car.x,car.y??options.roadSurfaceY??.30,car.z);
-    asset.model.rotation.y=car.yaw;asset.model.visible=false;scene.add(asset.model);
-  }
-  if(taxi)installDetail(traffic.detailCars.get('e6'),taxi);
-  function prepare(eye){
-    const car=traffic.detailCars.get('model3');
-    if(!car||car.detail||scene.userData.capturingProbe||performance.now()<retryAt)return;
-    if((car.x-eye.x)**2+(car.z-eye.z)**2+eye.y**2>90**2)return;
-    if(!teslaRequest){
-      teslaRequest=loadDetailedVehicle('model3').then(asset=>installDetail(car,asset)).catch(error=>{
-        console.warn('Model 3 近景模型暂不可用',error);retryAt=performance.now()+30000;
-      }).finally(()=>teslaRequest=null);
-    }
-    return teslaRequest;
-  }
+  const masters=new Map([['e6',detailedFleet(taxi,'e6',group)],['model3',detailedFleet(tesla,'model3',group)]]);
   const pos=new THREE.Vector3(), rot=new THREE.Quaternion(), scale=new THREE.Vector3(1,1,1);
   const transform=new THREE.Matrix4(), wheelLocal=new THREE.Matrix4(), wheelWorld=new THREE.Matrix4();
   const wheelRot=new THREE.Quaternion(), flip=new THREE.Quaternion().setFromAxisAngle(UP,Math.PI);
@@ -394,16 +374,14 @@ export async function createVehicles(scene, data, options = {}) {
   }
   function update(dt, eye) {
     if (!eye) return;
-    prepare(eye);
     dt = Math.max(0, Math.min(.15, dt || 0));
     for (const list of buckets) list.length=0;
     const horizon = Math.min(2050, Math.max(560, eye.y * 2.8));
     traffic.step(dt,eye,horizon);
-    const floor = options.roadSurfaceY ?? .30;
-    for(const [c,asset] of details){
-      asset.model.visible=(eye.x-c.x)**2+(eye.y-floor)**2+(eye.z-c.z)**2<53**2;
-      if(asset.model.visible)asset.setEnvironment(scene.userData.streetProbe);
-    }
+    // createNetwork uses surface roads. Their asphalt is at 0.28 m in city-blocks.
+    const floor = options.roadSurfaceY ?? .28;
+    const probe=scene.userData.streetProbe,origin=probe?.userData.capturePosition;
+    const environment=origin&&origin.distanceToSquared(eye)<150**2?probe:null;
     shadow.count=0;
     collisionX=eye.x; collisionZ=eye.z; nearCars.length=0;
     for (const car of traffic.cars) {
@@ -415,13 +393,24 @@ export async function createVehicles(scene, data, options = {}) {
     for (let m=0;m<types.length;m++) {
       const t=types[m], list=buckets[m];
       list.sort((a,b)=>a.distance-b.distance);
+      const detail=masters.get(VEHICLE_CATALOG[m].id);
+      let detailCount=0;
+      if(detail&&!scene.userData.capturingProbe){
+        for(const car of list){
+          const dist2=car.distance+(eye.y-(car.y??floor))**2;
+          car.showMaster=dist2<(car.showMaster?54:48)**2;
+          if(car.showMaster)detailCount++;
+        }
+      }
+      detail?.begin(detailCount,environment);
       let close=0, far=0;
       for (const car of list) {
+        if(scene.userData.capturingProbe&&car.distance<4**2)continue;
         pos.set(car.x,car.y??floor,car.z); rot.setFromAxisAngle(UP,car.yaw);
         transform.compose(pos,rot,scale);
-        if(car.detail?.model.visible) {
-          // The parked close-up uses the clear-coated hero mesh and this same contact shadow.
-        } else if (car.distance+eye.y*eye.y < 65*65 && close<45) {
+        if(detailCount&&car.showMaster){
+          detail.add(transform,car.wheel);
+        } else if (car.distance+(eye.y-pos.y)**2 < (detail?125:65)**2 && close<45) {
           t.near.setMatrixAt(close,transform); t.near.setColorAt(close,car.color);
           for (const item of t.extra) item.setMatrixAt(close,transform);
           t.offsets.forEach((off,k) => {
@@ -436,13 +425,14 @@ export async function createVehicles(scene, data, options = {}) {
         }
         if (car.distance+eye.y*eye.y<250*250 && shadow.count<1000) {
           const [len,w]=VEHICLE_CATALOG[m].size;
-          pos.y+=car.detail ? .004 : -.009;
+          pos.y+=.004;
           scale.set(w*1.24,1,len*1.1);
           wheelWorld.compose(pos,rot,scale);
           shadow.setMatrixAt(shadow.count++,wheelWorld);
           scale.set(1,1,1);
         }
       }
+      detail?.finish();
       t.near.count=close; t.wheels.count=close*4; t.far.count=far;
       for (const extra of t.extra) extra.count=close;
       for (const mesh of [t.near,t.wheels,t.far,...t.extra]) {
@@ -452,9 +442,8 @@ export async function createVehicles(scene, data, options = {}) {
     if(shadow.count) shadow.instanceMatrix.needsUpdate=true;
   }
   function dispose() {
-    disposed=true;
     scene.remove(group);
-    for(const [,asset] of details){scene.remove(asset.model);asset.dispose();}
+    for(const master of masters.values())master.dispose();
     const materials=new Set(), geometries=new Set(), textures=new Set();
     for (const source of [group,...assets.map(a=>a.scene)]) {
       source.traverse(n=>{
@@ -467,5 +456,5 @@ export async function createVehicles(scene, data, options = {}) {
     for (const m of materials) { if (m.map) textures.add(m.map); m.dispose(); }
     for (const texture of textures) texture.dispose();
   }
-  return { update,prepare,isBlocked,dispose,setNight(value) { night.value = .50 + Number(value)*3; }, models: VEHICLE_CATALOG, count:traffic.cars.length };
+  return { update,isBlocked,dispose,setNight(value) { night.value = .50 + Number(value)*3; }, models: VEHICLE_CATALOG, count:traffic.cars.length };
 }

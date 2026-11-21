@@ -1,10 +1,11 @@
 """Blender authoring for the Chinese Model 3 RWD, 18-inch Photon, dark interior.
 
 Run Blender 5.2 in background with -P scripts/model3_build.py -- <temporary-dir>.
-All surfaces below are original geometry. The tracing coordinate system refers to
-Tesla China's 760 x 658 exterior illustration, cropped only for local comparison.
+All surfaces below are original. MT382, PN01, W38A and IPB11 were independently
+confirmed in Tesla China's configuration data; the matched front, rear, side,
+wheel and interior compositor views define the production details.
 """
-from math import pi, sin, cos, sqrt, exp, hypot, asin, atan2, radians
+from math import pi, sin, cos, sqrt, exp, hypot, asin, atan2, radians, tan
 from functools import lru_cache
 from pathlib import Path
 import os, shutil, subprocess, sys
@@ -21,10 +22,12 @@ REF="https://www.tesla.cn/ownersmanual/model3/zh_cn/"
 MANUAL=REF+"GUID-56562137-FC31-4110-A13C-9A9FC6657BF0.html"
 EXTERIOR=REF+"GUID-6C6C3944-9674-4E81-A0E8-94D60B6D87B9.html"
 PHOTON="https://service.tesla.cn/docs/Model3/ServiceManual/2024/zh-cn/GUID-769C9625-76EE-467B-B756-C9032AC2B99A.html"
+CONFIG="https://static-assets.tesla.cn/configurator/compositor?context=design_studio_2&options=$MT382,$PN01,$W38A,$IPB11&view=STUD_FRONT34&model=m3&size=1920&bkba_opt=2&crop=0,0,0,0&overlay=0&"
 L,W,H,WB=4.720,1.848,1.442,2.875
 FA,RA,TRACK,R=L/2-.868,-L/2+.977,1.584,.326
 def clamp(x,a=0,b=1):return max(a,min(b,x))
 def bell(x,w):return exp(-(x/w)**2)
+def soft(x):q=clamp(x);return q*q*(3-2*q)
 def add(p,q):return tuple(a+b for a,b in zip(p,q))
 def blend(a,b,t):return tuple(lerp(i,j,t) for i,j in zip(a,b))
 
@@ -69,8 +72,18 @@ sill_p=Spline([(S(p),h) for p,h in [(65,.178),(137,.172),(202,.158),(338,.157),
 def side_width(s,h):
     q=clamp((h-sill_p(s))/(belt(s)-sill_p(s)))
     a=min((FA,RA),key=lambda axle:abs(s-axle))
-    shoulder=.019*bell(hypot(s-a,h-R)-.402,.062)
-    return min(W/2,width(s)+roll(q)+shoulder)
+    distance=hypot(s-a,h-R)
+    shoulder=.020*bell(distance-.398,.057)+.006*bell(distance-.380,.012)
+    # The two press lines are not horizontal decals: the upper return grows out
+    # of the repeater, while the lower spear dies out under the two door handles.
+    upper=.741-.039*s+.011*bell(s+1.01,.46)
+    lower=.393-.029*s-.016*bell(s-.69,.32)
+    upper_amplitude=soft((s+1.38)/.61)*soft((1.18-s)/.27)
+    lower_amplitude=soft((s+1.06)/.41)*soft((.98-s)/.40)
+    shoulder+=upper_amplitude*(.011*bell(h-upper,.043)-.007*bell(h-upper+.09,.090))
+    shoulder+=lower_amplitude*(.010*bell(h-lower,.022)-.013*bell(h-lower-.051,.055))
+    rear_sail=.106*bell(s+1.54,.400)*soft((h-.955)/.215)
+    return width(s)+roll(q)+shoulder-rear_sail
 def flank(g,s,h,out=0):return (g*(side_width(s,h)+out),s,h)
 def arch(s):
     d=min(abs(s-FA),abs(s-RA));r=.370
@@ -78,12 +91,13 @@ def arch(s):
     if d>=r:return lerp(R,sill_p(s),(d-r)/.020)
     return R+sqrt(max(0,r*r-d*d))
 
-SF,SR=S(65),S(721)
+SF,SR=S(91),S(721)
 front_c=Spline([(.137,2.286),(.174,2.333),(.217,2.336),(.270,2.287),(.343,2.299),
     (.420,2.339),(.530,2.360),(.594,2.356),(.653,2.341),(.693,2.298),(.77,2.203)])
 rear_c=Spline([(.148,-2.215),(.22,-2.324),(.325,-2.353),(.427,-2.36),(.537,-2.334),
     (.642,-2.273),(.782,-2.262),(.870,-2.276),(1.00,-2.306),(1.07,-2.309)])
-front_upper=Spline([(0,.696),(.20,.697),(.465,.699),(.63,.714),(.74,.741),(.82,.765),(.878,belt(SF))])
+front_upper=Spline([(0,.537),(.20,.541),(.46,.557),(.60,.585),(.70,.634),(.77,.680),
+                    (.82,.726),(.866,.765),(.899,belt(SF))])
 rear_upper=Spline([(0,1.014),(.32,1.006),(.54,.995),(.69,.989),(.781,.994),(.84,belt(SR))])
 def cap(k,u,h,out=0):
     st=SF if k>0 else SR
@@ -98,7 +112,7 @@ def cap(k,u,h,out=0):
         high=.651-.044*f*f-.079*f**8
         smooth=lambda v:clamp(v)**2*(3-2*clamp(v))
         field=smooth((h-low)/.041)*smooth((high-h)/.034)
-        s+=(-.032*field+.014*bell(h-low,.022))*(1-f**3.8)
+        s+=(-.031*field+.012*bell(h-low,.031))*(1-f**3.8)
     return (g*(w*f+out*sin(a)),s+k*out*cos(a),h)
 def fascia(k,x,h,out=0):
     st=SF if k>0 else SR
@@ -112,7 +126,8 @@ def captop(k,u):
 def cab(g,s,q):
     lo=belt(s);top=max(lo+.0005,cantrail(s))
     inset=clamp((top-lo)/.37)
-    x=side_width(s,lo)-(.207*inset+.003)*q**1.20+.004*sin(pi*q)
+    cpost=.063*(1-inset)*bell(s+1.55,.44)
+    x=side_width(s,lo)-(.207*inset+.003+cpost)*q**1.20+.004*sin(pi*q)
     return (g*x,s,lerp(lo,top,q))
 def roof(s,f):
     edge=cab(1,s,1);h=silhouette(s)
@@ -121,21 +136,24 @@ def roof(s,f):
 bpy.ops.wm.read_factory_settings(use_empty=True)
 def m(name,c,metal=0,r=.4,emit=0,coat=0):return material(name,c,metal,r,emit,coat)
 mats={
-    "paint":m("Body paint","#575F6A",.62,.218,coat=1),
+    "paint":m("Body paint","#464650",.64,.245,coat=.98),
+    "badge":m("PN01 dark titanium script","#48474C",.58,.297,coat=.35),
     "trim":m("Satin black trim","#222526",.13,.34),
-    "frit":m("Obsidian ceramic frit","#111819",.3,.130,coat=.74),
-    "glass":m("Acoustic windscreen","#3C4D5A",.38,.077,coat=.72),
-    "door_glass":m("Frameless side glass","#303E47",.35,.091,coat=.77),
-    "roof_glass":m("Solar panoramic roof","#192329",.43,.083,coat=.80),
+    "frit":m("Obsidian ceramic frit","#101216",.16,.143,coat=.46),
+    "headerGlass":m("Solar band at glazing upper edge","#20252B",.14,.102,coat=.43),
+    "intakeDark":m("Front air intake cavity","#08090A",.0,.86),
+    "glass":m("Acoustic windscreen","#46505A",.18,.076,coat=.53),
+    "door_glass":m("Frameless side glass","#343942",.15,.079,coat=.56),
+    "roof_glass":m("Solar panoramic roof","#101217",.16,.166,coat=.42),
     "rubber":m("Rubber seals","#222425",.012,.79),
     "tyre":m("235 45R18 radial tyre","#2D2D2E",.012,.82),
     "sidewall":m("Moulded 235 45R18 tyre information","#333334",.012,.74),
     "tread":m("Tyre ribs","#373737",.015,.72),
     "felt":m("Arched fender lining","#171819",.0,.95),
-    "cover":m("Photon NEU 243E graphite","#777A80",.40,.293,coat=.55),
-    "coverEdge":m("Photon chamfer highlight","#85888D",.48,.26,coat=.55),
-    "blade":m("Photon NEU 251E charcoal","#383A3D",.31,.30,coat=.43),
-    "bladeFacet":m("Photon moulded vent chamfer","#535558",.37,.27,coat=.43),
+    "cover":m("Photon NEU 243E graphite","#41414A",.36,.32,coat=.48),
+    "coverEdge":m("Photon chamfer highlight","#585861",.44,.28,coat=.50),
+    "blade":m("Photon NEU 251E charcoal","#242429",.30,.29,coat=.52),
+    "bladeFacet":m("Photon moulded vent chamfer","#3B3C43",.32,.27,coat=.49),
     "alloy":m("Photon ghost metallic alloy","#777C7E",.65,.31),
     "brake":m("Steel brake discs","#515654",.58,.38),
     "chrome":m("Satin bright metal","#B5BBBD",.80,.22),
@@ -147,7 +165,8 @@ mats={
     "leather":m("Black premium seat upholstery","#302F30",.02,.65),
     "textile":m("Woven cabin soft trim","#404040",.01,.83),
     "stitch":m("Seam cord","#535152",.015,.72),
-    "ambient":m("Ambient instrument ribbon","#8BACC7",.20,.31,.13),
+    "ambient":m("IPB11 violet ambient ribbon","#8279DD",.15,.28,.43),
+    "screen":m("IPB11 central display pixels","#CFD1D2",.02,.27,.16),
     "plate":m("Shenzhen EV fleet plate","#96CDA9",.13,.34),
 }
 subprocess.run([shutil.which("python") or "python",str(ROOT/"scripts/model3_markings.py"),str(TEMP)],check=True)
@@ -162,9 +181,10 @@ def image_node(mat,file,socket,normal=False):
 image_node(mats["sidewall"],"model3-tyre-wall.png","Base Color")
 image_node(mats["sidewall"],"model3-tyre-normal.png","Normal",True)
 image_node(mats["plate"],"model3-street-plate.png","Base Color")
-for k,a in [("lens",.115),("glass",.66),("door_glass",.78),("roof_glass",.90)]:
+image_node(mats["screen"],"model3-touchscreen.png","Base Color")
+for k,a in [("lens",.10),("glass",.425),("door_glass",.44),("headerGlass",.73)]:
     mats[k].node_tree.nodes.get("Principled BSDF").inputs["Alpha"].default_value=a
-mats["paint"].node_tree.nodes.get("Principled BSDF").inputs["Coat Roughness"].default_value=.070
+mats["paint"].node_tree.nodes.get("Principled BSDF").inputs["Coat Roughness"].default_value=.098
 parts=[];active="01 • Coachwork pressings"
 def part(name):
     mesh=Surface();parts.append((active,name,mesh));return mesh
@@ -181,14 +201,14 @@ def rb(p,centre,radii,key,pow=.44,n=22):
         p.face(vs,key,Vector(vs[0])-Vector(centre))
 
 joint_profiles=[Spline(p) for p in [[(0,721),(1,721)],[(0,494),(.14,511),(.48,544),(.80,575),(.944,585),(1,581)],
-    [(0,409),(.42,408),(.76,410),(1,415)],[(0,226),(.37,224),(.68,223),(1,226)],[(0,65),(1,65)]]]
+    [(0,409),(.42,408),(.76,410),(1,415)],[(0,226),(.37,224),(.68,223),(1,226)],[(0,91),(1,91)]]]
 def joint(i,q):return S(joint_profiles[i](q))
 def doorbottom(s):return .271+.006*bell(s+.19,1.12)+.013*bell(s+1.57,.35)
 def aperture(s,h):
     d=min(abs(s-FA),abs(s-RA))
     if h>=R:return hypot(d,h-R)-.370
     return d-.370-.020*clamp((R-h)/(R-sill_p(s)))
-def cut_panel(mesh,us,vs,point,g,key):
+def cut_panel(mesh,us,vs,point,g,key,normal=None):
     """Clip real sheet boundaries against the wheel aperture in the sheet plane.
 
     Changing door-seam station through its height must never pull a vertical fan
@@ -209,7 +229,7 @@ def cut_panel(mesh,us,vs,point,g,key):
                         if (aperture(p[1],p[2])>=0)==(da>=0):low=mid
                         else:high=mid
                     clipped.append(blend(a,b,(low+high)*.5))
-            if len(clipped)>2:mesh.face(clipped,key,(g,0,0))
+            if len(clipped)>2:mesh.face(clipped,key,normal or (g,0,0))
 for g,side in [(-1,"Left"),(1,"Right")]:
     bottom=part(side+" painted sill and rocker return")
     cut_panel(bottom,samples(SR,SF,187),samples(0,1,15),
@@ -227,7 +247,7 @@ for g,side in [(-1,"Left"),(1,"Right")]:
             s=lerp(lo,hi,t);h=lerp(doorbottom(s),belt(s),q)
             hem=(.006*bell(s-lo,.007) if i else 0)+(.006*bell(hi-s,.007) if i<3 else 0)
             return flank(g,s,h,-hem)
-        cut_panel(shell,sorted(tset),samples(0,1,48),face,g,"paint")
+        cut_panel(shell,sorted(tset),samples(0,1,62),face,g,"paint")
     seal=part(side+" panel flanges and wheel housing")
     for j in (1,2,3):
         tube(seal,[flank(g,joint(j,q),lerp(doorbottom(joint(j,q)),belt(joint(j,q)),q),-.0047)
@@ -250,16 +270,20 @@ for g,side in [(-1,"Left"),(1,"Right")]:
     seal.patch(samples(S(529),S(202),64),[0,.2,.76,1],
             lambda s,q:flank(g,s,lerp(.148,.232,q),-.008+.009*sin(pi*q)),"trim",(g,0,-.2))
     handles=part(side+" flush handles and repeater camera")
-    for px,py in [(382,157),(547,150)]:
+    for px,py in [(382,158),(547,151)]:
         ss,hh=S(px),Z(py)
-        handles.patch(samples(-1,1,24),samples(0,1,5),
-             lambda t,q:flank(g,ss+.112*t,hh+.003*t+(.014*(1-abs(t)**5))*(2*q-1),.0028),
-             "trim",(g,0,0))
-        tube(handles,[flank(g,ss+.10*t,hh-.006*(1-t*t)+.001*t,.004) for t in samples(-1,1,14)],.0012,"frit",5)
+        high=Spline([(0,.0005),(.045,.008),(.52,.010),(.70,.012),(.81,.022),(.94,.024),(1,.015)])
+        low=Spline([(0,.0003),(.055,-.008),(.58,-.008),(.83,-.009),(.968,-.002),(1,.015)])
+        def pull(t,q,out):
+            return flank(g,ss+lerp(.107,-.105,t),hh+lerp(low(t),high(t),q),out)
+        handles.patch(samples(0,1,31),[0,.14,.67,1],lambda t,q:pull(t,q,.0017+.0012*(1-q)),"badge",(g,0,0))
+        tube(handles,[pull(t,0,.0023) for t in samples(0,1,30)]+[pull(t,1,.0023) for t in samples(1,0,30)],.0015,"frit",5)
     ss,hh=S(201),Z(174)
-    handles.patch(samples(0,1,16),samples(0,1,6),
-        lambda t,q:flank(g,ss+lerp(-.088,.067,t),hh+.016*t+lerp(-.021,.019,q)*sin(pi*t)**.64,.0038),
-        "frit",(g,0,0))
+    lo=Spline([(0,.016),(.13,-.002),(.32,-.026),(.43,-.031),(.74,-.008),(1,.023)])
+    hi=Spline([(0,.017),(.12,.025),(.69,.025),(1,.023)])
+    handles.patch(samples(0,1,21),samples(0,1,8),
+        lambda t,q:flank(g,ss+lerp(.073,-.091,t),hh+lerp(lo(t),hi(t),q),.0038+.0039*sin(pi*q)),
+        lambda t,q:"trim" if q>.85 else "frit",(g,0,0))
     ellipsoid(handles,flank(g,ss-.026,hh+.001,.005),(.0026,.009,.007),"lens",14,6)
 
 for k,label in [(1,"Unbroken shark-nose front bumper"),(-1,"Liftgate face and rear bumper")]:
@@ -269,7 +293,9 @@ for k,label in [(1,"Unbroken shark-nose front bumper"),(-1,"Liftgate face and re
             top=captop(k,g*u)[2]
             floor=lerp(.148 if k>0 else .190,sill_p(SF if k>0 else SR),sin(u*pi/2)**2)
             return cap(k,g*u,lerp(floor,top,q))
-        shell.patch(samples(0,1,56),samples(0,1,48),bumper,"paint",(g*.5,k,0))
+        if k>0:
+            cut_panel(shell,samples(0,1,73),samples(0,1,57),bumper,g,"paint",(g*.5,k,0))
+        else:shell.patch(samples(0,1,56),samples(0,1,48),bumper,"paint",(g*.5,k,0))
 
 GLASS_REAR,GLASS_FRONT=S(649),S(190)
 def deck(k,u,t):
@@ -277,8 +303,10 @@ def deck(k,u,t):
     p=blend(start,end,t);s=p[1];f=abs(sin(u*pi/2));g=1 if u>=0 else -1
     sside=lerp(GLASS_FRONT if k>0 else GLASS_REAR,SF if k>0 else SR,t)
     upper=lerp(silhouette(s),p[2],t**4)
-    if k>0:upper+=.019*bell(f-.65,.115)*sin(pi*t)
-    else:upper+=.014*bell(t-.86,.13)*(1-.44*f)
+    if k>0:
+        upper+=(.027*bell(f-.77,.095)-.009*bell(f-.61,.14))*sin(pi*t)
+    else:
+        upper+=(.033*bell(t-.898,.100)-.005*bell(t-.55,.18))*(1-.18*f)
     h=lerp(upper,belt(sside),f**5)
     h=lerp(h,p[2],t**7+(1-t)**8)
     x=lerp(p[0],g*side_width(sside,h),f**8*sin(pi*t))
@@ -287,8 +315,9 @@ for k,label in [(1,"Front luggage lid and crowned fenders"),(-1,"Boot lid and in
     panel=part(label)
     for g in (-1,1):
         panel.patch(samples(0,1,52),samples(0,1,48),lambda u,t:deck(k,g*u,t),"paint",(0,k*.14,1))
-        tube(panel,[add(deck(k,g*lerp(.71,.39,t),t),(0,0,.001)) for t in samples(.007,.981,59)],.0024,"rubber")
-        tube(panel,[add(deck(k,g*u,.981),(0,0,.001)) for u in samples(0,.393,34)],.0020,"rubber")
+        def cut(t):return lerp(.72,.390,t**.85)
+        tube(panel,[add(deck(k,g*cut(t),t),(0,0,.0007)) for t in samples(.007,.986,59)],.0017,"rubber")
+        tube(panel,[add(deck(k,g*u,.986),(0,0,.0008)) for u in samples(0,.393,34)],.00155,"rubber")
 
 active="02 • Glazing and roof"
 def pillar(key,q):
@@ -300,8 +329,9 @@ for g,label in [(-1,"Left"),(1,"Right")]:
         def pane(t,q):return cab(g,lerp(pillar(le,q),pillar(ri,q),t),q)
         def panemat(t,q):
             if q<.035 or q>.951:return "trim"
-            if q<.067 or q>.912:return "frit"
+            if q<.074 or q>.872:return "frit"
             if t<(.090 if le=="B" else .041) or t>(.907 if ri=="B" else .967):return "frit"
+            if q>.797:return "headerGlass"
             return "door_glass"
         glass.patch(sorted(set(samples(0,1,36)+[.041,.090,.907,.967])),
                     sorted(set(samples(0,1,26)+[.035,.067,.912,.951])),pane,panemat,(g,0,.15))
@@ -320,9 +350,11 @@ for a,b,name,key in [(roofcuts[1],roofcuts[0],"Acoustic front windscreen","glass
        (roofcuts[4],roofcuts[2],"Panoramic aft glass and heated rear windscreen","glass")]:
     glazing=part(name)
     def roof_key(t,f):
-        limit=lerp(.879,.943,sin(pi*t))
-        if abs(f)>.956:return "paint"
-        if abs(f)>limit or min(t,1-t)<.016:return "frit"
+        limit=lerp(.792,.874,sin(pi*t))
+        if abs(f)>.957:return "paint"
+        if abs(f)>limit or min(t,1-t)<.034:return "frit"
+        if name.startswith("Acoustic") and t<.119:return "headerGlass"
+        if name.startswith("Panoramic aft") and t>.56:return "roof_glass"
         return key
     def bow(t,f):
         s=lerp(a,b,t)
@@ -332,6 +364,30 @@ for a,b,name,key in [(roofcuts[1],roofcuts[0],"Acoustic front windscreen","glass
         return roof(s+shift,f)
     glazing.patch(sorted(set(samples(0,1,43)+[.016,.984])),
                sorted(set(samples(-1,1,60)+[-.956,.956])),bow,roof_key,(0,0,1))
+
+# Roof rails are closed structural sections. An opaque dark headliner sits
+# below the panoramic roof and behind the black ceramic frit at the pillars.
+liner=part("Black headliner, solid A and C pillar returns")
+liner.patch(samples(S(554),S(329),52),samples(-.986,.986,42),
+            lambda s,f:add(roof(s,f),(0,0,-.023)),"textile",(0,0,-1))
+liner.patch(samples(S(554),S(329),52),samples(-.986,.986,34),
+            lambda s,f:add(roof(s,f),(0,0,-.019)),"frit",(0,0,1))
+for g in (-1,1):
+    def apo(s,v):
+        f=g*lerp(.787,.977,v)
+        return add(roof(s,f),(-g*.016,0,-.020-.010*sin(pi*v)))
+    liner.patch(samples(S(339),S(195),41),samples(0,1,12),apo,"frit",(g,.35,.54))
+    liner.patch(samples(S(339),S(195),41),samples(0,1,12),lambda s,v:add(apo(s,v),(0,.003,-.010)),"textile",(-g,-.2,-.7))
+    for q in (.24,.72):
+        tube(liner,[add(apo(s,q),(-g*.008,0,-.012)) for s in samples(S(336),S(196),41)],.012,"textile",8)
+    def rail(s,q):
+        outer=cab(g,s,1)
+        return add(outer,(-g*(.011+.031*q),0,-.010-.024*q))
+    liner.patch(samples(S(638),S(233),72),[0,.16,.67,1],rail,"rubber",(g,0,-.3))
+    def cpost(t,q):
+        s=lerp(S(621)-.070*q,S(649)-.040*q,t)
+        return add(cab(g,s,q),(-g*.017,0,-.010))
+    liner.patch(samples(0,1,13),samples(0,1,18),cpost,"textile",(-g,0,-.2))
 trim=part("Cowl, defroster lines and glass seals")
 for p in (335,481):
     st=S(p);a=(st-GLASS_FRONT)/(GLASS_REAR-GLASS_FRONT)
@@ -354,10 +410,10 @@ def transverse(g,k,u,t,lower,upper,out):
 for g,label in [(-1,"Left"),(1,"Right")]:
     lamp=part(label+" Highland LED headlamp and segmented projector")
     # Traced swept housing. The inboard point pinches into the hood seam.
-    bottom=(Spline([(0,.494),(.25,.579),(.56,.704),(.82,.796),(1,.846)]),
-            Spline([(0,.666),(.25,.666),(.56,.683),(.82,.697),(1,.729)]))
-    upper=(Spline([(0,.515),(.25,.602),(.56,.719),(.82,.812),(1,.842)]),
-           Spline([(0,.682),(.25,.712),(.56,.743),(.82,.769),(1,.773)]))
+    bottom=(Spline([(0,.592),(.25,.659),(.56,.770),(.82,.843),(1,.887)]),
+            Spline([(0,.581),(.25,.582),(.56,.595),(.82,.622),(1,.668)]))
+    upper=(Spline([(0,.606),(.25,.677),(.56,.788),(.82,.854),(1,.888)]),
+           Spline([(0,.595),(.25,.618),(.56,.654),(.82,.680),(1,.707)]))
     def lp(u,v,out=0):
         p=transverse(g,1,u,v,bottom,upper,out)
         # Rearward sweep through the outer wing folds into the upstream fender crown.
@@ -386,27 +442,39 @@ for g,label in [(-1,"Left"),(1,"Right")]:
         x=lerp(.568,.847,u);h=bottom_h(u)+.025*q
         return fascia(-1,g*x,h,.0071)
     tail.patch(samples(0,1,37),samples(0,1,5),return_segment,"optic",(g*.50,-1,0))
-    # Two parallel red guides form the hooked C, terminating on the deck lid.
-    route=[tp(u,high(u)-.008,.012) for u in samples(.025,.94,41)]
-    route += [tp(lerp(.94,.985,t),lerp(high(.94)-.008,.819,t),.012) for t in samples(0,1,11)]
-    route += [return_segment(u,.48) for u in samples(.972,.02,40)]
-    tube(tail,route,.0080,"red",9)
-    tube(tail,[add(v,(0,-.0027,.0004)) for v in route],.0035,"red_light",8)
+    # The cast red field grows from the pointed inner tip to a tall outside bar.
+    xrot=Spline([(0,.416),(.30,.595),(.58,.735),(.76,.805),(.85,.824),(.92,.830),(1,.830)])
+    zrot=Spline([(0,.949),(.32,.965),(.62,.970),(.74,.967),(.82,.960),(.92,.931),(1,.849)])
+    rwidth=Spline([(0,.001),(.19,.007),(.51,.012),(.73,.015),(.88,.018),(1,.020)])
+    def castbar(t,v):
+        x=xrot(t);h=zrot(t);a=max(0,t-.001);b=min(1,t+.001)
+        dx=xrot(b)-xrot(a);dh=zrot(b)-zrot(a);norm=max(.00001,hypot(dx,dh))
+        return fascia(-1,g*(x+v*rwidth(t)*(-dh)/norm),h+v*rwidth(t)*dx/norm,.011)
+    tail.patch(samples(0,1,58),[-1,-.80,-.55,.38,.78,1],castbar,
+               lambda t,v:"red" if abs(v)>.79 else "red_light",(g*.50,-1,0))
+    def lower_cast(t,v):
+        x=lerp(.83,.575,t);zc=.849-.004*t;breadth=.010*(1-t**7)
+        return fascia(-1,g*x,zc+v*breadth,.011)
+    tail.patch(samples(0,1,37),[-1,-.78,.61,1],lower_cast,
+               lambda t,v:"red" if abs(v)>.79 else "red_light",(g*.50,-1,0))
+    tube(tail,[castbar(t,-.68) for t in samples(.16,.990,62)],.00235,"head",8)
     # The red side reflector wraps around the painted quarter next to the charge door.
     side_tail=lambda t,q:flank(g,lerp(SR,S(671),t),
           lerp(.815+.131*t,.950-.005*t,q),.004+.003*sin(pi*t))
-    tail.patch(samples(0,1,31),samples(0,1,10),side_tail,
-               lambda t,q:"optic" if q<.085 or q>.895 else "red",(g,-.18,0))
+    tail.patch(samples(0,1,38),samples(0,1,21),side_tail,
+               lambda t,q:"red" if .18<t<.93 and .39<q<.77 else "optic",(g,-.18,0))
+    tube(tail,[flank(g,s,h,.0014) for s,h in
+               [(S(721),.849),(S(719),.750),(S(716),.640),(S(712),.607),(S(698),.599),(S(671),.595)]],.0016,"rubber",6)
     if g==-1:
         tube(tail,[flank(g,lerp(S(716),S(687),t),.950,.007) for t in samples(0,1,24)],.0021,"trim")
 
 intake=part("Lower intake, air guides and rear diffuser")
 for g in (-1,1):
     def inlet(u,v):
-        x=.649*u;lower=.184+.007*u*u
-        upper=.267-.022*u**2-.050*u**8
+        x=.655*u;lower=.189+.006*u*u
+        upper=.286-.028*u**2-.054*u**8
         return fascia(1,g*x,lerp(lower,upper,v),.004)
-    intake.patch(samples(0,1,34),samples(0,1,9),inlet,"felt",(g*.2,1,0))
+    intake.patch(samples(0,1,34),samples(0,1,9),inlet,"intakeDark",(g*.2,1,0))
     for v in (.31,.58,.78):
         tube(intake,[add(inlet(u,v),(0,.003,0)) for u in samples(0,.955,31)],.0032,"trim",6)
     for u in (.065,.344,.69,.96):
@@ -417,7 +485,7 @@ for g in (-1,1):
     intake.patch(samples(0,1,38),samples(0,1,14),diff,"trim",(g*.3,-1,-.08))
     for u in (.17,.39,.71):tube(intake,[diff(u,v) for v in samples(.02,.42,9)],.007,"frit",6)
     tube(intake,[add(diff(u,.865),(0,-.002,0)) for u in samples(.45,.895,26)],.0061,"red",8)
-    tube(intake,[add(fascia(1,g*.806*u,.154+.013*u*u,.002),(0,0,-.003)) for u in samples(0,1,31)],.0065,"trim",7)
+    tube(intake,[add(fascia(1,g*.806*u,.154+.013*u*u,.002),(0,0,-.003)) for u in samples(0,1,31)],.0034,"trim",7)
 under=part("Battery casing and flat underbody")
 rb(under,(0,-.03,.224),(.742,1.805,.086),"felt",.41,24)
 for k,st in [(1,SF),(-1,SR)]:
@@ -434,18 +502,18 @@ def tesla_mark(p,at,scale,key,normal):
     paths=[[(0,-.50),(-.105,.155),(-.36,.24),(-.31,.34),(-.105,.32),(0,.24),(.105,.32),(.31,.34),(.36,.24),(.105,.155)],
            [(-.48,.344),(-.36,.418),(-.17,.474),(0,.49),(.17,.474),(.36,.418),(.48,.344),(.410,.307),(.185,.381),(0,.397),(-.185,.381),(-.410,.307)]]
     for poly in paths:p.face([at(u*scale,v*scale) for u,v in poly],key,normal,False)
-badges=part("Bright bonnet emblem and individual TESLA deck letters")
+badges=part("Dark titanium bonnet emblem and individual TESLA deck letters")
 def crest(x,y):
     u=clamp(abs(x)/.87)
     p=deck(1,(1 if x>=0 else -1)*u,.89-y*.98)
     return (x,p[1],p[2]+.0030)
-tesla_mark(badges,crest,.104,"chrome",(0,.35,1))
+tesla_mark(badges,crest,.096,"badge",(0,.35,1))
 letters={"T":[[(-.43,.38),(.43,.38)],[(0,.38),(0,-.42)]],"E":[[(-.40,.37),(.40,.37)],[(-.33,0),(.30,0)],[(-.40,-.37),(.40,-.37)]],
     "S":[[(.37,.37),(-.25,.37),(-.39,.22),(-.30,.07),(.30,-.05),(.39,-.22),(.25,-.37),(-.37,-.37)]],
     "L":[[(-.31,.37),(-.31,-.37),(.39,-.37)]],"A":[[(-.40,-.38),(0,.37),(.40,-.38)],[(-.19,-.08),(.19,-.08)]]}
 for i,c in enumerate("TESLA"):
     for stroke in letters[c]:
-        tube(badges,[fascia(-1,-(i-2)*.112-u*.035,.941+v*.034,.0059) for u,v in stroke],.00275,"chrome",7)
+        tube(badges,[fascia(-1,-(i-2)*.104-u*.033,.947+v*.034,.0059) for u,v in stroke],.00235,"badge",7)
 tube(badges,[fascia(1,-.532+.029*cos(a),.449+.028*sin(a),.0008) for a in samples(0,2*pi,37)],.0014,"trim",5)
 trunk=part("Boot opening flange, handle and registration recess")
 for g in (-1,1):
@@ -486,9 +554,20 @@ rb(cabin,(0,.887,.786),(.778,.230,.088),"leather",.46,26)
 rb(cabin,(0,.697,.799),(.754,.033,.036),"textile",.41,26)
 vent=[(x,.669+.052*(x/.74)**2,.814+.012*(x/.74)**2) for x in samples(-.735,.735,53)]
 tube(cabin,vent,.008,"frit",8);tube(cabin,[add(p,(0,0,.010)) for p in vent],.0025,"ambient")
-screen=part("15.4 inch central display and console")
-rb(screen,(0,.589,.823),(.174,.014,.105),"trim",.20,24)
-rb(screen,(0,.574,.823),(.169,.003,.099),"frit",.19,24)
+screen=part("IPB11 16 inch QHD central display and console")
+def display(u,v,depth=0):
+    return (u*.1771,.567+.020*v-depth,.840+.0997*v)
+rim=[(-1.026,-1.046),(1.026,-1.046),(1.026,1.046),(-1.026,1.046)]
+screen.face([display(u,v,-.018) for u,v in rim],"trim",(0,1,-.18),False)
+for a,b in zip(rim,rim[1:]+rim[:1]):
+    screen.face([display(*a,0),display(*b,0),display(*b,-.018),display(*a,-.018)],
+                "trim",(a[0]+b[0],0,a[1]+b[1]),False)
+def rectangle(cw,ch,z,material):
+    xy=[(-cw,-ch),(cw,-ch),(cw,ch),(-cw,ch)]
+    screen.face([display(u,v,z) for u,v in xy],material,(0,-1,.18),False,
+                [(.5+u/(2*cw),.5+v/(2*ch)) for u,v in xy])
+rectangle(1.026,1.046,0,"frit")
+rectangle(1,1,.0014,"screen")
 rb(screen,(0,.145,.490),(.139,.327,.060),"leather",.38)
 rb(screen,(0,.391,.561),(.128,.142,.028),"trim",.32)
 for x in (-.069,.069):
@@ -506,20 +585,25 @@ for dir in (-1,1):
     tube(wheel,[(-.371+dir*.027,.499,.797),(-.371+dir*.096,.493,.805),rr[0 if dir>0 else 32]],.014,"trim")
     rb(wheel,(-.371+dir*.087,.475,.805),(.012,.006,.007),"chrome",.53,13)
     tube(wheel,[(-.371+dir*.035,.493,.762),(-.371+dir*.059,.524,.697),rr[48]],.009,"chrome",7)
+tube(wheel,[(-.410,.543,.777),(-.449,.554,.785),(-.551,.581,.819)],.006,"trim",8)
+rb(wheel,(-.551,.580,.818),(.021,.010,.012),"trim",.54,15)
 seats=part("Front ventilated seats, rear bench and safety belts")
 for g in (-1,1):
     x=g*.374
     rb(seats,(x,-.041,.465),(.214,.223,.066),"leather",.55,25)
-    rb(seats,(x,-.233,.735),(.206,.075,.222),"leather",.56,26)
-    rb(seats,(x,-.260,1.005),(.111,.070,.092),"leather",.58,25)
+    rb(seats,(x,-.233,.769),(.206,.075,.260),"leather",.56,28)
+    rb(seats,(x,-.269,1.095),(.108,.069,.130),"leather",.71,29)
     rb(seats,(x,-1.038,.710),(.242,.086,.229),"leather",.59)
-    rb(seats,(x,-1.071,.967),(.108,.068,.067),"leather",.55)
+    rb(seats,(x,-1.076,1.029),(.108,.061,.099),"leather",.57)
     for d in (-1,1):
         rb(seats,(x+d*.163,-.186,.748),(.054,.051,.163),"leather",.69)
         tube(seats,[(x+d*.102,-.160,.573),(x+d*.119,-.153,.738),(x+d*.095,-.168,.907)],.002,"stitch",5)
     for st in (.27,-.60):
         rb(seats,(g*.77,st,.617),(.046,.282,.132),"textile",.44)
         rb(seats,(g*.740,st,.627),(.056,.212,.043),"leather",.51)
+        tube(seats,[(g*.753,st+ds,.797+.009*ds) for ds in samples(-.329,.34,28)],.0021,"ambient")
+    tube(seats,[(g*.695,-.34,1.168),(g*.665,-.328,1.048),(g*.536,-.191,.617),(g*.477,-.167,.493)],
+          .0125,"rubber",9)
 rb(seats,(0,-.885,.448),(.640,.190,.069),"leather",.38,24)
 rearview=part("Rearview mirror and windshield cameras")
 rb(rearview,(0,.402,1.199),(.103,.025,.029),"trim",.48)
@@ -554,12 +638,14 @@ def roadwheel(g,detail=True):
     if detail:
         for d,r in [(.115,.249),(.118,.263),(.115,.291),(.111,.305)]:
             lathe([(d,r-.0007),(d+.0009,r),(d,r+.0007)],"tread")
-        for j in range(70):
-            a=2*pi*j/70
+        for j in range(95):
+            a=2*pi*j/95
             for v in (-1,1):
-                tube(w,[p(v*d,r,a+.046*(d-.032)/.076) for d,r in
-                          ((.031,.3347),(.055,.3347),(.078,.3342),(.095,.3286),(.106,.315))],.00115,"tread",4)
-    lathe([(.078,.231),(.108,.233),(.112,.228),(.106,.219),(.087,.213)],"alloy")
+                tube(w,[p(v*d,r,a+v*.055*(d-.032)/.076) for d,r in
+                          ((.031,.3349),(.055,.3349),(.078,.3342),(.095,.3286),(.106,.315),(.113,.301))],.00132,"tread",5)
+                tube(w,[p(v*d,r,a+.025+v*.031*(d-.057)/.049) for d,r in
+                          ((.058,.3347),(.075,.3345),(.094,.3293),(.105,.317))],.00072,"tread",4)
+    lathe([(.084,.239),(.105,.246),(.110,.244),(.113,.240),(.109,.234),(.102,.225)],"bladeFacet")
     lathe([(.039,.160),(.043,.158),(.043,.060),(.054,.039),(.054,.001)],"brake")
     lathe([(.031,.226),(.033,.216),(.023,.199),(.016,.001)],"felt")
     if detail:
@@ -572,14 +658,14 @@ def roadwheel(g,detail=True):
         beta=2*pi*j/7+pi/2
         span=2*pi/7
         def disk(t,v,offset=0):
-            r=lerp(.029,.229,t)
+            r=lerp(.031,.244,t)
             a=beta+span*v+.041*(1-t)
             base=.113+.008*(1-t)+.006*sin(pi*t)
             q=clamp((v-.143)/.666)
             if v>.812:q=1-clamp((v-.812)/.312)
             # The broad painted field is a tilted and slightly convex blade. The
             # leading bevel and trailing shoulder reflect different sky angles.
-            lift=(.016*(q-.50)+.009*sin(pi*q))*min(1,.25+1.9*t)
+            lift=(.009*(q-.50)+.0043*sin(pi*q))*min(1,.25+1.9*t)
             lift*=min(1,10*(1-t)+.15)
             return p(base+lift+offset,r,a)
         verts=samples(0,1,18 if detail else 5)
@@ -587,12 +673,12 @@ def roadwheel(g,detail=True):
               (.169,.775,"cover",.002,.0005),(.775,.794,"coverEdge",.0005,-.0005),(.794,.812,"bladeFacet",-.0005,-.0024)]:
             w.patch(verts,samples(0,1,8 if ma=="cover" and detail else 2),
                     lambda t,q:disk(t,lerp(a,b,q),lerp(da,db,q)),ma,(g,0,0))
-        tlo,thi=.351,.875
+        tlo,thi=.323,.941
         def opening(t):
             q=clamp((t-tlo)/(thi-tlo))
             capshape=1-(1-min(q/.14,(1-q)/.12,1))**2
-            half=lerp(.056,.124,q)*sqrt(max(0,capshape))
-            centre=lerp(.990,.977,q)
+            half=lerp(.049,.131,q)*sqrt(max(0,capshape))
+            centre=lerp(1.017,.970,q)
             return centre-half,centre+half
         st=sorted(set(samples(tlo,thi,18 if detail else 7)+[tlo+.011,thi-.012]))
         for a,b in [(0,tlo),(thi,1)]:
@@ -603,14 +689,19 @@ def roadwheel(g,detail=True):
                 v0,v1=opening(t)
                 outer=.812 if side<0 else 1.124;inner=v0 if side<0 else v1
                 v=lerp(outer,inner,u);c=sin(.5*pi*u)
-                recess=-.0025-.018*c*c*(.64+.36*sin(pi*clamp((t-tlo)/(thi-tlo))))
+                recess=-.0035-.027*c*c*(.72+.28*sin(pi*clamp((t-tlo)/(thi-tlo))))
                 return disk(t,v,recess)
             w.patch(st,[0,.20,.55,.78,1],lip,
                   lambda t,u:"bladeFacet" if u>.55 else "blade",(g,0,0))
             w.patch(st,[0,1],lambda t,q:add(lip(t,1),(-g*.012*q,0,0)),"blade",(g,0,0))
     lathe([(.112,.036),(.122,.035),(.125,.031),(.126,.0275),(.126,.0002)],"blade")
     lathe([(.125,.0308),(.126,.0298)],"coverEdge")
-    tesla_mark(w,lambda u,v:(g*.1272,g*u,v),.039,"coverEdge",(g,0,0))
+    tesla_mark(w,lambda u,v:(g*.1272,g*u,v),.039,"frit",(g,0,0))
+    if detail:
+        # Two shallow molded vent details are visible on the close compositor view.
+        a=-.269
+        centre=p(.103,.205,a)
+        ellipsoid(w,centre,(.009,.0048,.0048),"rubber",12,7)
     # Keep the face of the fitted cover inside the published stock body width.
     extent=max(g*x for x,y,z in w.vertices);limit=(W-TRACK)/2
     def calibrate(p):
@@ -676,6 +767,24 @@ for k,label,hc in [(1,"Front",.403),(-1,"Rear",.748)]:
     ob=mesh.export_object("StreetPlate "+label,mats)
     ob["street_plate"]=True;ob["registration_type"]="Fictional Shenzhen small new-energy plate"
     collect(ob,"07 • Removable Shenzhen road registration");plates.append(ob)
+    if k<0:
+        display=Surface()
+        display.patch(samples(-.953,.953,24),[-.877,.877],
+            lambda u,v:platepoint(u,v,-.0019),"badge",(0,-1,0))
+        display_letters={
+          "M":[[(0,0),(0,1),(.45,.42),(.9,1),(.9,0)]],
+          "O":[[(.1,0),(0,.15),(0,.86),(.14,1),(.77,1),(.90,.86),(.90,.15),(.79,0),(.1,0)]],
+          "D":[[(0,0),(0,1),(.56,1),(.86,.78),(.86,.23),(.56,0),(0,0)]],
+          "E":[[(.85,1),(0,1),(0,0),(.85,0)],[(0,.51),(.72,.51)]],
+          "L":[[(0,1),(0,0),(.86,0)]],
+          "3":[[(0,1),(.75,1),(.9,.78),(.62,.52),(.89,.29),(.76,0),(0,0)],[(.2,.52),(.62,.52)]],
+        }
+        for idx,char in enumerate("MODEL 3"):
+            for stroke in display_letters.get(char,[]):
+                tube(display,[platepoint((idx-3.47)*.133+x*.108,(v-.5)*.48,-.0009)
+                               for x,v in stroke],.0008,"trim",6)
+        ob=display.export_object("Recessed rear MODEL 3 configurator plaque",mats)
+        collect(ob,"01 • Coachwork pressings");coach.append(ob)
 placements=[("wheel_LF",-1,FA),("wheel_RF",1,FA),("wheel_LR",-1,RA),("wheel_RR",1,RA)]
 wheels=[];prototypes={}
 for name,g,s in placements:
@@ -686,10 +795,11 @@ for name,g,s in placements:
         ob.location=(g*TRACK/2,-s,R)
     collect(ob,"05 • Photon wheels");ob["rolling_radius"]=R;ob["tyre"]="235/45R18"
     ob["size"]="18 x 8.5 J ET38";wheels.append(ob)
-anchor=coach[0];anchor["design_reference"]="Model 3 RWD / Tesla China / 18-inch Photon"
+anchor=coach[0];anchor["design_reference"]="Tesla China Model 3 RWD / MT382 / PN01 / W38A / IPB11"
 anchor["body_dimensions_m"]=[L,W,H];anchor["wheelbase_m"]=WB
 sc=bpy.context.scene;sc.unit_settings.system="METRIC";sc.unit_settings.length_unit="METERS"
-sc["reference"]=EXTERIOR;sc["dimensions_source"]=MANUAL;sc["wheel_reference"]=PHOTON
+sc["reference"]=CONFIG;sc["dimensions_source"]=MANUAL;sc["wheel_reference"]=PHOTON
+sc["configuration"]="MT382 / PN01 / W38A / IPB11"
 sc["market"]="Tesla 中国 · 后轮驱动版 · 星空灰 · 18英寸光子轮毂 · 深色高级内饰"
 sc["dimensions_m"]="4.720 x 1.848 x 1.442; unfolded mirrors 2.089; wheelbase 2.875"
 sc["geometry_note"]="Original reconstructed surfaces from public elevations; dimensions in metres."
@@ -700,21 +810,30 @@ def camera(name,pos,look,lens):
     data=bpy.data.cameras.new(name);o=bpy.data.objects.new(name,data);bpy.context.collection.objects.link(o)
     o.location=pos;o.rotation_euler=(Vector(look)-Vector(pos)).to_track_quat("-Z","Y").to_euler()
     data.lens=lens;collect(o,studio);return o
-cam=camera("Model 3 · front three quarter",(-4.51,-6.54,2.34),(0,.05,.70),51);sc.camera=cam
-camera("Model 3 · rear three quarter",(-4.52,6.55,2.29),(0,-.04,.70),51)
-world=bpy.data.worlds.new("Daylit courtyard studio");sc.world=world;world.use_nodes=True
+def factory_camera(name,eye,target,vertical_fov):
+    def blender(p):return (p[0],-p[2],p[1])
+    o=camera(name,blender(eye),blender(target),12/tan(radians(vertical_fov)/2))
+    o.data.sensor_fit="VERTICAL";o.data.sensor_height=24
+    return o
+cam=factory_camera("Model 3 · STUD_FRONT34",(4.560252,.8147661,3.8303095),(0,.6364665,.37393),44.1551739);sc.camera=cam
+factory_camera("Model 3 · STUD_SIDE",(6.7535436,.6644278,.2919665),(0,.6208283,-.0187802),40.8586742)
+factory_camera("Model 3 · STUD_REAR34",(5.8366641,.8862789,-5.6470877),(0,.6746467,-.3815446),33.2233633)
+world=bpy.data.worlds.new("PN01 white sweep and longitudinal reflection cards");sc.world=world;world.use_nodes=True
 nodes=world.node_tree.nodes
-hdri=nodes.new("ShaderNodeTexEnvironment");hdri.image=bpy.data.images.load(str(ROOT/"public/media/courtyard.hdr"))
+studio_map=OUT/"model3-studio.hdr"
+if not studio_map.exists():
+    subprocess.run([shutil.which("python") or "python",str(ROOT/"scripts/model3_studio.py"),str(studio_map)],check=True)
+hdri=nodes.new("ShaderNodeTexEnvironment");hdri.image=bpy.data.images.load(str(studio_map))
 world.node_tree.links.new(hdri.outputs["Color"],nodes["Background"].inputs["Color"])
-nodes["Background"].inputs["Strength"].default_value=1.10
+nodes["Background"].inputs["Strength"].default_value=1.05
 def softbox(name,pos,size,power):
     data=bpy.data.lights.new(name,"AREA");data.energy=power;data.shape="DISK";data.size=size
     o=bpy.data.objects.new(name,data);bpy.context.collection.objects.link(o);o.location=pos
     o.rotation_euler=(Vector((0,0,.7))-Vector(pos)).to_track_quat("-Z","Y").to_euler();collect(o,studio)
-softbox("Body reflection card",(-3,-3,5.4),4.8,620)
-softbox("Roof rim light",(2.9,3.9,4.8),4.1,420)
+softbox("Soft studio fill",(-3,-3,5.4),5.6,94)
+softbox("Boot rim fill",(2.9,3.9,4.8),5.1,74)
 sc.render.engine="CYCLES";sc.cycles.samples=32;sc.cycles.use_denoising=True
-sc.render.resolution_x=1360;sc.render.resolution_y=860;sc.render.resolution_percentage=100
+sc.render.resolution_x=1440;sc.render.resolution_y=810;sc.render.resolution_percentage=100
 sc.render.film_transparent=True
 for area in bpy.context.screen.areas:
     if area.type=="VIEW_3D":

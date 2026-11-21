@@ -209,7 +209,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,da
     }
   }
   requestAnimationFrame(render);
-  return {moveTo,position,prepareView:()=>vehicles.prepare(camera.position),toggleCamera:mode,toggleDrone:drone,get aerial(){return orbiting;},get flying(){return flying;},
+  return {moveTo,position,prepareView:()=>vehicles.update(0,camera.position),toggleCamera:mode,toggleDrone:drone,get aerial(){return orbiting;},get flying(){return flying;},
     get period(){return climate.weather==='aurora'?'极光夜':skies[skyIndex].name;},get climate(){return {...climate};},
     get sheltered(){const p=camera.position;return climate.weather==='rain'&&city.getWeatherCover().roofAt(p.x,p.z)>p.y+.5;},
     async setClimate(patch){requestedClimate={...requestedClimate,...patch};await setSky();},
