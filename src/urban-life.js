@@ -223,6 +223,7 @@ function makeHoardingTexture() {
 export function buildUrbanLife(root, map, m, grid) {
   const group = new T.Group();
   group.name = '春笋广场与后海主干道街具';
+  group.userData.localDetails = root.userData.localDetails ??= [];
   root.add(group);
 
   const kits = buildUrbanKits();
@@ -560,9 +561,14 @@ export function buildUrbanLife(root, map, m, grid) {
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
   });
   bikeBayPaint.mesh(group, bayMat, '共享单车停放框线');
-  for (const part of [guardrails, planters, hydrants, bins, utilBoxes, blueBikes, yellowBikes, plazaBenches, hedgesGreen, hedgesGold, hedgesBurgundy, hedgeKerbs, stoneSpheres, plazaPosts, lampHeads, poolRims]) {
-    const cast = part === plazaBenches || part === planters || part === utilBoxes || part === stoneSpheres || part === hedgesGreen || part === hedgesGold || part === hedgesBurgundy;
-    const range = (part === guardrails || part === planters || part === plazaBenches || part === hedgesGreen || part === hedgesGold || part === hedgesBurgundy) ? 520 : 280;
+  // The distant segments meet end to end along the surveyed road. Reuse their
+  // instance transforms and leaf materials when swapping the rounded profile.
+  const distantHedge = new T.BoxGeometry(.82,.56,2.31).translate(0,.36,0);
+  const hedgeLod = {near:kits.hedgeBlockGeo, far:distantHedge, distance:95, tileSize:128};
+  for (const hedge of [hedgesGreen, hedgesGold, hedgesBurgundy]) hedge.flush(group,true,780,hedgeLod);
+  for (const part of [guardrails, planters, hydrants, bins, utilBoxes, blueBikes, yellowBikes, plazaBenches, hedgeKerbs, stoneSpheres, plazaPosts, lampHeads, poolRims]) {
+    const cast = part === plazaBenches || part === planters || part === utilBoxes || part === stoneSpheres;
+    const range = (part === guardrails || part === planters || part === plazaBenches) ? 520 : 280;
     part.flush(group, cast, range);
   }
 }

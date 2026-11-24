@@ -321,6 +321,12 @@ export function createFilm(renderer, camera) {
   return {
     lastStats,
     setGrade,
+    compile(scene,cam){
+      const previous=renderer.getRenderTarget();
+      renderer.setRenderTarget(target);
+      try{return renderer.compileAsync(scene,cam);}
+      finally{renderer.setRenderTarget(previous);}
+    },
     render(scene, cam, time = 0, spray = 0) {
       compositeMat.uniforms.uTime.value = time;
       compositeMat.uniforms.uSpray.value = spray;

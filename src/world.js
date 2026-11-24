@@ -62,15 +62,15 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
     }
     return skiesLoaded.get(hdr);
   }
-  async function setSky({interactive=false,label=''}={}){
+  async function setSky({interactive=false,label='',deferProbes=false}={}){
     const token=++skyRequest,next={...requestedClimate};
     const index=next.weather==='aurora'?skies.length-1:preferredSky,sky=skies[index],light=weatherLighting(next.weather);
     const hdr=sky.hdr??sky.key;
     const probeKey=sky.key+':'+next.weather;
     const needsProbe=!!probes&&probeKey!==lastProbeKey;
     const needsHdr=!skiesLoaded.has(hdr);
+    if(needsProbe){probes.cancel();lastProbeKey='';}
     if(interactive&&(needsProbe||needsHdr)){
-      probes?.cancel();
       onTransition?.({active:true,label,progress:needsHdr?14:26});
       await frame();
       if(token!==skyRequest)return;
@@ -107,7 +107,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
           if(token!==skyRequest)return;
         }
         const ok=await probes.refresh(elapsed,{
-          sliced:interactive,
+          sliced:interactive,deferred:deferProbes,
           cameraPos:camera.position,
           shouldCancel:()=>token!==skyRequest,
           onStep:interactive?(done,total)=>onTransition?.({active:true,label,progress:34+Math.round(done/total*64)}):undefined
@@ -136,7 +136,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   atmoGlsl=createAtmosphereSystem(scene,city);
   bayLife=createBayLife(scene,{low:software});
   tour=createDroneTour(city);
-  probes=localReflections(renderer,scene,city,sun,sunDirection,software,vehicles);await setSky();
+  probes=localReflections(renderer,scene,city,sun,sunDirection,software,vehicles);await setSky({deferProbes:true});
   progress(94,t('loadingWater'));await frame();
   createPedestrians(scene,map,city,vehicles.isBlocked).then(p=>people=p).catch(err=>console.warn('行人资源',err));
   // Pre-warm remaining sky HDRs and precipitation cover during idle time for instant switching.
@@ -311,6 +311,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
       const flightTime=Math.min(raw,.25),steps=Math.max(1,Math.ceil(flightTime/.05));
       for(let i=0;i<steps;i++)flight(flightTime/steps);
     }else walking(dt);
+    probes.step(elapsed,camera.position);
     const focus=orbiting?orbit.target:camera.position;
     if(Math.hypot(focus.x-anchorX,focus.z-anchorZ)>8||elapsed-lastShadow>.35){
       anchorX=focus.x;anchorZ=focus.z;lastShadow=elapsed;sun.target.position.set(anchorX,1,anchorZ);sun.position.copy(sun.target.position).addScaledVector(sunDirection,540);sun.shadow.needsUpdate=true;
@@ -341,7 +342,19 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
     }
   }
   requestAnimationFrame(render);
-  const api={moveTo,position,releaseLook:mouseLook.release,prepareView:()=>vehicles.update(0,camera.position),toggleCamera:mode,toggleDrone:drone,
+  let viewPrepared=false;
+  async function prepareView(){
+    vehicles.update(0,camera.position);
+    if(viewPrepared)return;
+    city.update(elapsed,camera);
+    // Queue the programs together so the driver can link them in parallel
+    // before the first visible frame asks for uniforms one material at a time.
+    if(renderer.extensions.has('KHR_parallel_shader_compile')){
+      await (film.compile?.(scene,camera)??renderer.compileAsync(scene,camera));
+    }
+    viewPrepared=true;
+  }
+  const api={moveTo,position,releaseLook:mouseLook.release,prepareView,toggleCamera:mode,toggleDrone:drone,
     startTour,stopTour,toggleTour,tourRoutes:TOUR_ROUTES,
     setTourPaused(v){tour?.setPaused(v);},
     setTourSpeed(v){tour?.setSpeed(v);},

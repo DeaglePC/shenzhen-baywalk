@@ -29,7 +29,29 @@ function finish(materials,high){
     emissive:0xffe3ac,emissiveIntensity:0,polygonOffset:high,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
   mat.userData.cityProbe='bridge';
   materials.parkLights.finish(mat,.46);
+  mat.customProgramCacheKey=()=>high?'talent-sleeve-engraving':'talent-sleeve-atlas';
   mat.onBeforeCompile=shader=>{
+    if(high){
+      // Estimate the recess from the photographed strokes against the local
+      // brushed metal. Restrict the relief to the name and credentials band.
+      shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+        float groove=0.;
+        #ifdef USE_MAP
+        const vec3 plateLuma=vec3(.2126,.7152,.0722);
+        float surround=dot(textureLod(map,vMapUv,3.5).rgb,plateLuma);
+        groove=smoothstep(.035,.27,(surround-dot(diffuseColor.rgb,plateLuma))/max(.07,surround));
+        groove*=smoothstep(.43,.49,vPlaqueRow)*(1.-smoothstep(.70,.75,vPlaqueRow));
+        diffuseColor.rgb*=1.-.66*groove;
+        #endif`);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+        roughnessFactor=mix(roughnessFactor,.78,groove);`);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+        vec3 px=dFdx(-vViewPosition),py=dFdy(-vViewPosition);
+        vec3 sx=cross(py,normal),sy=cross(normal,px);
+        float det=dot(px,sx);
+        normal=normalize(max(abs(det),1e-10)*normal+
+          sign(det)*.00065*(dFdx(groove)*sx+dFdy(groove)*sy));`);
+    }
     shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
       float lettering=1.0-smoothstep(.038,.25,dot(diffuseColor.rgb,vec3(.21,.72,.07)));
       totalEmissiveRadiance *= lettering * smoothstep(.42,.47,vPlaqueRow)*(1.-smoothstep(.66,.72,vPlaqueRow));`);

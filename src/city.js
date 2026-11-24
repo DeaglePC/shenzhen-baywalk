@@ -264,8 +264,10 @@ export function createCity(scene,map,options={}){
     if(water)water.material.uniforms.time.value=time;
     const details=root.userData.localDetails||[];
     if(camera&&(detailCount!==details.length||lastDetailEye.distanceToSquared(camera.position)>25)){
-      for(const {item,range} of details){
-        const s=item.boundingSphere;item.visible=s.center.distanceTo(camera.position)<range+s.radius;
+      for(const {item,range,lod} of details){
+        const s=item.boundingSphere,d=s.center.distanceTo(camera.position)-s.radius;
+        item.visible=d<range;
+        if(lod&&item.visible)item.geometry=d<lod.distance?lod.near:lod.far;
       }
       lastDetailEye.copy(camera.position);detailCount=details.length;
     }

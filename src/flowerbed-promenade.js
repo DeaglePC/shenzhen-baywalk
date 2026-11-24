@@ -83,16 +83,19 @@ export function flowerbedPromenade(root,road,m){
     function ring(y,out,thickness,width){
       return [p(-width,y,out-thickness),p(width,y,out-thickness),p(width,y,out+thickness),p(-width,y,out+thickness)];
     }
-    const sections=[ring(.075,0,.115,.095),ring(3.55,.06,.081,.076),ring(3.74,.11,.079,.076),
+    // Keep the central viewing terrace lit below the flower lettering.
+    const terrace=s>140&&s<150;
+    const sections=terrace?[ring(.075,0,.115,.095),ring(.76,0,.10,.09)]:[ring(.075,0,.115,.095),ring(3.55,.06,.081,.076),ring(3.74,.11,.079,.076),
       ring(4.88,1.41,.086,.074)];
     for(let i=1;i<sections.length;i++)for(let k=0;k<4;k++){
       const j=(k+1)%4;poles.quad(sections[i-1][k],sections[i-1][j],sections[i][j],sections[i][k]);
     }
     poles.quad(...sections.at(-1));
-    diffusers.quad(p(-.049,3.84,.309),p(.049,3.84,.309),p(.049,4.79,1.389),p(-.049,4.79,1.389));
+    if(terrace)diffusers.quad(p(-.072,.64,.105),p(.072,.64,.105),p(.072,.71,.105),p(-.072,.71,.105));
+    else diffusers.quad(p(-.049,3.84,.309),p(.049,3.84,.309),p(.049,4.79,1.389),p(-.049,4.79,1.389));
     bases.quad(p(-.048,.36,.116),p(.048,.36,.116),p(.048,.67,.117),p(-.048,.67,.117));
-    posts.push([x,z]);const light=p(0,4.31,.85);
-    m.parkLights.fixture(...light,0xffe4be,60,15);
+    posts.push([x,z]);const light=terrace?p(0,.68,.12):p(0,4.31,.85);
+    m.parkLights.fixture(...light,0xffe4be,terrace?8:60,terrace?5:15);
   }
   poles.mesh(root,mat({color:0x42484c,metalness:.48,roughness:.53}),'湖滨 · 折臂庭院灯',true);
   bases.mesh(root,mat({color:0x596065}),'湖滨 · 灯杆检修盖');

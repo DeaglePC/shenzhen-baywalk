@@ -68,7 +68,7 @@ export function flowerbedLandscape(root,map,m){
   }
   const shingleHeight=(f,x,z)=>.205+Math.min(.38,outlineDistance(x,z,f.p)*.135);
   relief(lawn,meadow.p,meadowHeight,2.8);
-  lawn.mesh(root,new T.MeshStandardMaterial({map:lawnMap,roughness:1,side:T.DoubleSide}),'花坛 · 临湖园林草地');
+  const lawnMesh=lawn.mesh(root,new T.MeshStandardMaterial({map:lawnMap,roughness:1,side:T.DoubleSide}),'花坛 · 临湖园林草地');
 
   const rocks=new Instances(new T.IcosahedronGeometry(1,1),
     new T.MeshStandardMaterial({roughness:.98}),'花坛 · 碎石滩临水石岸');
@@ -147,6 +147,6 @@ export function flowerbedLandscape(root,map,m){
     return path.posts.some(([px,pz])=>Math.hypot(x-px,z-pz)<.29)||
       ornaments.some(({line,r})=>line.slice(1).some((b,i)=>segmentDistance(x,z,line[i],b)<r));
   }
-  return {path,trees,shoalRings,shore,lawnMap,heightAt,blocked,
+  return {path,trees,shoalRings,shore,lawnMap,lawnMesh,heightAt,blocked,
     dispose(){path.dispose();for(const t of [lawnMap,shingleMap,leafMap,redMap,shootMap])t.dispose();}};
 }

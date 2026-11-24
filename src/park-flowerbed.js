@@ -15,7 +15,7 @@ function plantTips(root,surface,flowers){
   const shade=new T.Color(flowers?0xdb9217:0x6d153a),light=new T.Color(flowers?0xffcb31:0xab3552);
   const vertex=i=>new T.Vector3().fromArray(surface.p,3*surface.indices[i]);
   for(let i=0;i<surface.indices.length;i+=3){
-    const a=vertex(i),b=vertex(i+1),c=vertex(i+2),area=new T.Triangle(a,b,c).getArea();
+    const a=vertex(i),b=vertex(i+1),c=vertex(i+2),area=Math.abs((b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x))*.5;
     const n=Math.floor(area*(flowers?63:37)+rng());
     for(let j=0;j<n;j++){
       const u=Math.sqrt(rng()),v=rng(),p=a.clone().multiplyScalar(1-u).addScaledVector(b,u*(1-v)).addScaledVector(c,u*v);
@@ -52,10 +52,11 @@ export function parkFlowerbed(root,map){
     quad(green,points,tone);
     floor(points[0],points[1],points[2]);floor(points[0],points[2],points[3]);
   }
+  const skirtShade=new T.Color(0xa1af90);
   const toe=v=>[v[0],.067,v[2]];
   function skirt(a,b,tone){
     const span=Math.hypot(a[0]-b[0],a[2]-b[2])/2.1,station=(a[0]+a[2])/2.1;
-    green.quad(toe(a),a,b,toe(b),[[station,0],[station,a[1]/2.1],[station+span,b[1]/2.1],[station+span,0]],tone);
+    green.quad(toe(a),a,b,toe(b),[[station,0],[station,a[1]/2.1],[station+span,b[1]/2.1],[station+span,0]],tone.clone().multiply(skirtShade));
   }
   // Each station crosses both tiers, from the lakeside toe to the back of the bank.
   const front=[],seam=[],crest=[],tail=[];
@@ -86,7 +87,7 @@ export function parkFlowerbed(root,map){
         T.MathUtils.lerp(far[i][k],far[i+1][k],t),v);
       return [at(0),T.MathUtils.lerp(near[0][1],far[0][1],v)+h,at(2)];
     }
-    const fill=isChinese?red:gold;
+    const fill=isChinese?red:gold,foliageHeight=isChinese?.145:.105;
     function plantTriangle(a,b,c){
       // A long straight stroke must follow the bend even between its traced corners.
       const sorted=[a,b,c].sort((left,right)=>left.x-right.x);
@@ -94,7 +95,7 @@ export function parkFlowerbed(root,map){
         const [lo,mid,hi]=sorted,split=lo.clone().lerp(hi,.5);
         plantTriangle(lo,mid,split);plantTriangle(split,mid,hi);return;
       }
-      const pts=[a,b,c].map(v=>point(v.x,v.y,.025));
+      const pts=[a,b,c].map(v=>point(v.x,v.y,foliageHeight));
       const indices=pts.map(q=>fill.vertex(q,uv(q)));
       if(new T.Triangle(...pts.map(q=>new T.Vector3(...q))).getNormal(new T.Vector3()).y<0)indices.reverse();
       fill.indices.push(...indices);
@@ -112,7 +113,7 @@ export function parkFlowerbed(root,map){
       function profile(i,t){
         const j=(i+1)%ring.length,v=ring[i].clone().lerp(ring[j],t),n=offset[i].clone().lerp(offset[j],t);
         const lip=(side,h)=>point(v.x+side*n.x/width,v.y+side*n.y/depth,h);
-        return [lip(-1,.006),lip(-1,.078),lip(1,.078),lip(1,.006)];
+        return [lip(-1,.006),lip(-1,.078),lip(1,.078),lip(1,.006),point(v.x,v.y,foliageHeight)];
       }
       for(let i=0;i<ring.length;i++){
         const n=Math.max(1,Math.ceil(Math.abs(ring[(i+1)%ring.length].x-ring[i].x)*sections));
@@ -120,6 +121,7 @@ export function parkFlowerbed(root,map){
         for(let j=1;j<=n;j++){
           const b=profile(i,j/n);
           for(let k=0;k<3;k++)quad(rim,[a[k],b[k],b[k+1],a[k+1]]);
+          quad(fill,[a[1],b[1],b[4],a[4]]);
           a=b;
         }
       }

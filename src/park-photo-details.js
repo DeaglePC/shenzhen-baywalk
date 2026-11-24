@@ -508,12 +508,28 @@ export function parkPhotoDetails(root,map,m,grid,hooks={}){
     const bColors=[new T.Color('#d8b48a'),new T.Color('#8bb4c9'),new T.Color('#d98d82'),new T.Color('#e5d7b4'),new T.Color('#97b88c')];
     const picnicSites=[
       [-472.5,163.5,.4],[-478.0,160.2,1.1],[-484.5,166.8,-.3],
-      [-466.5,244.0,.8],[-463.8,248.5,1.5],[174.5,-206.0,.6],[180.2,-201.5,-.4]
+      [-466.5,244.0,.8],[-463.8,248.5,1.5]
     ];
     picnicSites.forEach(([px,pz,rot],idx)=>{
       blankets.at(px,.27,pz,1,1,1,rot,bColors[idx%bColors.length]);
     });
     blankets.flush(group,false,320);
+    const lawn=grid.flowerLandscape?.lawnMesh;
+    if(lawn){
+      const ray=new T.Raycaster(new T.Vector3(),new T.Vector3(0,-1,0));
+      for(const [x,z,yaw,color] of [[162,-210,.6,0xa99779],[167,-205,-.4,0x819cab]]){
+        const cloth=new T.PlaneGeometry(2.1,1.75,4,4).rotateX(-Math.PI/2).rotateY(yaw).translate(x,0,z);
+        const v=cloth.attributes.position;
+        for(let i=0;i<v.count;i++){
+          ray.ray.origin.set(v.getX(i),8,v.getZ(i));
+          const [hit]=ray.intersectObject(lawn,false);
+          v.setY(i,(hit?.point.y??0)+.012);
+        }
+        cloth.computeVertexNormals();
+        const mat=blanketMat.clone();mat.color.setHex(color);
+        const rug=new T.Mesh(cloth,mat);rug.name='花坛 · 临湖草坪野餐垫';rug.receiveShadow=true;group.add(rug);
+      }
+    }
   }
 
   // =========================================================================
