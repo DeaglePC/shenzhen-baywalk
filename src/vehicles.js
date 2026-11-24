@@ -558,7 +558,7 @@ const LAMP_LAYOUT = [
   { hx: .66, hy: .68, hz: 2.12, ty: .82, tz: -2.12, beam: 15.0, pw: 5.8 }, // mini
 ];
 
-function createVehicleLighting(group, lowQuality = false) {
+function createVehicleLighting(group, scene, lowQuality = false) {
   // 1. Projected dual-beam road illumination pool ahead of each lit vehicle.
   const poolCanvas = document.createElement('canvas');
   poolCanvas.width = poolCanvas.height = 256;
@@ -697,14 +697,16 @@ function createVehicleLighting(group, lowQuality = false) {
   for (let i = 0; i < spotCount; i++) {
     const light = new THREE.SpotLight(0xfff1d6, 0, 36, Math.PI * 0.27, 0.68, 1.45);
     light.castShadow = false;
-    light.visible = false;
-    group.add(light, light.target);
+    // Three keys every lit shader on the number of visible lights. Keep the
+    // pool in the scene even when a car leaves range or a probe hides the fleet.
+    scene.add(light, light.target);
     spots.push(light);
   }
 
   return {
     pools, beams, headFlares, tailFlares, spots, conePower, flarePower, poolMat,
     dispose() {
+      for (const spot of spots) scene.remove(spot, spot.target);
       poolTex.dispose();
       for (const m of [pools, beams, headFlares, tailFlares]) {
         m.geometry.dispose();
@@ -740,7 +742,7 @@ export async function createVehicles(scene, data, options = {}) {
     snowFinishes.clear();
   }
   const shadow=contactShadows(group);
-  const lighting=createVehicleLighting(group,!!options.low);
+  const lighting=createVehicleLighting(group,scene,!!options.low);
   scene.add(group);
   const masters=new Map([['e6',detailedFleet(taxi,'e6',group)],['model3',detailedFleet(tesla,'model3',group)]]);
   const pos=new THREE.Vector3(), rot=new THREE.Quaternion(), scale=new THREE.Vector3(1,1,1);
@@ -772,9 +774,7 @@ export async function createVehicles(scene, data, options = {}) {
     lighting.beams.visible = show;
     lighting.headFlares.visible = show;
     lighting.tailFlares.visible = show;
-    if (!show) {
-      for (const s of lighting.spots) { s.visible = false; s.intensity = 0; }
-    }
+    if (!show) for (const spot of lighting.spots) spot.intensity = 0;
   }
   syncLightStrength();
   function update(dt, eye) {
@@ -901,7 +901,7 @@ export async function createVehicles(scene, data, options = {}) {
         for (let i = 0; i < lighting.spots.length; i++) {
           const spot = lighting.spots[i];
           const item = litNearest[i];
-          if (!item) { spot.visible = false; spot.intensity = 0; continue; }
+          if (!item) { spot.intensity = 0; continue; }
           const { car, layout } = item;
           const sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
           const baseY = car.y ?? floor;
@@ -911,7 +911,6 @@ export async function createVehicles(scene, data, options = {}) {
           spot.target.position.copy(spotTarget);
           spot.target.updateMatrixWorld();
           spot.intensity = spotStrength;
-          spot.visible = true;
         }
       }
     }
@@ -933,7 +932,7 @@ export async function createVehicles(scene, data, options = {}) {
     for (const texture of textures) texture.dispose();
   }
   return {
-    update, isBlocked, dispose, enableSnow,
+    update, isBlocked, dispose, enableSnow, headlightSpots:lighting.spots,
     setNight(value, weather = weatherKind) {
       const prevNight = nightLevel, prevWeather = weatherKind;
       nightLevel = Math.max(0, Math.min(1, Number(value) || 0));

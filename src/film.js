@@ -321,10 +321,10 @@ export function createFilm(renderer, camera) {
   return {
     lastStats,
     setGrade,
-    compile(scene,cam){
+    compile(objects,cam,scene){
       const previous=renderer.getRenderTarget();
       renderer.setRenderTarget(target);
-      try{return renderer.compileAsync(scene,cam);}
+      try{return renderer.compileAsync(objects,cam,scene);}
       finally{renderer.setRenderTarget(previous);}
     },
     render(scene, cam, time = 0, spray = 0) {

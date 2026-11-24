@@ -69,7 +69,6 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
     const probeKey=sky.key+':'+next.weather;
     const needsProbe=!!probes&&probeKey!==lastProbeKey;
     const needsHdr=!skiesLoaded.has(hdr);
-    if(needsProbe){probes.cancel();lastProbeKey='';}
     if(interactive&&(needsProbe||needsHdr)){
       onTransition?.({active:true,label,progress:needsHdr?14:26});
       await frame();
@@ -101,18 +100,8 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
       film.setGrade?.(sky.key,next.weather);
       city?.setSun?.(sunDirection,sun.color);city?.setNight?.(night,next.weather==='aurora'?.57:1);vehicles?.setNight(night,next.weather);anchorX=1e8;
       if(needsProbe){
-        if(interactive){
-          onTransition?.({active:true,label,progress:34});
-          await frame();
-          if(token!==skyRequest)return;
-        }
-        const ok=await probes.refresh(elapsed,{
-          sliced:interactive,deferred:deferProbes,
-          cameraPos:camera.position,
-          shouldCancel:()=>token!==skyRequest,
-          onStep:interactive?(done,total)=>onTransition?.({active:true,label,progress:34+Math.round(done/total*64)}):undefined
-        });
-        if(ok)lastProbeKey=probeKey;
+        probes.refresh(elapsed,camera.position,interactive||deferProbes);
+        lastProbeKey=probeKey;
       }
     }finally{
       if(interactive&&token===skyRequest)onTransition?.({active:false,label:'',progress:100});
@@ -126,6 +115,8 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   new ResizeObserver(resize).observe(container);resize();const initialSky=setSky();
   progress(30,t('loadingCity'));await frame();await frame();
   city=createCity(scene,map,{renderer,camera,quality:software?'low':'balanced'});progress(62,t('loadingVehicles'));await frame();
+  const compileMaterials=objects=>film.compile?.(objects,camera,scene)??renderer.compileAsync(objects,camera,scene);
+  city.root.userData.prepareTreeMaterials=compileMaterials;
   [vehicles]=await Promise.all([createVehicles(scene,map,{low:software,signals:city.signals,stadiumAreas:city.stadiumAreas,walkers(){
     const walkers=people?.positions()??[];
     if(playing&&!blocked&&!orbiting&&!flying&&!tour?.active)walkers.push({x:foot.x,z:foot.z,y:foot.y});
@@ -138,7 +129,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   tour=createDroneTour(city);
   probes=localReflections(renderer,scene,city,sun,sunDirection,software,vehicles);await setSky({deferProbes:true});
   progress(94,t('loadingWater'));await frame();
-  createPedestrians(scene,map,city,vehicles.isBlocked).then(p=>people=p).catch(err=>console.warn('行人资源',err));
+  const pedestriansReady=createPedestrians(scene,map,city,vehicles.isBlocked).then(p=>people=p).catch(err=>console.warn('行人资源',err));
   // Pre-warm remaining sky HDRs and precipitation cover during idle time for instant switching.
   const idle=fn=>'requestIdleCallback' in window?requestIdleCallback(fn,{timeout:5000}):setTimeout(fn,1800);
   idle(()=>{
@@ -346,12 +337,11 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   async function prepareView(){
     vehicles.update(0,camera.position);
     if(viewPrepared)return;
+    await pedestriansReady;
     city.update(elapsed,camera);
     // Queue the programs together so the driver can link them in parallel
     // before the first visible frame asks for uniforms one material at a time.
-    if(renderer.extensions.has('KHR_parallel_shader_compile')){
-      await (film.compile?.(scene,camera)??renderer.compileAsync(scene,camera));
-    }
+    await compileMaterials(scene);
     viewPrepared=true;
   }
   const api={moveTo,position,releaseLook:mouseLook.release,prepareView,toggleCamera:mode,toggleDrone:drone,

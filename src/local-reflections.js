@@ -7,6 +7,8 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
   const camera=new T.CubeCamera(.32,14000,cube),filter=new T.PMREMGenerator(renderer);
   const paintCube=low?cube:new T.WebGLCubeRenderTarget(512,{type:T.HalfFloatType,generateMipmaps:false});
   const paintCamera=low?camera:new T.CubeCamera(.32,14000,paintCube);
+  // Reused output targets need the PMREM working buffers for their own size.
+  const paintFilter=low?filter:new T.PMREMGenerator(renderer);
   const captures=[
     {key:'district',at:new T.Vector3(-241,87,-425),target:null},
     {key:'bridge',at:new T.Vector3(215.2,4.25,136),target:null},
@@ -15,9 +17,8 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
     {key:'street',at:new T.Vector3(-126.8,1.44,-420.7),target:null}
   ];
   const waterProxy=new T.MeshStandardMaterial({color:0x2b7e86,roughness:.22,metalness:.26});
-  const nextFrame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
   const skyIntensities=new Map(),skyTargets=[];
-  let runToken=0,pending=null,nextCaptureTime=0;
+  let pending=null,nextCaptureTime=0;
   function collectTargets(){
     const materials=new Set(),omit=[],tower=[];
     scene.traverse(o=>{
@@ -49,7 +50,7 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
         let texture=sky;
         if(sky.image.width/4!==buffer.width){
           buffer.fromEquirectangularTexture(renderer,sky);
-          const target=filter.fromCubemap(buffer.texture);
+          const target=(buffer===paintCube?paintFilter:filter).fromCubemap(buffer.texture);
           skyTargets.push(target);texture=target.texture;
         }
         textures.set(buffer,texture);
@@ -66,6 +67,7 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
     const originalWater=city.water?.material,oldSun=sun.position.clone(),oldTarget=sun.target.position.clone();
     const omit=capture.key==='district'?[...targets.omit,...targets.tower]:targets.omit;
     const visibility=omit.map(o=>o.visible),xr=renderer.xr.enabled;
+    const headlightPower=vehicles.headlightSpots.map(light=>light.intensity);
     scene.userData.capturingProbe=true;
     try{
       eye.position.copy(capture.at);
@@ -75,6 +77,8 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       eye.updateMatrixWorld(true);
       city.update(time,eye);
       if(street)vehicles.update(0,capture.at);
+      // Moving headlights should not leave a lasting reflection in the cube.
+      for(const light of vehicles.headlightSpots)light.intensity=0;
       omit.forEach(o=>o.visible=street&&o.name==='Shenzhen road traffic');
       if(city.water)city.water.material=waterProxy;
       sun.target.position.set(capture.at.x,0,capture.at.z);
@@ -84,12 +88,13 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       renderer.setRenderTarget(buffer,face);
       renderer.render(scene,eye.children[face]);
       if(face===5){
-        capture.target=filter.fromCubemap(buffer.texture,capture.target);
+        capture.target=(street?paintFilter:filter).fromCubemap(buffer.texture,capture.target);
         capture.target.texture.userData.capturePosition=capture.at.clone();
         scene.userData[capture.key+'Probe']=capture.target.texture;
         bindMaterials(targets.materials,capture);
       }
     }finally{
+      vehicles.headlightSpots.forEach((light,i)=>light.intensity=headlightPower[i]);
       renderer.setRenderTarget(target,activeFace,mip);renderer.xr.enabled=xr;
       omit.forEach((o,i)=>o.visible=visibility[i]);
       if(city.water)city.water.material=originalWater;
@@ -118,27 +123,23 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
     }
     nextCaptureTime=performance.now()+60;
   }
-  function cancel(){runToken++;pending=null;}
-
-  async function refresh(time,options={}){
-    cancel();
-    const token=runToken,targets=collectTargets();
+  function refresh(time,position,deferred){
+    // Replace the previous capture only after the requested sky has loaded.
+    pending=null;
+    const targets=collectTargets();
     seedFromSky(targets.materials);
-    if(options.deferred){enqueue(captures,targets);return true;}
+    if(deferred){enqueue(captures,targets);return;}
     const others=captures.slice(1);
-    if(options.cameraPos)others.sort((a,b)=>a.at.distanceToSquared(options.cameraPos)-b.at.distanceToSquared(options.cameraPos));
-    const ordered=[captures[0],...others],count=options.sliced?2:ordered.length;
-    for(let i=0;i<count;i++){
-      for(let face=0;face<6;face++){
-        if(token!==runToken||options.shouldCancel?.())return false;
-        renderFace(ordered[i],face,time,targets);
-        if(options.sliced)await nextFrame();
-      }
-      options.onStep?.(i+1,count);
+    others.sort((a,b)=>a.at.distanceToSquared(position)-b.at.distanceToSquared(position));
+    for(const capture of [captures[0],...others]){
+      for(let face=0;face<6;face++)renderFace(capture,face,time,targets);
     }
-    if(token!==runToken||options.shouldCancel?.())return false;
-    if(count<ordered.length)enqueue(ordered.slice(count),targets);
-    return true;
   }
-  return {refresh,step,cancel,dispose(){cancel();skyTargets.forEach(t=>t.dispose());if(paintCube!==cube)paintCube.dispose();cube.dispose();filter.dispose();waterProxy.dispose();captures.forEach(p=>p.target?.dispose());}};
+  return {refresh,step,dispose(){
+    pending=null;
+    skyTargets.forEach(t=>t.dispose());
+    if(paintCube!==cube){paintCube.dispose();paintFilter.dispose();}
+    cube.dispose();filter.dispose();waterProxy.dispose();
+    captures.forEach(p=>p.target?.dispose());
+  }};
 }

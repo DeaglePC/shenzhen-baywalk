@@ -1,9 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {BoxGeometry,Group,Matrix4,Mesh,MeshStandardMaterial} from 'three';
+import {detailedFleet} from '../src/detailed-fleet.js';
 import {makeTraffic} from '../src/vehicles.js';
 import {streetObstacles,bodiesOverlap,TrafficOccupancy} from '../src/traffic-collision.js';
 import {stadiumMotorAreas} from '../src/city-stadium.js';
+
+test('parked and moving cars use the instanced material prepared before the first close-up',()=>{
+  const parent=new Group(),model=new Group(),paint=new MeshStandardMaterial();
+  model.add(new Mesh(new BoxGeometry(),paint));
+  const fleet=detailedFleet({model,setEnvironment(){},dispose(){}},'taxi',parent);
+  const group=parent.children[0],initial=group.children[0];
+  assert.ok(initial.isInstancedMesh);
+  assert.equal(initial.material,paint);
+  assert.equal(initial.count,0);
+  assert.equal(group.visible,false);
+  for(const count of [1,0,5,1]){
+    fleet.begin(count,null);
+    for(let i=0;i<count;i++)fleet.add(new Matrix4().makeTranslation(i*6,0,0),0);
+    fleet.finish();
+    assert.equal(group.visible,count>0);
+    assert.equal(group.children[0].count,count);
+    assert.equal(group.children[0].material,paint);
+  }
+  fleet.dispose();
+});
 
 test('a bumper clips a thin wall, while a courtyard and a raised link remain passable',()=>{
   const square=(x,z,size)=>[[x,z],[x+size,z],[x+size,z+size],[x,z+size]];

@@ -159,6 +159,7 @@ function batch(parent,model,level,count,wind){
   const far=level==='far',close=level==='close';
   const branch=new T.InstancedMesh(model.geometry[far?2:0],model.wood,count);
   const leaves=new T.InstancedMesh(close?model.close.geometry[1]:model.geometry[1],close?model.close.leaf:model.leaf,count);
+  leaves.setColorAt(0,new T.Color()); // Compile the same tinted leaf shader used by populated batches.
   const meshes=[branch,leaves];
   if(close)meshes.push(new T.InstancedMesh(model.close.geometry[0],model.close.twig,count));
   for(const mesh of meshes){
@@ -223,10 +224,18 @@ export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
       try{
         const [materials,...shapes]=await Promise.all([closeMaterials(wind),...names.map(n=>geometryFile(n+'-close',true))]);
         if(!root.parent)return;
-        models.forEach((m,i)=>{
-          m.close={...materials,geometry:shapes[i]};groups[i].push(batch(root,m,'close',heroLimit,wind));
+        const detailRoot=new T.Group();detailRoot.visible=false;root.add(detailRoot);
+        const batches=models.map((m,i)=>{
+          m.close={...materials,geometry:shapes[i]};return batch(detailRoot,m,'close',heroLimit,wind);
         });
         root.dispatchEvent({type:'foliageadded'});
+        try{
+          await root.userData.prepareTreeMaterials?.(detailRoot);
+        }catch(error){
+          root.remove(detailRoot);throw error;
+        }
+        if(!root.parent)return;
+        batches.forEach((group,i)=>groups[i].push(group));detailRoot.visible=true;
       }catch(e){retryAfter=performance.now()+30000;console.warn('Close tree asset unavailable',e);}
       finally{loadingClose=false;last.x=Infinity;}
     }

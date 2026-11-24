@@ -24,7 +24,9 @@ export function parkLighting(root){
   let level=0, poolMesh=null, poolMat=null, poolDirty=false;
   for(let i=0;i<10;i++){
     const light=new T.PointLight(0xffffff,0,28,1.35);
-    light.visible=false;root.add(light);points.push(light);
+    // Changing the visible light count invalidates shaders across the city.
+    // Keep the pool registered during daylight with zero intensity.
+    root.add(light);points.push(light);
   }
   function rebuildPools(){
     poolDirty=false;
@@ -87,7 +89,7 @@ export function parkLighting(root){
     setNight(value){
       level=T.MathUtils.smoothstep(value,.16,.92);
       for(const {material,intensity,daylight} of finishes)material.emissiveIntensity=daylight+(intensity-daylight)*level;
-      for(const light of points){light.visible=level>0;light.intensity=0;}
+      for(const light of points)light.intensity=0;
       if(level>.01&&poolDirty)rebuildPools();
       if(poolMesh){poolMesh.visible=level>.01;poolMat.opacity=level*.88;}
     },

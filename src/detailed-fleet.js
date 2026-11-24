@@ -47,20 +47,27 @@ export function detailedFleet(asset, id, parent){
   }
   let capacity=0,count=0,visibleCount=0;
   const matrices=origins.map(()=>new T.Matrix4()),roll=new T.Matrix4();
+  function reserve(required){
+    if(required<=capacity)return;
+    capacity=2**Math.ceil(Math.log2(Math.max(4,required)));
+    for(const b of batches.values()){
+      if(b.mesh){group.remove(b.mesh);b.mesh.dispose();}
+      b.mesh=new T.InstancedMesh(b.geometry,b.material,capacity);
+      b.mesh.count=0;b.mesh.castShadow=!b.material.transparent;b.mesh.receiveShadow=true;b.mesh.frustumCulled=false;
+      b.mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
+      group.add(b.mesh);
+    }
+  }
+  // Include both detail models in the loading screen's shader compile even
+  // when the starting position has no nearby vehicles.
+  group.visible=false;
+  reserve(4);
   return {
     begin(required,environment){
       count=0;visibleCount=required;group.visible=required>0;
       if(!required)return;
       asset.setEnvironment(environment);
-      if(required<=capacity)return;
-      capacity=2**Math.ceil(Math.log2(Math.max(4,required)));
-      for(const b of batches.values()){
-        if(b.mesh){group.remove(b.mesh);b.mesh.dispose();}
-        b.mesh=new T.InstancedMesh(b.geometry,b.material,capacity);
-        b.mesh.castShadow=!b.material.transparent;b.mesh.receiveShadow=true;b.mesh.frustumCulled=false;
-        b.mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
-        group.add(b.mesh);
-      }
+      reserve(required);
     },
     add(root,angle){
       matrices[0].copy(root);roll.makeRotationX(angle);
