@@ -68,18 +68,18 @@
 <table>
   <tr>
     <td width="50%" align="center">
+      <img src="docs/images/compare-field-124.jpg" alt="作者 2026-11-22 亲赴深圳人才公园实地拍摄 124 根星光柱实机对照" width="100%" />
+      <br />
+      <strong>作者亲赴实地逐根采集 · 124 根星光柱实拍 vs 实机</strong>
+      <br />
+      <sub>2026-11-22 作者本人现场实拍（含 IMG 编号与视频帧）与浏览器 3D 漫游逐一对齐</sub>
+    </td>
+    <td width="50%" align="center">
       <img src="docs/images/compare-tidal.jpg" alt="潮汐广场、后海天际线与《领航者》青铜像实拍对照" width="100%" />
       <br />
       <strong>潮汐广场 · 火山引擎/中海油天际线 · 《领航者》青铜像</strong>
       <br />
       <sub>左侧为现场实拍，右侧为浏览器 WebGL 2 实时渲染同机位画面</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="docs/images/compare-starbridge.jpg" alt="星光桥开园实拍与同机位实机对照" width="100%" />
-      <br />
-      <strong>人才星光桥 · 袁庚 / 朱世平 / 蔡志明 实拍校准</strong>
-      <br />
-      <sub>金属柱面弧面展开刻像、暗色职衔刻字与柱身夜光逐一比对现场原照</sub>
     </td>
   </tr>
 </table>
@@ -359,7 +359,7 @@ blender -b -P scripts/traffic_import.py -- <缓存目录>
 
 - **地理与遥感数据**：© [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL 1.0) · [CMAB Building Dataset](https://doi.org/10.1038/s41597-025-04730-5) (CC BY 4.0) · Copernicus Sentinel-2C (2025) · [Meta & WRI CHMv2](https://registry.opendata.aws/dataforgood-fb-forestsv2/) (CC BY 4.0) · [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) — 详见 [地理数据说明](public/data/SOURCES.md)
 - **建筑、车辆与材质资产**：[Poly Haven](https://polyhaven.com/) (CC0) · [ambientCG](https://ambientcg.com/) (CC0) · 2024 Tesla Model 3 & Generic Passenger Car Pack (CC BY 4.0) — 详见 [城市场景说明](public/city/SOURCES.md) · [植被来源](public/foliage/SOURCES.md)
-- **星光桥人物肖像与文献**：详见 [星光桥资料与授权](public/talent/SOURCES.md) 与 [完整素材声明页](public/credits.html)
+- **星光桥与南岸 124 根人物柱（作者原创实地拍摄）**：当前实景中的 **全部 124 根双面星光柱（桥面 65 根 + 南岸步道 59 根）** 以及现场护栏标牌、棕榈树干与粉色异木棉花簇，**均由本项目作者于 2026 年 11 月 22 日亲赴深圳人才公园实地拍摄采集**，并按照片 GPS EXIF 逐根对齐坐标；早期结构考据与历史对比原照署名详见 [星光桥实地采集与授权说明](public/talent/SOURCES.md) 与 [完整素材声明页](public/credits.html)
 
 ---
 

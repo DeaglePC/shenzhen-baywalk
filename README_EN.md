@@ -68,18 +68,18 @@ Inspect pixel-matched field photographs against real-time 2560 × 1440 WebGL cap
 <table>
   <tr>
     <td width="50%" align="center">
+      <img src="docs/images/compare-field-124.jpg" alt="Author's 2026-11-22 on-site photography of all 124 Talent Pillars vs live 3D render" width="100%" />
+      <br />
+      <strong>124 Talent Pillars · 100% Author On-Site Photography</strong>
+      <br />
+      <sub>Photographed personally by the author across Shenzhen Talent Park on Nov 22, 2026 & GPS EXIF-aligned</sub>
+    </td>
+    <td width="50%" align="center">
       <img src="docs/images/compare-tidal.jpg" alt="Tidal Square real photo vs WebGL comparison" width="100%" />
       <br />
       <strong>Tidal Square · Houhai Skyline · Bronze Sculpture</strong>
       <br />
       <sub>Left: real field photograph · Right: live Three.js WebGL 2 render</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="docs/images/compare-starbridge.jpg" alt="Starlight Bridge pillars real photo vs in-engine comparison" width="100%" />
-      <br />
-      <strong>Starlight Bridge · Academician & Pioneer Pillars</strong>
-      <br />
-      <sub>Cylindrical metallic portraits & etched inscriptions matched to real site photos</sub>
     </td>
   </tr>
 </table>
@@ -196,8 +196,7 @@ flowchart LR
 All geographic datasets, 3D vehicle models, PBR textures, and portrait attributions are transparently documented in:
 - [Geographic & Satellite Data Sources](public/data/SOURCES.md) (OpenStreetMap ODbL 1.0, CMAB CC BY 4.0, Copernicus Sentinel-2C, Meta & WRI CHMv2 CC BY 4.0, AWS Terrain Tiles)
 - [City Assets & Architectural Calibration](public/city/SOURCES.md)
-- [Starlight Bridge Field Records & Licenses](public/talent/SOURCES.md)
-- [Full Credits Page](public/credits.html)
+- **All 124 Starlight Bridge & South Shore Talent Pillars (Author's Original Field Photography)**: Every single one of the **124 double-sided talent pillars (65 on Starlight Bridge + 59 along the South Shore)** — along with railing signage, palm bark, and pink floss-silk blossoms — was **photographed on-site in Shenzhen Talent Park personally by the author on November 22, 2026** and aligned via raw GPS EXIF coordinates. Historical archive references & bridge elevation attributions are documented in [Starlight Bridge Field Records & Licenses](public/talent/SOURCES.md) and [Full Credits Page](public/credits.html).
 
 ---
 
