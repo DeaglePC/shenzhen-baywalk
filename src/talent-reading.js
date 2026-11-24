@@ -1,4 +1,5 @@
-import {literatureLocation} from './talent-literature.js';
+
+import {t, isEnglish} from './i18n.js';
 
 function reference(title, url) {
   const a = document.createElement('a');
@@ -20,53 +21,50 @@ export function readingContent(record) {
   const refs = document.createElement('p');
   refs.className = 'reading-links';
   refs.append(reference(membership.title, membership.url), reference(...profile));
-  if (record.survey) refs.append(reference('桥头名录原片', 'https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=2886s'));
+  if (record.survey) refs.append(reference(t('talentVideoRef'), 'https://www.youtube.com/watch?v=YaOHuAAV-lQ&t=2886s'));
   fragment.append(bioText, sourceText);
   if (record.physicalImage) {
     const observation = document.createElement('p');
     observation.className = 'reading-evidence';
     observation.textContent = record.evidenceNote;
     fragment.append(observation);
-    refs.append(reference('实拍与游戏近照', '/comparison/plaques.html#' + record.id));
+    refs.append(reference(t('talentCompareRef'), '/comparison/plaques.html#' + record.id));
   }
   if (record.id === 'wang-jian') {
     const caption = document.createElement('p');
     caption.className = 'reading-evidence';
-    caption.textContent = '柱上演示肖像取自 2010 年深圳华大总部合影中的汪建。原柱的刻像仍待近照核对。';
+    caption.textContent = t('talentWangJianNote');
     fragment.append(caption);
-    refs.append(reference('2010 年合影与署名', 'https://commons.wikimedia.org/wiki/File:Wang_Jian_showing_Sydney_Brenner_around_BGI.jpg'));
+    refs.append(reference(t('talentWangJianRef'), 'https://commons.wikimedia.org/wiki/File:Wang_Jian_showing_Sydney_Brenner_around_BGI.jpg'));
   }
   fragment.append(refs);
   return fragment;
 }
 
-// Index only the eight researched records. Walking up to a column and jumping
-// to it from the directory both use its actual scene coordinates.
 export function columnReader(details, columns) {
-  const summary = details.querySelector('summary');
-  const content = details.querySelector('div');
-  const stops = columns.flatMap(column => column.faces.filter(record => record?.literature)
-    .map(record => ({x: column.x, z: column.z, record})));
-  let current = null;
-  return (position, requestedId = null) => {
-    let nearest = null, distance = 3.1;
-    for (const stop of stops) {
-      const gap = Math.hypot(stop.x - position.x, stop.z - position.z);
-      if (gap < distance) { nearest = stop.record; distance = gap; }
+  const summary=details.querySelector('summary'),content=details.querySelector('div');
+  let current=null,lastLang=null;
+  return (position,requestedId=null)=>{
+    let nearest=null,distance=3.1;
+    for(const col of columns){
+      const gap=Math.hypot(col.x-position.x,col.z-position.z);
+      if(col.record.id===requestedId&&gap<3.1){nearest=col.record;break;}
+      if(gap<distance){nearest=col.record;distance=gap;}
     }
-    if (nearest !== current) {
-      current = nearest;
-      details.hidden = !current;
-      details.open = false;
-      content.replaceChildren();
-      if (current) {
-        summary.textContent = current.name + ' · 文献导览';
-        const location = document.createElement('p');
-        location.className = 'reading-location';
-        location.textContent = literatureLocation(current);
-        content.append(location, readingContent(current));
+    const lang=isEnglish();
+    if(nearest!==current||lang!==lastLang){
+      const changed=nearest!==current;
+      current=nearest;lastLang=lang;details.hidden=!current;if(changed)details.open=false;content.replaceChildren();
+      if(current){
+        const displayName=lang&&current.english?`${current.english} (${current.name})`:current.name;
+        summary.textContent=displayName+t('talentPlaqueSuffix');
+        const location=document.createElement('p');location.className='reading-location';
+        location.textContent=current.field.location+' · '+current.field.file;
+        const text=document.createElement('p');text.textContent=current.field.excerpt;
+        content.append(location,text,reference(t('talentBtnZoomPhoto'),current.field.image));
+        if(current.literature)content.append(readingContent(current));
       }
     }
-    if (requestedId && current?.id === requestedId) details.open = true;
+    if(requestedId&&current?.id===requestedId)details.open=true;
   };
 }

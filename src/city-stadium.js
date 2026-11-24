@@ -213,6 +213,7 @@ function roof(root,hole){
   const steel=new T.MeshStandardMaterial({vertexColors:true,metalness:.43,roughness:.35,side:T.DoubleSide});
   const boxed=new T.MeshStandardMaterial({vertexColors:true,metalness:.39,roughness:.41,side:T.DoubleSide});
   coatedPanels(steel,cx,cz);
+  steel.userData.showFacade=[1,.63,46];
   const high=new T.Group(),low=new T.Group();
   high.add(hi.mesh(steel,'银色冲孔钢板与封闭场馆屋面'));
   high.add(returns.mesh(boxed,'扭曲箱形钢网 · 折边和腹板'),soffit.mesh(boxed,'箱形钢网 · 内侧封板'));
@@ -494,6 +495,8 @@ const northRamp=[[85,-864],[104,-865],[106,-935],[96,-935]];
 const gateDeck=[[307,-829],[328,-829],[332,-713],[310,-713]];
 const gateAccess=[[312,-718],[320,-718],[317,-681],[309,-681]];
 const stadiumTunnel=[[326,-774],[326,-765.6],[282,-765.6],[282,-774]];
+const venueOutline=[...sections.map(s=>[s[0],s[1]]),...sections.map(s=>[s[2],s[3]]).reverse()];
+export const stadiumMotorAreas=[venueOutline,southStair,northRamp,gateAccess,stadiumTunnel];
 const gateCenter=-770.8,gateHalf=58.5,portalHalf=44.2;
 const gatePlane=dz=>326.8+dz*.014;
 function pierVolume(x,z){
@@ -684,7 +687,7 @@ function buildingBase(root,m,shape,hole,roofData,near){
   undercroft.mesh(root,pavement,'平台结构边缘');
   reveals.mesh(root,new T.MeshStandardMaterial({vertexColors:true,roughness:.49,metalness:.42,side:T.DoubleSide}),'平台退进玻璃及格栅');
   const glassMat=new T.MeshPhysicalMaterial({vertexColors:true,metalness:.54,roughness:.145,clearcoat:.85,side:T.DoubleSide});
-  reflectCanopy(glassMat,porosity,true);glassMat.userData.cityProbe='district';facades.mesh(root,glassMat,'体育馆与游泳馆的反射玻璃幕墙');
+  reflectCanopy(glassMat,porosity,true);glassMat.userData.cityProbe='district';glassMat.userData.showFacade=[0,.75,32];facades.mesh(root,glassMat,'体育馆与游泳馆的反射玻璃幕墙');
   stile.mesh(root,new T.MeshStandardMaterial({color:0xa9b7b9,metalness:.7,roughness:.34,side:T.DoubleSide}),'玻璃横梁与窗框');
   cap.mesh(root,pavement,'馆体围护顶');
   rails.flush(near);
@@ -744,6 +747,7 @@ function controls(footprint,shape){
   }
   const wall=(x,z)=>ellipseDistance(x,z,ranges.swimming)<1||ellipseDistance(x,z,ranges.gym)<1||Math.hypot(x-83.6,z+791.9)<9.7||pierVolume(x,z);
   return {
+    motorExclusions:stadiumMotorAreas,
     ownsFootprint:f=>[665408865,665408866,9244350,9244351].includes(Math.abs(Number(f.id))),
     groundHeight:terrace,
     coverHeight(x,z){
@@ -785,8 +789,7 @@ export function buildStadium(root,m,map){
   const bowl=map.buildings.find(f=>f.id===bowlID),central=map.buildings.find(f=>f.id===connectorID);
   if(!bowl?.holes?.[0]||!central)return {ownsFootprint:()=>false,groundHeight:()=>null,walkable:()=>null,flightBlocked:()=>null,coverHeight:()=>null};
   const group=new T.Group();group.name='深圳湾体育中心 · 春茧';root.add(group);
-  const inner=bowl.holes[0],north=sections.map(s=>[s[0],s[1]]),south=sections.map(s=>[s[2],s[3]]).reverse();
-  const footprint=[...north,...south],shape=roof(group,inner);
+  const inner=bowl.holes[0],footprint=venueOutline,shape=roof(group,inner);
   const near=new T.Group();near.name='近景球网、扶手、网壳细部';
   trackAndSeating(group,near);buildingBase(group,m,footprint,inner,shape,near);
   courtMarkings(group,map);fittings(group,near,inner,shape.ceiling,m);

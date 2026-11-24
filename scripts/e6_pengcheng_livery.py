@@ -23,46 +23,89 @@ BOXES = {
 }
 
 
+fontdirs = (Path("C:/Windows/Fonts"), Path("/usr/share/fonts/truetype/dejavu"),
+            Path("/usr/share/fonts/opentype/noto"))
+fonts = {
+    "han": ("msyhbd.ttc", "simhei.ttf", "NotoSansCJK-Bold.ttc"),
+    "light": ("msyh.ttc", "NotoSansCJK-Regular.ttc"),
+    "latin": ("bahnschrift.ttf", "arial.ttf", "DejaVuSans.ttf"),
+    "bold": ("arialbd.ttf", "DejaVuSans-Bold.ttf"),
+    "slant": ("arialbi.ttf", "DejaVuSans-BoldOblique.ttf"),
+    "thai": ("leelawad.ttf", "tahoma.ttf", "DejaVuSans.ttf"),
+    "korean": ("malgunbd.ttf", "NotoSansCJK-Bold.ttc"),
+    "arabic": ("tahoma.ttf", "DejaVuSans.ttf"),
+}
+
+
+def text(target, box, label, font="han", ink="#102b5a", outline=None, stroke=0, italic=0):
+    from PIL import Image, ImageDraw, ImageFont
+    path = next((root / file for file in fonts[font] for root in fontdirs
+                 if (root / file).exists()), None)
+    if path is None:
+        raise FileNotFoundError(f"Install a font for the '{font}' typeface: {fonts[font]}")
+    face = ImageFont.truetype(str(path), 160)
+    left, top, right, bottom = face.getbbox(label, stroke_width=stroke)
+    source = Image.new("RGBA", (right-left+12, bottom-top+12))
+    draw = ImageDraw.Draw(source)
+    draw.text((6-left, 6-top), label, font=face, fill=ink, stroke_width=stroke, stroke_fill=outline)
+    if italic:
+        source = source.transform((source.width + int(source.height*italic), source.height),
+                                  Image.Transform.AFFINE, (1, italic, -source.height*italic, 0, 1, 0),
+                                  Image.Resampling.BICUBIC)
+    source = source.crop(source.getbbox())
+    x0, y0, x1, y1 = box
+    target.alpha_composite(source.resize((x1-x0,y1-y0), Image.Resampling.LANCZOS), (x0, y0))
+
+
+
+def registration_plate(number, electric=True):
+    """Render the fictional registrations with the photographed taxi lettering layout."""
+    from PIL import Image, ImageDraw
+
+    # Plate: pale top, green foot, embossed narrow new-energy characters and the
+    # small round separator. The optical assembly provides the plate frame/bolts.
+    plate=Image.new("RGBA",(1024,300)); d=ImageDraw.Draw(plate)
+    keys=[(0,(203,216,204)),(.26,(153,209,176)),(.55,(68,191,137)),(1,(7,161,102))]
+    if not electric:
+        keys = [(0, (35, 85, 163)), (1, (21, 56, 133))]
+    ink = "#131e18" if electric else "#f3f5eb"
+    for y in range(300):
+        n=y/299
+        (a,c),(b,e)=next((k0,k1) for k0,k1 in zip(keys,keys[1:]) if n<=k1[0])
+        d.line((0,y,1023,y),fill=tuple(round(i+(j-i)*(n-a)/(b-a)) for i,j in zip(c,e)))
+    d.rounded_rectangle((2,2,1021,297),13,outline="#31473c" if electric else "#ebefe9",width=5)
+    d.rounded_rectangle((7,7,1016,292),10,outline="#d1dfc9" if electric else "#426695",width=4)
+    text(plate,(23,48,132,247),"粤","light","#152a20" if electric else ink)
+    # Curved DIN-like forms with straight stems; the photograph's digits are
+    # much narrower and more vertical than a generic computer sans-serif.
+    boxes=[(143,31,248,261),(296,30,401,260),(412,30,515,260),(533,30,636,260),
+           (655,30,758,260),(774,30,879,260),(891,30,1000,260)]
+    if not electric:
+        boxes = [boxes[0]] + [(305+i*140, 31, 423+i*140, 260) for i in range(5)]
+    assert len(number) == len(boxes) and number.startswith("B")
+    for glyph,box in zip(number,boxes):
+        x,y,X,Y=box
+        text(plate,(x+2,y+2,X+2,Y+2),glyph,"latin","#c5d8bc" if electric else "#273d60")
+        text(plate,box,glyph,"latin",ink)
+    if not electric:
+        d.ellipse((261,133,284,155), fill=ink)
+        return plate.convert("RGB")
+    d.ellipse((251,126,288,167), fill="#1b7966",outline="#5ca4a1",width=4)
+    d.arc((256,130,283,160),201,351,fill="#c4b663",width=3)
+    d.polygon([(258,149),(269,138),(281,148),(277,151),(262,151)],fill="#bfd2ba")
+    d.line((260,155,280,155),fill="#adbda7",width=3)
+    return plate.convert("RGB")
+
+
 def generate(directory):
     from math import cos
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     atlas = Image.new("RGBA", SIZE)
     navy = "#102b5a"
     ocher = "#af7323"
-    fontdirs = (Path("C:/Windows/Fonts"), Path("/usr/share/fonts/truetype/dejavu"),
-                Path("/usr/share/fonts/opentype/noto"))
-    fonts = {
-        "han": ("msyhbd.ttc", "simhei.ttf", "NotoSansCJK-Bold.ttc"),
-        "light": ("msyh.ttc", "NotoSansCJK-Regular.ttc"),
-        "latin": ("bahnschrift.ttf", "arial.ttf", "DejaVuSans.ttf"),
-        "bold": ("arialbd.ttf", "DejaVuSans-Bold.ttf"),
-        "slant": ("arialbi.ttf", "DejaVuSans-BoldOblique.ttf"),
-        "thai": ("leelawad.ttf", "tahoma.ttf", "DejaVuSans.ttf"),
-        "korean": ("malgunbd.ttf", "NotoSansCJK-Bold.ttc"),
-        "arabic": ("tahoma.ttf", "DejaVuSans.ttf"),
-    }
-
-    def text(target, box, label, font="han", ink=navy, outline=None, stroke=0, italic=0):
-        path = next((root / file for file in fonts[font] for root in fontdirs
-                     if (root / file).exists()), None)
-        if path is None:
-            raise FileNotFoundError(f"Install a font for the '{font}' typeface: {fonts[font]}")
-        face = ImageFont.truetype(str(path), 160)
-        left, top, right, bottom = face.getbbox(label, stroke_width=stroke)
-        source = Image.new("RGBA", (right-left+12, bottom-top+12))
-        draw = ImageDraw.Draw(source)
-        draw.text((6-left, 6-top), label, font=face, fill=ink, stroke_width=stroke, stroke_fill=outline)
-        if italic:
-            source = source.transform((source.width + int(source.height*italic), source.height),
-                                      Image.Transform.AFFINE, (1, italic, -source.height*italic, 0, 1, 0),
-                                      Image.Resampling.BICUBIC)
-        source = source.crop(source.getbbox())
-        x0, y0, x1, y1 = box
-        target.alpha_composite(source.resize((x1-x0,y1-y0), Image.Resampling.LANCZOS), (x0, y0))
-
     def slot(name, size, painter):
         canvas = Image.new("RGBA", size)
         painter(canvas)
@@ -184,30 +227,7 @@ def generate(directory):
                 d.ellipse((x+1.3,y+.8,x+3.8,y+2.8),fill=(86,233,129) if iy<=23 else (46,142,90))
     led.save(directory/"pengcheng-led.png",optimize=True)
 
-    # Plate: pale top, green foot, embossed narrow new-energy characters and the
-    # small round separator. The optical assembly provides the plate frame/bolts.
-    plate=Image.new("RGBA",(1024,300)); d=ImageDraw.Draw(plate)
-    keys=[(0,(203,216,204)),(.26,(153,209,176)),(.55,(68,191,137)),(1,(7,161,102))]
-    for y in range(300):
-        n=y/299
-        (a,c),(b,e)=next((k0,k1) for k0,k1 in zip(keys,keys[1:]) if n<=k1[0])
-        d.line((0,y,1023,y),fill=tuple(round(i+(j-i)*(n-a)/(b-a)) for i,j in zip(c,e)))
-    d.rounded_rectangle((2,2,1021,297),13,outline="#31473c",width=5)
-    d.rounded_rectangle((7,7,1016,292),10,outline="#d1dfc9",width=4)
-    text(plate,(23,48,132,247),"粤","light","#152a20")
-    # Curved DIN-like forms with straight stems; the photograph's digits are
-    # much narrower and more vertical than a generic computer sans-serif.
-    boxes=[(143,31,248,261),(296,30,401,260),(412,30,515,260),(533,30,636,260),
-           (655,30,758,260),(774,30,879,260),(891,30,1000,260)]
-    for glyph,box in zip("BC53270",boxes):
-        x,y,X,Y=box
-        text(plate,(x+2,y+2,X+2,Y+2),glyph,"latin","#c5d8bc")
-        text(plate,box,glyph,"latin","#131e18")
-    d.ellipse((251,126,288,167), fill="#1b7966",outline="#5ca4a1",width=4)
-    d.arc((256,130,283,160),201,351,fill="#c4b663",width=3)
-    d.polygon([(258,149),(269,138),(281,148),(277,151),(262,151)],fill="#bfd2ba")
-    d.line((260,155,280,155),fill="#adbda7",width=3)
-    plate.convert("RGB").save(directory/"pengcheng-plate.png",optimize=True)
+    registration_plate("BC53270").save(directory/"pengcheng-plate.png", optimize=True)
 
 
 if __name__ == "__main__":

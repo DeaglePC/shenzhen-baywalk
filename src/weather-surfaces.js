@@ -2,7 +2,7 @@
 // separate sheet through trees, building façades or the water's surface.
 import * as T from 'three';
 
-const noise = `
+export const surfaceNoise = `
   float wxHash(vec2 p){
     vec3 h=fract(vec3(p.xyx)*.1031);h+=dot(h,h.yxz+33.33);return fract((h.x+h.y)*h.z);
   }
@@ -24,31 +24,46 @@ const noise = `
 
 const declarations = `
   varying vec3 wxWorld;
-  uniform float wxRain, wxSnow, wxTime;
+  uniform float wxRain, wxSnow, wxTime, wxDarkness;
   uniform vec3 wxSeason;
-`+noise;
+`+surfaceNoise;
 
 function kind(name) {
+  if (/张拉膜帆棚/.test(name)) return 'roof';
+  if (/临水深色木栈道|潮汐广场 · 错缝深浅条石|七级弧形看台|滨水花池石座/.test(name)) return 'paving';
+  if (/真实树干与分叉/.test(name)) return 'branch';
   if (/棕榈叶冠/.test(name)) return 'palm';
-  if (/三维树冠与叶簇|树冠 ·|沿岸.*(灌|草)|麦冬|枝叶|沿阶草/.test(name)) return name.includes('jacaranda')?'flower':'leaf';
-  if (/园林草地|岸线植被|岛岸坡/.test(name)) return 'grass';
+  if (/三维树冠与叶簇|树冠 ·|沿岸.*(灌|草)|麦冬|枝叶|沿阶草|水边草丛/.test(name)) return name.includes('jacaranda')?'flower':'leaf';
+  if (/园林草地|岸线植被|岛岸坡|沿岸草地/.test(name)) return 'grass';
   if (/建筑屋顶|连续银色屋盖|屋面|屋盖|建筑檐口|巴士亭.*顶|公交.*顶棚/.test(name)) return 'roof';
-  if (/沥青|停车场|道路中心线|路缘线|斑马线|导向标线/.test(name)) return 'road';
-  if (/广场|铺装|人行道|步道|桥面|桥板|缓坡|红色骑行道|路缘花岗石|导向砖|平台板|花岗岩|地面瓷砖|护岸块石/.test(name)) return 'paving';
+  if (/沥青车道|停车场/.test(name)) return 'asphalt';
+  if (/车道划线|跑道白边|慢跑带|车道路面|沥青|停车场|道路中心线|路缘线|斑马线|导向标线/.test(name)) return 'road';
+  if (/广场|铺装|人行道|步道|桥面|桥板|缓坡|红色骑行道|路缘花岗石|导向砖|盲道砖|平台板|花岗岩|地面瓷砖|护岸块石|横梁|临水石岸|座椅木条|树池边缘/.test(name)) return 'paving';
   return null;
 }
 
 function patch(mat, type, controls) {
   const leaf=['leaf','flower','palm'].includes(type);
   const plant=leaf||type==='grass';
+  const asphalt=type==='asphalt',road=asphalt||type==='road';
   const oldHook=mat.onBeforeCompile,oldKey=mat.customProgramCacheKey;
   const previousKey=oldKey.call(mat);
-  mat.customProgramCacheKey=()=>previousKey+'|shenzhen-weather-3-'+type;
+  mat.customProgramCacheKey=()=>previousKey+'|shenzhen-weather-4-'+type;
   mat.onBeforeCompile=function(shader,renderer) {
     oldHook.call(this,shader,renderer);
     Object.assign(shader.uniforms,controls);
     const billboard=shader.vertexShader.includes('vec3 plantWorld');
     shader.vertexShader='varying vec3 wxWorld;\n'+shader.vertexShader;
+    if(leaf){
+      shader.vertexShader='varying float wxLeafHeight;\n'+shader.vertexShader;
+      shader.fragmentShader='varying float wxLeafHeight;\n'+shader.fragmentShader;
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwxLeafHeight=position.y;');
+    }
+    if(asphalt){
+      shader.vertexShader='attribute vec2 snowLane;varying vec2 wxLane;\n'+shader.vertexShader;
+      shader.fragmentShader='varying vec2 wxLane;\n'+shader.fragmentShader;
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwxLane=snowLane;');
+    }
     const world=billboard?'wxWorld=(modelMatrix*vec4(plantWorld,1.)).xyz;':`
       vec4 wxLocation=vec4(transformed,1.);
       #ifdef USE_BATCHING
@@ -76,18 +91,24 @@ function patch(mat, type, controls) {
         smoothstep(.44,.66,wxNoise(wxWorld.xz*.046))*.37*wxSeason.x;
         diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.36,.22,.42)*(.48+wxVariation),bloom);`:''}
     `:'';
-    const cover=type==='roof'?.95:type==='grass'?.98:type==='paving'?.80:type==='road'?.61:.31;
+    const cover=type==='branch'?.82:road?.94:.99;
     const groundSnow=leaf?`
-      // Leaf clusters carry thin sheets. Restrict dusting to the high tips,
-      // retaining the deep green of evergreen canopy interiors and palm fronds.
-      float exposure=smoothstep(.43,.81,wxNoise(wxWorld.xz*.74+wxWorld.y*.47));
-      wxAmount=wxSnow*${type==='palm'?'.09':'.20'}*exposure;
+      float clump=.66*wxNoise(wxWorld.xz*.83+wxWorld.y*.59)+.34*wxNoise(wxWorld.xz*2.26+wxWorld.y);
+      float crown=${type==='palm'?'.70':'smoothstep(.20,.93,wxLeafHeight)'};
+      float exposure=smoothstep(.49-.19*crown,.78-.26*crown,clump);
+      float leafLight=clamp(dot(diffuseColor.rgb,vec3(.21,.71,.08))*4.,0.,1.);
+      wxAmount=wxSnow*exposure*(.30+.67*crown)*(.62+.38*leafLight);
     `:`
       vec3 geometric=cross(dFdx(wxWorld),dFdy(wxWorld));
       float up=geometric.y*inversesqrt(max(dot(geometric,geometric),1e-18));
-      float field=.54*wxNoise(wxWorld.xz*vec2(.042,.081)+4.1)+.29*wxNoise(wxWorld.xz*.36)+.17*wxNoise(wxWorld.xz*1.95);
-      float drifts=smoothstep(.56-wxSnow*.36,.81-wxSnow*.27,field);
-      wxAmount=wxSnow*${cover.toFixed(2)}*drifts*smoothstep(.49,.91,up);
+      float field=.51*wxNoise(wxWorld.xz*vec2(.047,.081)+4.1)+.33*wxNoise(wxWorld.xz*.42)+.16*wxNoise(wxWorld.xz*2.6);
+      float drifts=smoothstep(.41-wxSnow*.30,.80-wxSnow*.28,field);
+      wxAmount=wxSnow*${cover.toFixed(2)}*drifts*smoothstep(.25,.80,up);
+      ${asphalt?`if(wxLane.y>1.){
+        float wheel=abs(abs(mod(wxLane.x,wxLane.y)-wxLane.y*.5)-.73);
+        float packed=1.-smoothstep(.07,.30,wheel+(.5-field)*.22);
+        wxAmount*=1.-.69*packed;
+      }`:''}
     `;
     shader.fragmentShader=shader.fragmentShader.replace('#include <alphamap_fragment>',`#include <alphamap_fragment>
       ${plantColor}
@@ -95,20 +116,24 @@ function patch(mat, type, controls) {
       if(wxSnow>.001){
         ${groundSnow}
         float crystals=.86+.14*wxNoise(wxWorld.xz*6.21);
-        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.91,.95)*crystals,wxAmount);
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.91,.95)*crystals*${billboard?'mix(1.,.21,wxDarkness)':'1.'},wxAmount);
       }
       diffuseColor.rgb*=1.-wxRain*${leaf?'.16':type==='grass'?'.24':'.22'};
     `);
     // The original road shader restricts planar reflections to the calibrated
     // street camera. Extend the wet film elsewhere while preserving that camera.
     shader.fragmentShader=shader.fragmentShader.replace('waterFilm*=max(localStreet,localBridge*.56);',
-      'waterFilm=mix(waterFilm*max(localStreet,localBridge*.56),.17+.83*waterFilm,wxRain);');
+      'waterFilm=mix(waterFilm*max(localStreet,localBridge*.56),.17+.83*waterFilm,wxRain)*(1.-wxAmount);');
     shader.fragmentShader=shader.fragmentShader.replace('#include <metalnessmap_fragment>',`
       roughnessFactor=mix(roughnessFactor, min(roughnessFactor,${leaf?'.42':type==='grass'?'.58':'.235'}),wxRain*${leaf?'.58':'.85'});
       roughnessFactor=mix(roughnessFactor,.91,wxAmount);
       #include <metalnessmap_fragment>
     `);
-    if(type==='road'||type==='paving'){
+    if(mat.isMeshPhysicalMaterial){
+      shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_begin>',
+        '#ifdef USE_CLEARCOAT\nmaterial.clearcoat*=1.-wxAmount;\n#endif\n#include <lights_fragment_begin>');
+    }
+    if(road||type==='paving'){
       shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
         if(wxRain>.01){
           float nearWet=1.-smoothstep(19.,47.,distance(cameraPosition,wxWorld));
@@ -124,10 +149,10 @@ function patch(mat, type, controls) {
   return ()=>{mat.onBeforeCompile=oldHook;mat.customProgramCacheKey=oldKey;mat.needsUpdate=true;};
 }
 
-export function weatherSurfaces(city) {
-  const controls={wxRain:{value:0},wxSnow:{value:0},wxTime:{value:0},wxSeason:{value:new T.Vector3()}};
+export function weatherSurfaces(city,vehicles) {
+  const controls={wxRain:{value:0},wxSnow:{value:0},wxTime:{value:0},wxDarkness:{value:0},wxSeason:{value:new T.Vector3()}};
   const patched=new Map();
-  let installed=false,disposed=false,snowFalling=false;
+  let installed=true,disposed=false,snowFalling=false;
   function scan(){
     if(disposed||!installed)return;
     city.root.traverse(o=>{
@@ -138,31 +163,25 @@ export function weatherSurfaces(city) {
         patched.set(m,patch(m,type,controls));
       }
     });
-    const lake=city.water?.material;
-    if(lake?.isShaderMaterial&&!patched.has(lake)){
-      const prev=lake.fragmentShader;
-      Object.assign(lake.uniforms,{wxRain:controls.wxRain});
-      lake.fragmentShader='uniform float wxRain;\n'+noise+prev.replace('vec3 N=normalize(vec3(-slope.x,1.,-slope.y));',`
-        if(wxRain>.001){
-          float nearSurface=1.-smoothstep(35.,105.,distance(cameraPosition,where));
-          slope*=1.+.39*wxRain;
-          if(nearSurface>.001){
-            slope+=nearSurface*wxRain*(.085*wxRing(p*2.18,time)+.046*wxRing(p.yx*3.76+11.7,time*1.11));
-          }
-        }
-        vec3 N=normalize(vec3(-slope.x,1.,-slope.y));`);
-      lake.needsUpdate=true;
-      patched.set(lake,()=>{lake.fragmentShader=prev;delete lake.uniforms.wxRain;lake.needsUpdate=true;});
-    }
   }
+  // Install weather shaders eagerly during initial scene setup (uniforms stay 0
+  // on clear summer days) so switching weather/seasons later causes zero shader stutter.
+  scan();
+  vehicles?.enableSnow(controls.wxSnow);
   city.ready?.then(scan);
+  city.root.addEventListener('foliageadded',scan);
   return {
-    set(weather,season){
+    set(weather,season,period){
+      city.root.userData.treeWeather=weather;
+      city.root.userData.setTreeWeather?.(weather);
+      controls.wxDarkness.value=period==='night'?1:period==='dusk'?.6:0;
+      const lake=city.water?.material.uniforms;
+      if(lake){lake.snowCover=controls.wxSnow;lake.rainAmount=controls.wxRain;}
       if(!installed&&(weather!=='clear'||season!=='summer')){installed=true;scan();}
       controls.wxSeason.value.set(+(season==='spring'),+(season==='autumn'),+(season==='winter'));
       controls.wxRain.value=+(weather==='rain');
       snowFalling=weather==='snow';
-      if(snowFalling)controls.wxSnow.value=Math.max(.67,controls.wxSnow.value);
+      if(snowFalling)controls.wxSnow.value=Math.max(.87,controls.wxSnow.value);
       else if(weather!=='aurora'||season!=='winter')controls.wxSnow.value=0;
     },
     update(time,dt){
@@ -170,6 +189,6 @@ export function weatherSurfaces(city) {
       if(snowFalling)controls.wxSnow.value=Math.min(1,controls.wxSnow.value+dt*.011);
       else if(controls.wxSnow.value>0)controls.wxSnow.value=Math.max(0,controls.wxSnow.value-dt*.0013);
     },
-    dispose(){disposed=true;for(const restore of patched.values())restore();patched.clear();}
+    dispose(){disposed=true;city.root.removeEventListener('foliageadded',scan);for(const restore of patched.values())restore();patched.clear();}
   };
 }

@@ -18,9 +18,9 @@ function rushes(rng){
   return blades.geometry();
 }
 
-// Only the seven mapped wetland islands use this soft, planted edge. Their
-// individual rocks and reed beds are seeded scenic detail.
-export function islandShores(root,lake,soil){
+// The planted islands use soft banks and reeds. The three open gravel bars
+// by the flowerbed have their own shingle surface and riprap.
+export function islandShores(root,lake,soil,gravelBars){
   if(!lake?.holes?.length)return;
   const rng=random(6079),bank=new Surface(),shoulders=new Surface();
   const rockMat=new T.MeshStandardMaterial({roughness:.84,metalness:.02});
@@ -29,6 +29,7 @@ export function islandShores(root,lake,soil){
   const reeds=new Instances(rushes(rng),leafMat,'湿地岛 · 水边草丛');
   const dark=new T.Color(0x514d3e),light=new T.Color(0x908b73);
   for(const ring of lake.holes){
+    if(gravelBars?.has(ring))continue;
     const sign=Math.sign(area(ring))||1,outer=[],inner=[];
     for(let i=0;i<ring.length;i++){
       const [x,z]=ring[i],a=ring[(i+ring.length-1)%ring.length],b=ring[(i+1)%ring.length];
@@ -36,7 +37,7 @@ export function islandShores(root,lake,soil){
       const nx=-sign*(b[1]-a[1])/l,nz=sign*(b[0]-a[0])/l;
       inner.push([x+nx*1.12,z+nz*1.12]);outer.push([x-nx*.43,z-nz*.43]);
     }
-    bank.polygon(inner,[],.47,4);
+    bank.polygon(inner,[],.47,4,new T.Color(0xc8d8a8));
     for(let i=0;i<ring.length;i++){
       const j=(i+1)%ring.length,pt=(p,y)=>[p[0],y,p[1]];
       shoulders.quad(pt(outer[i],.09),pt(outer[j],.09),pt(inner[j],.47),pt(inner[i],.47));

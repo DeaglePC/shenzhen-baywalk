@@ -1,4 +1,4 @@
-"""Blender authoring for the Chinese Model 3 RWD, 18-inch Photon, dark interior.
+"""Archived Blender authoring for the Chinese Model 3 RWD, 18-inch Photon, dark interior.
 
 Run Blender 5.2 in background with -P scripts/model3_build.py -- <temporary-dir>.
 All surfaces below are original. MT382, PN01, W38A and IPB11 were independently
@@ -19,7 +19,7 @@ sys.path.insert(0,str(ROOT/"scripts"))
 from vehicle_build import Surface,material,samples,lerp,rod,ellipsoid
 
 TEMP=Path(sys.argv[sys.argv.index("--")+1]);TEMP.mkdir(exist_ok=True,parents=True)
-OUT=ROOT/"public/models"
+OUT=TEMP/"legacy-exports";OUT.mkdir(exist_ok=True)
 REF="https://www.tesla.cn/ownersmanual/model3/zh_cn/"
 MANUAL=REF+"GUID-56562137-FC31-4110-A13C-9A9FC6657BF0.html"
 EXTERIOR=REF+"GUID-6C6C3944-9674-4E81-A0E8-94D60B6D87B9.html"

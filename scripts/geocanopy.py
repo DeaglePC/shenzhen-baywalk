@@ -6,6 +6,7 @@ than surveyed stem positions. Output retains a detailed park and a lighter
 representation toward the edge of the walkable region.
 """
 import json
+import sys
 from pathlib import Path
 from tempfile import gettempdir
 
@@ -17,6 +18,7 @@ from rasterio.transform import from_bounds
 from rasterio.warp import reproject, transform_bounds
 from rasterio.windows import Window, from_bounds as window_from_bounds
 from scipy.ndimage import gaussian_filter, maximum_filter
+from scipy.spatial import cKDTree
 from shapely.geometry import Polygon, LineString
 
 from geodata import DEST, EXTENT, unproject
@@ -61,6 +63,40 @@ def exclusion_mask(map_):
                      fill=0,dtype="uint8",all_touched=True).astype(bool)
 
 
+def park_infill():
+    """Sample additional peaks and contiguous wooded areas inside the park."""
+    data=json.loads((DEST/"shenzhen.json").read_text(encoding="utf-8"))
+    park=next(f for f in data["land"] if f["kind"]=="park" and "人才公园" in f.get("name",""))
+    raster=rasterize([(Polygon(park["p"],park.get("holes")),1)],out_shape=(SIZE,SIZE),
+                     transform=rasterio.Affine(PIXEL,0,-EXTENT,0,PIXEL,-EXTENT),dtype="uint8")
+    heights=height_grid()
+    trend=gaussian_filter(heights.astype("float32"),.8)
+    score=trend+np.random.default_rng(391).random(heights.shape,dtype="float32")*.03
+    available=(raster!=0)&~exclusion_mask(data)&(heights<32)
+    peaks=(score==maximum_filter(score,5))&(trend>=3.6)&available
+    original=json.loads((DEST/"houhai-canopy.json").read_text())["trees"]
+    local=json.loads((DEST.parents[1]/"src"/"foliage-samples.json").read_text())
+    previous=cKDTree(np.asarray(original+local)[:,:2])
+    added=[]
+    # An unbroken canopy can contain several trees but have only one local maximum.
+    # Fill uncovered portions only where a neighbourhood is consistently wooded.
+    wooded=(gaussian_filter((heights>=4).astype("float32"),2.5)>.75)&(trend>=4.5)&available
+    for candidates in (peaks,wooded):
+        rows,cols=np.where(candidates)
+        for i in np.argsort(-score[rows,cols],kind="stable"):
+            y,x=rows[i],cols[i]
+            point=(int(x*PIXEL-EXTENT+PIXEL/2),int(y*PIXEL-EXTENT+PIXEL/2))
+            height=int(heights[y,x]);spacing=max(4.5,min(9,height*.65))
+            if candidates is wooded:spacing=max(6.5,height*.83)
+            if previous.query(point)[0]<spacing:continue
+            if any((px-point[0])**2+(pz-point[1])**2<max(spacing,h*.65)**2 for px,pz,h in added):continue
+            added.append([*point,height])
+        if candidates is peaks:peak_count=len(added)
+    path=DEST.parents[1]/"src"/"park-infill.json"
+    path.write_text(json.dumps(added,separators=(",",":")),encoding="utf-8")
+    print("Park infill:",peak_count,"peaks and",len(added)-peak_count,"sites in continuous canopy",flush=True)
+
+
 def main():
     heights=height_grid()
     map_=json.loads((DEST/"shenzhen.json").read_text(encoding="utf-8"))
@@ -88,4 +124,6 @@ def main():
           "height min/median/max:",np.percentile(output[:,2],[0,50,100]),flush=True)
 
 
-if __name__=="__main__": main()
+if __name__=="__main__":
+    if "--park-infill" in sys.argv:park_infill()
+    else:main()

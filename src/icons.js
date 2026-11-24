@@ -12,7 +12,10 @@ const shapes = {
   expand:'<path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/>',close:'<path d="m6 6 12 12M18 6 6 18"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
   bird:'<path d="m2 12 20-8-7 16-3-7z"/>', walk:'<circle cx="14" cy="4" r="2"/><path d="m7 12 3-4 4 1 2 4 4 1m-7-5-2 6 4 3 1 4m-5-7-4 7"/>',
-  home:'<path d="m2 11 10-8 10 8M5 10v11h14V10M10 21v-7h4v7"/>', plus:'<path d="M4 12h16M12 4v16"/>',minus:'<path d="M4 12h16"/>'
+  home:'<path d="m2 11 10-8 10 8M5 10v11h14V10M10 21v-7h4v7"/>', plus:'<path d="M4 12h16M12 4v16"/>',minus:'<path d="M4 12h16"/>',
+  headlight:'<path d="M13 6H9a5 5 0 0 0 0 12h4c1.6 0 2.5-1.2 2.5-6S14.6 6 13 6Z"/><path d="M18 8h3m-3 4h4m-4 4h3"/>',
+  tour:'<circle cx="12" cy="12" r="9" stroke-dasharray="4 3"/><path d="m10 8 6 4-6 4z"/>',
+  eye:'<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.8"/>'
 };
 export const icon = (name) => '<svg aria-hidden="true" viewBox="0 0 24 24">'+(shapes[name] || '')+'</svg>';
 export function applyIcons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));}

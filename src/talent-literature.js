@@ -68,7 +68,8 @@ export const literature = {
 };
 
 export function literatureLocation(record) {
+  if (record.field) return record.field.location+' · 2026 年 11 月 22 日实拍';
   if (record.survey) return record.survey.code + ' · 2021 年名录编号';
   const area = record.literature.membership === craftWeek ? '星光大道' : '星光桥';
-  return area + ' · 实地柱号待核，此处为展示位';
+  return area + ' · 历史名录，本次实拍未定位';
 }

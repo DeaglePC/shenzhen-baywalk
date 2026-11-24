@@ -3,3 +3,8 @@ dist/
 .qa/
 *.log
 __pycache__/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db

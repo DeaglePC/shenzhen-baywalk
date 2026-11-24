@@ -13,7 +13,7 @@
 <body data-mode="home">
   <div id="world"></div>
   <main id="home">
-    <div class="cover" role="img" aria-label="深圳湾黄昏与蓝白出租车的场景概念主视觉"></div>
+    <div class="cover" role="img" aria-label="深圳人才公园星光桥与后海天际线夜景灯光秀实机画面"></div>
     <div class="cover-shade"></div>
     <section class="intro" aria-labelledby="headline">
       <div class="eyebrow"><span class="orange-line"></span>开放世界 <i>/</i> 城市探索</div>
@@ -24,7 +24,7 @@
         <button class="primary large" id="start"><span data-icon="play"></span>开始漫游</button>
         <button class="glass large" data-action="map"><span data-icon="map"></span>区域地图</button>
       </div>
-      <div class="scene-entries"><a class="flight-entry" href="?walk=stadium&amp;camera=drone">航拍春茧</a><a class="compare-entry" href="/comparison/index.html">查看实机画面对比</a></div>
+      <div class="scene-entries"><a class="flight-entry tour-entry" href="?tour=bay-grand">自动航拍巡航</a><a class="flight-entry" href="?walk=stadium&amp;camera=drone">航拍春茧</a><a class="compare-entry" href="/comparison/index.html">查看实机画面对比</a></div>
     </section>
     <footer class="landing-footer">
       <div class="facts">
@@ -40,6 +40,7 @@
     <nav aria-label="工具栏">
       <button class="garage-link" data-action="garage"><span data-icon="car"></span><span>车辆图鉴</span></button>
       <span class="nav-divider"></span>
+      <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch to English" title="Switch to English">EN</button>
       <button class="icon-button" id="sound" aria-label="开启环境音" title="开启环境音" aria-pressed="false"><span data-icon="mute"></span></button>
       <button class="icon-button" data-action="help" aria-label="操作指南" title="操作指南"><span data-icon="help"></span></button>
       <button class="icon-button" id="fullscreen" aria-label="全屏" title="全屏"><span data-icon="expand"></span></button>
@@ -49,12 +50,24 @@
     <div class="compass" aria-label="朝向"><b id="heading">NW</b><span></span><small id="bearing">315°</small></div>
     <button class="mini-panel" data-action="map" aria-label="打开区域地图"><canvas id="mini"></canvas><span class="map-north">N</span><span class="minilabel"><span data-icon="pin"></span><b id="locality">人才公园</b><kbd>M</kbd></span></button>
     <div class="world-tools">
-      <button class="glass" id="period" aria-label="切换日照"><span data-icon="sun"></span><span id="periodName">日落</span></button>
+      <button class="glass" id="headlights" aria-pressed="false" aria-label="切换汽车车灯" title="汽车车灯 (L)"><span data-icon="headlight"></span><span id="headlightsName">车灯</span></button>
+      <button class="glass" id="period" aria-controls="periodPanel" aria-expanded="false" aria-label="日照与时段"><span data-icon="sun"></span><span id="periodName">日落</span></button>
       <button class="glass" id="climateButton" aria-controls="climatePanel" aria-expanded="false" aria-label="天气与四季"><span data-icon="cloud"></span><span id="climateName">夏 · 晴</span></button>
       <button class="glass" id="drone" aria-pressed="false" title="自由无人机 (F)"><span data-icon="drone"></span><span id="droneName">无人机</span></button>
+      <button class="glass" id="autoTour" aria-pressed="false" title="自动无人机巡航 (G)"><span data-icon="tour"></span><span id="autoTourName">自动巡航</span></button>
       <button class="glass" id="aerial"><span data-icon="bird"></span><span id="cameraName">鸟瞰</span></button>
       <button class="glass" id="pause"><span data-icon="pause"></span><span>菜单</span></button>
     </div>
+    <div id="skyLoader" hidden role="status" aria-live="polite"><span class="sky-spinner" aria-hidden="true"></span><span id="skyLoaderText">正在切换场景光线…</span><span class="sky-bar"><i id="skyLoaderBar"></i></span></div>
+    <section id="periodPanel" hidden aria-label="日照与时段">
+      <div class="climate-head"><strong>日照与时段</strong><button id="closePeriod" class="icon-button" aria-label="关闭日照设置"><span data-icon="close"></span></button></div>
+      <fieldset><legend>时段</legend><div class="climate-options">
+        <button data-period="day">午后</button><button data-period="sunset">日落</button><button data-period="dusk">蓝调</button><button data-period="night">夜晚</button>
+      </div></fieldset>
+      <fieldset><legend>夜空</legend><div class="climate-options period-toggles">
+        <button id="moonToggle" type="button" aria-pressed="true">月亮：显示</button>
+      </div></fieldset>
+    </section>
     <section id="climatePanel" hidden aria-label="天气与四季">
       <div class="climate-head"><strong>天气与四季</strong><button id="closeClimate" class="icon-button" aria-label="关闭天气设置"><span data-icon="close"></span></button></div>
       <fieldset><legend>天气</legend><div class="climate-options">
@@ -65,16 +78,41 @@
       </div></fieldset>
     </section>
     <div id="flightInfo" hidden><span data-icon="drone"></span><b>自由飞行</b><output id="altitude">0 m</output></div>
+    <div id="tourBanner" hidden><span class="tour-dot" aria-hidden="true"></span><b id="tourBadge">自动巡航</b><span class="tour-sep"></span><span id="tourChapter">人才星光桥 · 碧湖启航</span><output id="tourAltitude">0 m</output></div>
+    <section id="tourDock" hidden aria-label="自动无人机巡航控制">
+      <div class="tour-routes" id="tourRoutes"></div>
+      <div class="tour-actions">
+        <button class="glass tour-btn" id="tourPlayPause" type="button"><span data-icon="pause"></span><span id="tourPlayText">暂停</span></button>
+        <button class="glass tour-btn" id="tourSpeed" type="button">1.0×</button>
+        <button class="glass tour-btn" id="tourTakeover" type="button"><span data-icon="drone"></span><span id="tourTakeoverText">接管飞行</span></button>
+        <button class="glass tour-btn" id="tourClean" type="button"><span data-icon="eye"></span><span id="tourCleanText">纯净画面</span></button>
+        <button class="glass tour-btn tour-stop" id="tourExit" type="button"><span data-icon="close"></span><span id="tourExitText">退出巡航</span></button>
+      </div>
+      <div class="tour-progress" id="tourProgress" role="slider" aria-label="巡航进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><span id="tourProgressFill"></span></div>
+    </section>
     <div id="flightLift" hidden><button class="glass" data-lift="1" aria-label="无人机上升">升</button><button class="glass" data-lift="-1" aria-label="无人机下降">降</button></div>
-    <div class="aim"></div><div id="walkHint">W A S D 移动　·　拖动环顾　·　Shift 快步</div>
+    <div class="aim"></div>
+    <div id="mouseCapture" hidden>
+      <button class="glass" id="lockMouse" type="button">单击锁定鼠标</button>
+      <span id="lockMessage" role="status" hidden></span>
+      <a class="glass" id="openEdge" hidden>在 Edge 中打开此场景</a>
+      <input id="sceneAddress" type="text" aria-label="可复制的场景地址" readonly hidden>
+    </div>
+    <div id="walkHint"></div>
     <details id="talentReader" hidden><summary>人物文献导览</summary><div></div></details>
     <div class="touchpad" aria-label="移动摇杆"><span></span></div>
   </div>
   <section id="loading" hidden aria-live="polite"><div class="loading-box"><div class="eyebrow"><span class="orange-line"></span> BAYWALK</div><h2>正在进入深圳湾</h2><div class="load-track"><span id="loadFill"></span></div><p id="loadText">读取地理数据…</p><button id="loadBack" class="glass" hidden>返回首页</button></div></section>
   <dialog id="panel" aria-labelledby="panelTitle">
     <div class="panel-head"><div><div class="eyebrow" id="panelKicker">FIELD MAP</div><h2 id="panelTitle">区域地图</h2></div><button id="closePanel" class="icon-button" aria-label="关闭"><span data-icon="close"></span></button></div>
+    <div id="lookSettings">
+      <label for="lookSpeed">鼠标灵敏度</label><output for="lookSpeed" id="lookValue"></output>
+      <input type="range" id="lookSpeed" min="25" max="300" step="5" value="100">
+      <button type="button" id="resetLook">恢复默认</button>
+    </div>
     <div id="panelBody"></div>
   </dialog>
+  <button id="restoreHud" class="glass" hidden type="button"><span data-icon="eye"></span><span id="restoreHudText">显示界面 (H)</span></button>
   <div id="toast" role="status" hidden></div>
   <script type="module" src="/src/app.js"></script>
 </body>

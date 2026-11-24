@@ -1,13 +1,14 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {VEHICLE_CATALOG} from './vehicles.js';
 import {loadDetailedVehicle,vehicleStudio} from './vehicle-hero.js';
 import {referencePose,referenceFov} from './taxi-framing.js';
 import {model3Framing} from './model3-framing.js';
+import {t,vehicleName,vehicleType} from './i18n.js';
 
-const types=['出租车','轿车','SUV','MPV','轿车','微型车'];
 const teslaViews={front:'STUD_FRONT34',side:'STUD_SIDE',rear:'STUD_REAR34'};
 function factoryImage(view){
   // The configurator serves this image with literal option separators in its query.
@@ -37,7 +38,7 @@ function model3ShadowMap(){
   return map;
 }
 export function showGarage(body,initialId='e6',initialView){
-  body.innerHTML='<div class="garage-grid"><div class="garage-stage"><span class="model-status">载入模型…</span><div class="model-caption"></div></div><div class="garage-side"><p class="side-title">城市车辆 · 6 款</p></div></div>';
+  body.innerHTML='<div class="garage-grid"><div class="garage-stage"><span class="model-status">'+t('garageLoading')+'</span><div class="model-caption"></div></div><div class="garage-side"><p class="side-title">'+t('garageTitle')+'</p></div></div>';
   const stage=body.querySelector('.garage-stage'),side=body.querySelector('.garage-side'),label=stage.querySelector('.model-caption'),status=stage.querySelector('.model-status');
   const renderer=new T.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});stage.prepend(renderer.domElement);
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.94;
@@ -51,9 +52,35 @@ export function showGarage(body,initialId='e6',initialView){
   const roundShadow=new T.CanvasTexture(matte),studioShadow=model3ShadowMap();
   const shadow=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshBasicMaterial({map:roundShadow,transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=-.005;scene.add(shadow);
   const angles=document.createElement('div');angles.className='taxi-angles';stage.append(angles);
+  const lampBtn=document.createElement('button');lampBtn.type='button';lampBtn.className='garage-lamps';
+  lampBtn.setAttribute('aria-pressed','false');lampBtn.textContent=t('headlightsOff');stage.append(lampBtn);
+  let lampsOn=false;
+  function applyGarageLights(model){
+    if(!model)return;
+    if(detailAssets.has(model)){detailAssets.get(model).setLights(lampsOn?1.15:0,lampsOn?.85:0);return;}
+    model.traverse(o=>{
+      if(!o.isMesh||!o.material)return;
+      const m=o.material,n=m.name||'';
+      if(/headlight/i.test(n)){
+        if(!m.userData._origEm)m.userData._origEm={c:m.emissive.clone(),i:m.emissiveIntensity};
+        m.emissive.setHex(lampsOn?0xfff6e0:m.userData._origEm.c.getHex());
+        m.emissiveIntensity=lampsOn?4.2:m.userData._origEm.i;
+      }else if(/rear light|tail/i.test(n)){
+        if(!m.userData._origEm)m.userData._origEm={c:m.emissive.clone(),i:m.emissiveIntensity};
+        m.emissive.setHex(lampsOn?0xff1c14:m.userData._origEm.c.getHex());
+        m.emissiveIntensity=lampsOn?3.2:m.userData._origEm.i;
+      }
+    });
+  }
+  lampBtn.addEventListener('click',()=>{
+    lampsOn=!lampsOn;
+    lampBtn.setAttribute('aria-pressed',String(lampsOn));
+    lampBtn.textContent=lampsOn?t('headlightsOn'):t('headlightsOff');
+    applyGarageLights(current);
+  });
   const source=document.createElement('a');source.className='garage-source';source.target='_blank';source.rel='noopener';source.hidden=true;
   let firstShot=initialView==='REAR_DETAIL'?'tail':Object.keys(teslaViews).find(k=>teslaViews[k]===initialView)||'front';
-  const cache=new Map(),detailAssets=new Map(),loader=new GLTFLoader();let token=0,active=true,current=null,raf,vehicleId='',selectedAngle='';
+  const cache=new Map(),detailAssets=new Map(),loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);let token=0,active=true,current=null,raf,vehicleId='',selectedAngle='';
   const environments=new Map();
   function studio(id){
     if(!environments.has(id))environments.set(id,vehicleStudio(renderer,()=>active,id).catch(()=>null));
@@ -75,7 +102,7 @@ export function showGarage(body,initialId='e6',initialView){
     if(shot){
       const factoryView=id==='tail'?'rear':id;
       source.href=factoryImage(teslaViews[factoryView]);
-      source.textContent='查看官网'+({front:'前 3/4',side:'正侧面',rear:'后 3/4'})[factoryView]+'原图 ↗';
+      source.textContent=t('garageSourcePrefix')+({front:t('garageAngleFront'),side:t('garageAngleSide'),rear:t('garageAngleRear34')})[factoryView]+t('garageSourceSuffix');
       camera.position.fromArray(shot.eye);controls.target.fromArray(shot.target);
     }else if(id==='photo'){
       camera.position.fromArray(referencePose.eye);camera.up.fromArray(referencePose.up);
@@ -92,26 +119,29 @@ export function showGarage(body,initialId='e6',initialView){
     controls.update();resize();
     for(const b of angles.children)b.setAttribute('aria-pressed',b.dataset.angle===id);
   }
-  for(const [id,text] of [['photo','照片角度'],['front','前 3/4'],['side','正侧面'],['rear','后 3/4'],['tail','车尾特写'],['wheel','轮毂']]){
+  for(const [id,text] of [['photo',t('garageAnglePhoto')],['front',t('garageAngleFront')],['side',t('garageAngleSide')],['rear',t('garageAngleRear34')],['tail',t('garageAngleTail')],['wheel',t('garageAngleWheel')]]){
     const b=document.createElement('button');b.type='button';b.dataset.angle=id;b.textContent=text;
     b.addEventListener('click',()=>angle(id));angles.append(b);
   }
   const observer=new ResizeObserver(resize);observer.observe(stage);resize();
   function destroy(model){const materials=new Set(),textures=new Set();model.traverse(o=>{o.geometry?.dispose();for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])materials.add(m);});for(const m of materials){for(const val of Object.values(m))if(val?.isTexture)textures.add(val);m.dispose();}for(const t of textures)t.dispose();}
   async function select(v,i){
-    const seq=++token;status.textContent='载入模型…';label.textContent=v.name;
+    const seq=++token;status.textContent=t('garageLoading');label.textContent=vehicleName(v);
     side.querySelectorAll('button').forEach((b,j)=>b.classList.toggle('selected',i===j));
     if(!cache.has(v.id)){
       const result=['e6','model3'].includes(v.id)?Promise.all([loadDetailedVehicle(v.id),studio(v.id)]).then(([asset,light])=>{
         detailAssets.set(asset.model,asset);
-        if(v.id==='model3')asset.model.traverse(o=>{if(o.userData.street_plate||o.name.startsWith('StreetPlate'))o.visible=false;});
         asset.setEnvironment(light?.texture??env.texture,v.id==='model3'?.27:0);return asset.model;
       }):
-        loader.loadAsync('/models/'+v.id+'.glb').then(g=>g.scene);
+        loader.loadAsync('/models/'+v.id+'.glb').then(g=>{
+          g.scene.traverse(o=>{if(o.userData.distant_vehicle)o.visible=false;});
+          return g.scene;
+        });
       cache.set(v.id,result);
     }
     try{
       const model=await cache.get(v.id);if(!active||seq!==token)return;if(current)scene.remove(current);scene.add(model);current=model;
+      applyGarageLights(current);
       const [l,w,h]=v.size;shadow.scale.set(w*1.65,l*1.4,1);angles.hidden=!['e6','model3'].includes(v.id);
       angles.querySelector('[data-angle=photo]').hidden=v.id!=='e6';
       angles.querySelector('[data-angle=front]').hidden=v.id==='e6';
@@ -128,15 +158,15 @@ export function showGarage(body,initialId='e6',initialView){
       key.intensity=configurator?2:2.15;key.color.setHex(configurator?0xffffff:0xffe7ca);
       soft.intensity=configurator?2.15:.65;
       controls.maxPolarAngle=Math.PI*(configurator?.56:.495);
-      angles.querySelector('[data-angle=rear]').textContent=configurator?'后 3/4':'车尾';
+      angles.querySelector('[data-angle=rear]').textContent=configurator?t('garageAngleRear34'):t('garageAngleRear');
       if(!angles.hidden)angle(vehicleId==='e6'?'photo':firstShot);
       else{source.hidden=true;selectedAngle='';camera.up.set(0,1,0);controls.minDistance=2.8;controls.autoRotate=true;controls.target.set(0,h*.45,0);camera.position.set(l*.90,h*1.26,l*.85);controls.update();resize();}
       firstShot='front';
-      status.textContent='拖动旋转 · 滚轮缩放';label.textContent=v.name+'　'+Math.round(l*1000)+' × '+Math.round(w*1000)+' × '+Math.round(h*1000)+' mm';
-      if(v.id==='model3')label.textContent+='　轴距 2875 mm · 星空灰 · 18 英寸光子轮毂';
-    }catch(e){status.textContent='模型载入失败，点击车型重试';cache.delete(v.id);}
+      status.textContent=t('garageDragHint');label.textContent=vehicleName(v)+'　'+Math.round(l*1000)+' × '+Math.round(w*1000)+' × '+Math.round(h*1000)+' mm';
+      if(v.id==='model3')label.textContent+=t('garageModel3Extra');
+    }catch(e){status.textContent=t('garageLoadFail');cache.delete(v.id);}
   }
-  VEHICLE_CATALOG.forEach((v,i)=>{const b=document.createElement('button');b.className='model-choice';b.append(v.name);const tag=document.createElement('small');tag.textContent=types[i];b.append(tag);b.onclick=()=>select(v,i);side.append(b);});
+  VEHICLE_CATALOG.forEach((v,i)=>{const b=document.createElement('button');b.className='model-choice';b.append(vehicleName(v));const tag=document.createElement('small');tag.textContent=vehicleType(v,i);b.append(tag);b.onclick=()=>select(v,i);side.append(b);});
   side.append(source);
   const initialIndex=Math.max(0,VEHICLE_CATALOG.findIndex(v=>v.id===initialId));
   select(VEHICLE_CATALOG[initialIndex],initialIndex);

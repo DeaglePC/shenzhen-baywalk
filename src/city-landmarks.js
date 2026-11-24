@@ -1,16 +1,16 @@
 import * as T from 'three';
-import {Surface, Instances, along, area, bounds, inRing, sideWall} from './city-geometry.js';
+import {Surface, area, bounds, inRing, sideWall} from './city-geometry.js';
 import {curtainWall, architecturalMetal, bayStone} from './city-curtainwall.js';
 import {label,photo} from './city-materials.js';
 import {bamboo} from './city-bamboo.js';
 import {buildStadium} from './city-stadium.js';
-import {starBridge} from './city-starbridge.js';
+import {tencentIDs,tencentTowers} from './tencent-towers.js';
 import {cultureIDs} from './city-culture-square.js';
 
 const t7Parts=[1274780082,1274780083,1274780084];
 const bayTowers=[571169610,571169616,571169612,571169614,571169595,571169597,571169593];
 const bayPodiums=[8129656,571169602,571169604,571169606,571169608];
-export const specialBuildings = new Set([529272473,665408865,665408866,665408867,9244350,9244351,...cultureIDs,736632011,...t7Parts,...bayTowers,...bayPodiums]);
+export const specialBuildings = new Set([529272473,665408865,665408866,665408867,9244350,9244351,...cultureIDs,...tencentIDs,736632011,...t7Parts,...bayTowers,...bayPodiums]);
 
 const clearTint=new T.Color(0xf4f4f1), coolTint=new T.Color(0xc9d5dc);
 function wallFace(surface,a,b,c,d,color,offset=0) {
@@ -252,6 +252,7 @@ function oneShenzhenBay(root,map,m) {
   bayGardens(podiums,[...parts,...bayTowers.map(id=>byId.get(id)).filter(Boolean)],s);
   const g=new T.Group();g.name='深圳湾一号 · 八座塔楼与临水商业';root.add(g);
   const office=curtainWall('bayOffice'),homes=curtainWall('bayHome');m.walls.push(office,homes);
+  office.userData.showFacade=[0,1.6,341.4];homes.userData.showFacade=[2,1.22,160];
   if(s.east.indices.length){
     const east=curtainWall('bayOffice'),image=photo('t7-east-elevation.webp');
     image.wrapS=image.wrapT=T.ClampToEdgeWrapping;
@@ -264,7 +265,7 @@ function oneShenzhenBay(root,map,m) {
         diffuseColor.rgb*=mix(vec3(1.),clamp(measured,vec3(.19),vec3(2.35)),.85);
         #include <alphatest_fragment>`);
     };
-    east.customProgramCacheKey=()=>'t7-east-photo-v1';m.walls.push(east);
+    east.customProgramCacheKey=()=>'t7-east-photo-v1';east.userData.showFacade=[1,1.6,341.4];m.walls.push(east);
     const shell=s.east.mesh(g,east,'T7临湖面 · 实拍窗格、百叶与鹏瑞标识',true);
     shell.geometry.setAttribute('elevationCoord',new T.Float32BufferAttribute(s.elevationUV,2));
   }
@@ -280,30 +281,8 @@ function oneShenzhenBay(root,map,m) {
   s.leaves.mesh(g,new T.MeshStandardMaterial({color:0x495f3c,roughness:.98,side:T.DoubleSide}),'露台修剪绿篱');
 }
 
-function mesh(parent,geo,mat,x,y,z,name){const m=new T.Mesh(geo,mat);m.position.set(x,y,z);m.name=name;m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
-function parkStructures(root,roads,m){
-  const rail=new Instances(new T.CylinderGeometry(1,1,1,6),m.rail,'湖桥不锈钢扶手');
-  roads.forEach(rd=>{
-    if(Number(rd.id)===562534109){starBridge(root,rd,m);return;}
-    if(Number(rd.id)!==570468707)return;
-    const p=rd.p,w=2.35,deck=2.4;
-    for(const side of [-1,1]){
-      for(let k=1;k<p.length;k++){
-        const A=p[k-1],B=p[k],dx=B[0]-A[0],dz=B[1]-A[1],L=Math.hypot(dx,dz)||1,ox=-dz/L*w*.5*side,oz=dx/L*w*.5*side;
-        for(const dy of [.53,1.12])rail.between(A[0]+ox,deck+dy,A[1]+oz,B[0]+ox,deck+dy,B[1]+oz,.047);
-      }
-      along(p,2.65,.4,(x,z,dx,dz)=>{const ox=-dz*w*.5*side,oz=dx*w*.5*side;rail.between(x+ox,deck,z+oz,x+ox,deck+1.14,z+oz,.045);});
-    }
-  });
-  rail.flush(root);
-  const board=new T.MeshStandardMaterial({map:label('深圳人才公园','SHENZHEN TALENT PARK',1024,'#355147'),roughness:.77});
-  const boardBack=new T.MeshStandardMaterial({color:0x61665b});
-  // Monument at the west gates, facing visitors approaching from the road.
-  const panel=mesh(root,new T.BoxGeometry(.32,1.7,7.6),[boardBack,board,boardBack,boardBack,boardBack,boardBack],-454,1.25,223,'西入口园名标识');
-  panel.rotation.y=-.13;
-}
 export function landmarks(group,map,m){
-  bamboo(group,m);oneShenzhenBay(group,map,m);parkStructures(group,map.roads,m);
+  tencentTowers(group,map,m);bamboo(group,m);oneShenzhenBay(group,map,m);
   return buildStadium(group,m,map);
 }
 

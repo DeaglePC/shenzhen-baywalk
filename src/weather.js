@@ -6,7 +6,7 @@ const light={
   clear:{sun:1,environment:1,background:1,hemi:1,fog:null,density:null,night:0},
   rain:{sun:.20,environment:.57,background:.60,hemi:1.14,fog:0x809098,density:.00059,night:.18},
   snow:{sun:.36,environment:.82,background:.75,hemi:1.22,fog:0xb9c6c9,density:.00049,night:.09},
-  aurora:{sun:.22,environment:.28,background:.15,hemi:.69,fog:0x253746,density:.00020,night:1}
+  aurora:{sun:.82,environment:.83,background:.9,hemi:.92,fog:0x253746,density:.00020,night:1}
 };
 export function weatherLighting(weather){return light[weather]||light.clear;}
 
@@ -134,8 +134,8 @@ function particles(snow,low,cover){
   return o;
 }
 
-export function createWeather(scene,city,{low=false}={}){
-  const surfaces=weatherSurfaces(city),sky=weatherSky(scene,low);
+export function createWeather(scene,city,{low=false,vehicles}={}){
+  const surfaces=weatherSurfaces(city,vehicles),sky=weatherSky(scene,low);
   const cover={wxCover:{value:null},wxCoverExtent:{value:3200}};
   const rain=particles(false,low,cover),snow=particles(true,low,cover);scene.add(rain,snow);
   let current='clear',emptyCover;
@@ -155,12 +155,13 @@ export function createWeather(scene,city,{low=false}={}){
           emptyCover.needsUpdate=true;cover.wxCover.value=emptyCover;
         }
       }
-      rain.material.uniforms.wxDark.value=snow.material.uniforms.wxDark.value=period==='dusk'?1:0;
-      surfaces.set(current,season);
+      rain.material.uniforms.wxDark.value=snow.material.uniforms.wxDark.value=period==='night'?1:period==='dusk'?.55:0;
+      surfaces.set(current,season,period);
     },
+    setMoonVisible(visible){return sky.setMoonVisible(visible);},
+    get moonVisible(){return sky.moonVisible;},
     update(time,dt,camera){
       surfaces.update(time,dt);
-      if(current==='clear')return;
       sky.update(time,camera);
       if(rain.visible)rain.material.uniforms.wxClock.value=time;
       if(snow.visible)snow.material.uniforms.wxClock.value=time;

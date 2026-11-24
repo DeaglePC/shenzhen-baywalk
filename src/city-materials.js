@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {random} from './city-geometry.js';
 import {curtainWall} from './city-curtainwall.js';
+import {applyDetailMaps} from './procedural-textures.js';
 export const asset=n=>import.meta.env.BASE_URL+'city/'+n;
 const loader=new T.TextureLoader();
 function canvasTexture(w,h,paint,repeat=true){
@@ -32,7 +33,7 @@ export function materials(){
       shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
         vec2 room=floor((vMapUv+vec2(.045,.065))*6.);
         float lit=fract(sin(dot(mod(room,vec2(149.,73.)),vec2(12.9898,78.233)))*43758.5453);
-        totalEmissiveRadiance*=pane*smoothstep(.70,.73,lit)*(.19+.30*lit);`);
+        totalEmissiveRadiance*=pane*smoothstep(.82,.85,lit)*(.09+.17*lit);`);
     };return mat;
   }
   const masonry=masonryFacade('Facade020A'),residential=masonryFacade('Facade019A');
@@ -40,10 +41,29 @@ export function materials(){
   const walls=[curtainWall('silver',[38,64]),curtainWall('blue',[13,13]),curtainWall('office',[27,24]),
     masonry,residential,curtainWall('fins',[57,62]),bambooGlass,atriumGlass];
   const roof=standard({map:photo('concrete.webp'),color:0xa8aaa7,roughness:.94,vertexColors:true});
-  const frontage=photo('retail-fronts.webp');
+  const frontage=photo('retail-fronts-sz.webp');
   // Outside-facing wall rings run right to left in the shop's local view.
   frontage.repeat.x=-1;
-  const shop=standard({map:frontage,emissiveMap:frontage,emissive:0xffeee0,emissiveIntensity:.22,roughness:.65});
+  const shop=new T.MeshStandardMaterial({
+    map:frontage,emissiveMap:frontage,emissive:0xfff6ea,emissiveIntensity:.38,
+    roughness:.54,metalness:.06,side:T.DoubleSide
+  });
+  shop.userData.cityProbe='street';
+  shop.customProgramCacheKey=()=>'sz-shop-glass-v2';
+  shop.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+      float bayU=fract(abs(vMapUv.x)*8.);
+      float inGlass=step(.06,bayU)*step(bayU,.94)*(1.-smoothstep(.65,.71,vMapUv.y));
+      roughnessFactor=mix(.72,.18,inGlass);
+    `).replace('#include <metalnessmap_fragment>',`#include <metalnessmap_fragment>
+      metalnessFactor=mix(.03,.10,inGlass);
+    `).replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+      float shopLuma=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
+      float fasciaGlow=smoothstep(.69,.74,vMapUv.y)*(.35+1.15*smoothstep(.44,.82,shopLuma));
+      float windowGlow=inGlass*(.58+.72*smoothstep(.16,.68,shopLuma));
+      totalEmissiveRadiance*=max(.28,windowGlow+fasciaGlow);
+    `);
+  };
   return {
     walls,bambooGlass,atriumGlass,roof,shop, grass:standard({map:photo('grass.webp'),roughness:1,vertexColors:true}),
     gutter:standard({map:photo('asphalt.webp'),color:0x646963,roughness:.87}),
@@ -54,10 +74,16 @@ export function materials(){
     }),roughness:.9}),
     asphalt:standard({map:photo('asphalt.webp'),color:0x7f8690,roughness:.9}),paving:standard({map:photo('pavers.webp'),color:0xe2d8c7,roughness:.87}),
     path:standard({map:photo('pavers.webp'),color:0xf7e9d6,roughness:.94}), running:standard({map:photo('asphalt.webp'),color:0xb57766,roughness:1}),
-    curb:standard({color:0xb5aba0,roughness:.87}), rail:standard({color:0xb6b3a9,metalness:.58,roughness:.35}),
-    cream:standard({color:0xe7ddd1,metalness:.3,roughness:.4}),dark:standard({color:0x3d4949,metalness:.44,roughness:.48}),
-    wood:standard({color:0x8c6346,roughness:.79}), paint:standard({color:0xeae6d4,roughness:.83}),yellow:standard({color:0xc8a45c,roughness:.79}),
+    curb:applyDetailMaps(standard({color:0xb5aba0,roughness:.87}),'granite',{normalScale:.42}),
+    rail:applyDetailMaps(standard({color:0xb6b3a9,metalness:.58,roughness:.35}),'brushedMetal',{normalScale:.34}),
+    cream:applyDetailMaps(standard({color:0xe7ddd1,metalness:.26,roughness:.44}),'stucco',{normalScale:.24}),
+    dark:applyDetailMaps(standard({color:0x3d4949,metalness:.44,roughness:.46}),'brushedMetal',{normalScale:.30}),
+    wood:applyDetailMaps(standard({color:0x8c6346,roughness:.79}),'woodGrain',{normalScale:.46}),
+    paint:applyDetailMaps(standard({color:0xeae6d4,roughness:.83}),'stucco',{normalScale:.26}),
+    yellow:applyDetailMaps(standard({color:0xc8a45c,roughness:.79}),'stucco',{normalScale:.24}),
     lamp:standard({color:0xf5e5c7,emissive:0xebc28c,emissiveIntensity:.5}),glass:standard({color:0x668496,metalness:.57,roughness:.22}),
-    trunk:standard({color:0x816e51,roughness:.99}),land:standard({color:0xb4b4a8,roughness:1}), field:standard({color:0x668e64,roughness:1})
+    trunk:applyDetailMaps(standard({color:0x816e51,roughness:.96}),'woodGrain',{normalScale:.55}),
+    land:applyDetailMaps(standard({color:0xb4b4a8,roughness:.96}),'granite',{normalScale:.32}),
+    field:standard({color:0x668e64,roughness:1})
   };
 }

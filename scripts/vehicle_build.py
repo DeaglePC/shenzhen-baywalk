@@ -1,4 +1,4 @@
-"""Rebuild the six metre-scale traffic GLBs with Blender 5.2 in background mode.
+"""Rebuild the procedural metre-scale traffic GLBs with Blender 5.2 in background mode.
 
 Create the decals first with system Python and Pillow:
     python scripts/vehicle_decals.py <temporary-atlas-directory>
@@ -559,5 +559,5 @@ def build(model,spec):
     print("WROTE",model, (OUT/(model+".glb")).stat().st_size)
 
 if __name__ == "__main__":
-    for key,spec in SPECS.items():
-        build(key,spec)
+    # Other production cars now come from licensed meshes.
+    build("e6", SPECS["e6"])

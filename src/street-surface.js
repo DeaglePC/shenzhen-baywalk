@@ -11,6 +11,33 @@ function frontageHardware(root,roads){
   const bars=new Instances(new T.BoxGeometry(),metal,'雨水篦格栅');
   const strip=new Surface(),clay=new T.MeshStandardMaterial({color:0xbba16c,roughness:.89});
   const ridges=new Instances(new T.BoxGeometry(),clay,'脚下导向砖凸纹');
+  const lid=document.createElement('canvas');lid.width=lid.height=256;
+  const g=lid.getContext('2d');g.fillStyle='#676660';g.fillRect(0,0,256,256);
+  for(const [r,w] of [[118,5],[108,3],[46,3]]){g.beginPath();g.arc(128,128,r,0,Math.PI*2);g.strokeStyle='#363b38';g.lineWidth=w;g.stroke();}
+  for(let y=14;y<245;y+=14)for(let x=12;x<245;x+=15){
+    const r=Math.hypot(x-128,y-128);if(r>105||r<49)continue;
+    const slope=(Math.floor(y/14)%2?1:-1)*3;
+    g.beginPath();g.moveTo(x-5,y+slope);g.lineTo(x+4,y-slope);g.lineWidth=3;g.strokeStyle='#999991';g.stroke();
+  }
+  g.fillStyle='#aaaaa1';g.font='bold 26px "Microsoft YaHei",sans-serif';g.textAlign='center';g.fillText('市政',128,138);
+  for(const x of [42,203]){g.fillStyle='#232623';g.fillRect(x,125,12,5);}
+  const tex=new T.CanvasTexture(lid);tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=8;
+  const covers=new Instances(new T.CircleGeometry(1,40).rotateX(-Math.PI/2),new T.MeshStandardMaterial({map:tex,bumpMap:tex,bumpScale:.009,roughness:.69,metalness:.40}),'车道路面 · 铸铁检查井盖');
+  const rim=new Instances(new T.CylinderGeometry(1,1,1,40),metal,'车道路面 · 井圈');
+  for(const rd of roads){
+    if(rd.layer||rd.tunnel||rd.bridge||rd.width<6||!['primary','secondary','tertiary','residential'].includes(rd.kind))continue;
+    const frontage=rd.id===1436530936||rd.id===1190795443;
+    along(rd.p,49,12+Math.abs(rd.id)%29,(x,z,dx,dz,s)=>{
+      if(Math.hypot(x,z)>1100)return;
+      const side=(Math.floor(s/49)%2?1:-1),yaw=Math.atan2(dx,dz),off=side*(rd.width*.5-1.56);
+      const cx=x-dz*off,cz=z+dx*off;rim.at(cx,.285,cz,.39,.019,.39);covers.at(cx,.296,cz,.356,1,.356,yaw);
+      if(frontage)return;
+      const edge=side*(rd.width/2-.20),ex=x-dz*edge,ez=z+dx*edge;
+      drain.at(ex,.298,ez,.30,.017,.64,yaw);
+      for(let i=-5;i<=5;i++)bars.at(ex+dx*i*.052,.311,ez+dz*i*.052,.284,.017,.026,yaw);
+    });
+  }
+  rim.flush(root,false,100);covers.flush(root,false,130);
   const nearby=(x,z)=>Math.hypot(x-taxi.x,z-taxi.y)<166;
   for(const rd of roads.filter(r=>r.id===1436530936||r.id===1190795443)){
     const clearance=rd.width*.5,offset=clearance+2.58;

@@ -1,44 +1,57 @@
 import {talentRecords,talentSources,talentBridgePhotos} from './talent-records.js';
 import {bridgeSurvey} from './talent-survey.js';
-import {personView} from './talent-bridge.js';
+import {columnsOnBridge,personView} from './talent-bridge.js';
 import {readingContent} from './talent-reading.js';
-import {literatureLocation} from './talent-literature.js';
+import {t,isEnglish} from './i18n.js';
 
 function link(label,url,title=label){
   const a=document.createElement('a');a.textContent=label;a.href=url;a.title=title;a.target='_blank';a.rel='noopener';return a;
 }
 function evidenceLabel(r){
-  if(r.portraitKind==='site-study-partial')return '实柱肖像仅核到局部';
-  if(r.image)return '有现场原照';
-  if(r.portraitKind==='site-study')return '肖像据实柱重绘';
-  if(r.portrait)return '肖像据公开人物照重绘';
-  if(r.physicalImage&&r.inscription?.length)return '实柱铭文可核，肖像待核';
-  if(r.inscription?.length)return '已核到部分刻字';
-  return '柱面肖像与铭文待核';
+  if(r.portraitKind==='site-study-partial')return t('evSitePartial');
+  if(r.image)return t('evOrigPhoto');
+  if(r.portraitKind==='site-study')return t('evSiteStudy');
+  if(r.portrait)return t('evPublicPortrait');
+  if(r.physicalImage&&r.inscription?.length)return t('evInscVerified');
+  if(r.inscription?.length)return t('evPartialInsc');
+  return t('evPending');
 }
-export function showTalentGuide(body,map,launch,documentsOnly=false){
-  body.innerHTML='<div class="panel-pad talent-guide"><p class="note"></p><p class="talent-references"></p><label>查找人物或柱号 <input type="search" placeholder="方滨兴、A-29…" autocomplete="off"></label><div class="talent-scope" role="group" aria-label="名录范围"><button type="button">全部人物</button><button type="button">文献补录</button></div><div class="talent-results"></div></div>';
+export function showTalentGuide(body,map,launch,documentsOnly=false,initialPerson=null){
+  body.innerHTML='<div class="panel-pad talent-guide"><p class="note"></p><p class="talent-references"></p><label>'+t('talentSearchLabel')+' <input type="search" placeholder="'+t('talentSearchPlaceholder')+'" autocomplete="off"></label><div class="talent-scope" role="group" aria-label="'+t('talentScopeAria')+'"><button type="button">'+t('talentScopeAll')+'</button><button type="button"></button></div><div class="talent-results"></div></div>';
   const wrap=body.firstElementChild,list=wrap.querySelector('.talent-results'),search=wrap.querySelector('input');
+  if(initialPerson){
+    const rec=talentRecords.find(r=>r.id===initialPerson);
+    search.value=(isEnglish()&&rec?.english)?rec.english:rec?.name||initialPerson;
+  }
   const [all,docs]=wrap.querySelectorAll('.talent-scope button');
-  docs.textContent='文献补录 · '+talentRecords.filter(r=>r.literature).length+' 位';
+  docs.textContent=t('talentScopeDocs',talentRecords.filter(r=>r.literature).length);
   all.onclick=()=>{documentsOnly=false;render();};
   docs.onclick=()=>{documentsOnly=true;render();};
-  wrap.querySelector('.note').textContent='已收录 '+talentRecords.length+' 位。2021 年桥头蓝牌列出 A-1 至 A-55，绿牌上的 55 个圆点已按走桥顺序对位，同排左右仍有推定。其余人物的实地柱号仍待核对。';
+  const bridge=map.roads.find(r=>r.id===562534109),columns=bridge?columnsOnBridge(bridge.p):[];
+  const deckCount=columns.filter(c=>c.onDeck).length;
+  wrap.querySelector('.note').textContent=t('talentSurveyNote',deckCount,columns.length-deckCount);
   const refs=wrap.querySelector('.talent-references');
-  refs.append(link('桥头名录与点位图',bridgeSurvey.source.url));
-  refs.append(link('桥头到桥尾实拍',bridgeSurvey.crossings[0].url),link('反向过桥实拍',bridgeSurvey.crossings[1].url));
-  for(const [i,photo] of talentBridgePhotos.entries())refs.append(link(i===0?'桥面照片':'桥侧照片',photo.image,photo.description));
-  const diagram=document.createElement('details');diagram.className='talent-diagram';
-  const summary=document.createElement('summary');summary.textContent='在桥头图上选一根柱';diagram.append(summary);
-  const diagramNote=document.createElement('p');diagramNote.textContent='上方为北端。选中编号可查看人物；示意位置按 2021 年桥头绿牌和步行顺序配对。';diagram.append(diagramNote);
-  const plot=document.createElement('div');plot.className='talent-plot';
-  for(const mark of bridgeSurvey.columns){
-    const b=document.createElement('button');b.type='button';b.textContent=mark.number;b.title=mark.code+' '+mark.name;
-    b.setAttribute('aria-label',b.title);b.style.left=(14+mark.across*72)+'%';b.style.top=(2.5+mark.station*95)+'%';
-    b.onclick=()=>{search.value=mark.code;documentsOnly=false;diagram.open=false;render();search.scrollIntoView({block:'nearest'});};
-    plot.append(b);
+  refs.append(link(t('talentRef2021'),bridgeSurvey.source.url));
+  for(const [i,photo] of talentBridgePhotos.entries())refs.append(link(i===0?t('talentRefDeck'):t('talentRefSide'),photo.image,photo.description));
+  for(const onDeck of [true,false]){
+    const group=columns.filter(c=>c.onDeck===onDeck);
+    if(!group.length)continue;
+    const diagram=document.createElement('details');diagram.className='talent-diagram';
+    const summary=document.createElement('summary');summary.textContent=onDeck?t('talentDiagramDeck'):t('talentDiagramShore');
+    const note=document.createElement('p');note.textContent=t('talentDiagramNote');
+    const plot=document.createElement('div');plot.className='talent-plot';
+    const first=group[0].station,span=group.at(-1).station-first;
+    plot.style.height=(group.length*30)+'px';
+    for(const c of group){
+      const r=c.record,b=document.createElement('button');b.type='button';b.textContent=r.field.order;
+      const personName=isEnglish()&&r.english?`${r.english} (${r.name})`:r.name;
+      b.title=personName+' · '+r.field.location;
+      b.setAttribute('aria-label',b.title);b.style.left=(38+c.offset*8)+'%';b.style.top=(1+(c.station-first)/span*98)+'%';
+      b.onclick=()=>{search.value=isEnglish()&&r.english?r.english:r.name;documentsOnly=false;diagram.open=false;render();search.scrollIntoView({block:'nearest'});};
+      plot.append(b);
+    }
+    diagram.append(summary,note,plot);search.closest('label').before(diagram);
   }
-  diagram.append(plot);refs.after(diagram);
   function goButton(label,id,detail){
     const b=document.createElement('button');b.textContent=label;b.className='place';b.onclick=()=>{const v=personView(map,id,detail);if(v)launch(v);};return b;
   }
@@ -50,30 +63,29 @@ export function showTalentGuide(body,map,launch,documentsOnly=false){
       if(documentsOnly&&!r.literature)continue;
       const mark=r.survey;
       if(/^a-\d+$/.test(term)&&mark?.code.toLowerCase()!==term)continue;
-      if(![r.name,r.english,...(r.aliases||[]),mark?.code,mark?.printedName].filter(Boolean).join(' ').toLowerCase().includes(term))continue;
+      if(![r.name,r.english,...(r.aliases||[]),r.field?.file,r.field?.location,mark?.code,mark?.printedName].filter(Boolean).join(' ').toLowerCase().includes(term))continue;
       const row=document.createElement('article'),title=document.createElement('h3'),cue=document.createElement('p'),links=document.createElement('div');
-      title.textContent=(mark?mark.code+'　':'')+r.name;
-      const location=r.literature?literatureLocation(r):mark?'2021 年名录有号，点位按示意图配对':'实地柱号待核，漫游中暂用展示位';
-      cue.textContent=[r.role,location,evidenceLabel(r)].filter(Boolean).join(' · ');
+      const personName=isEnglish()&&r.english?`${r.english} (${r.name})`:r.name;
+      title.textContent=(r.field?r.field.location+'　':t('talentHistorical')+'　')+personName;
+      cue.textContent=r.field?[r.field.file,mark?t('talentOldCode',mark.code):null].filter(Boolean).join(' · '):[r.role,evidenceLabel(r),t('talentUnlocated')].filter(Boolean).join(' · ');
       row.append(title,cue);
+      if(r.field){const p=document.createElement('p');p.textContent=t('talentExcerptPrefix')+r.field.excerpt;row.append(p);}
       if(r.literature)row.append(readingContent(r));
       const lines=r.inscription||[];
       if(lines.length||r.inscriptionFragments?.length){
         const transcript=document.createElement('p');transcript.className='talent-transcript';
-        transcript.textContent='柱面读文　'+[...lines,...(r.inscriptionFragments||[]).map(f=>(f.leftMissing?'…':'')+f.text+(f.rightMissing?'…':''))].join(' / ');
+        transcript.textContent=t('talentTranscriptPrefix')+[...lines,...(r.inscriptionFragments||[]).map(f=>(f.leftMissing?'…':'')+f.text+(f.rightMissing?'…':''))].join(' / ');
         row.append(transcript);
       }
-      if((r.readingNote||r.evidenceNote)&&!(r.literature&&r.physicalImage)){const note=document.createElement('p');note.textContent=r.readingNote||r.evidenceNote;row.append(note);}
-      if(mark && mark.printedName!==r.name){const alias=document.createElement('p');alias.textContent='蓝牌写作　'+mark.printedName;row.append(alias);}
-      links.append(goButton('前往铭牌',r.id));
-      if(r.literature)links.append(goButton('边看边读',r.id,'record'));
-      if(r.portrait)links.append(goButton('近看肖像',r.id,'portrait'));
-      if(r.id==='fang-binxing')links.append(link('原照与实机对照','/comparison/plaques.html'));
-      if(lines.length||r.inscriptionFragments?.length)links.append(goButton('近看铭文',r.id,'inscription'));
-      if(r.id==='fang-binxing'||r.id==='zhu-shiping')links.append(goButton('看左端',r.id,'left'),goButton('看右端',r.id,'right'));
-      if(r.id==='zhu-shiping')links.append(goButton('看园标与二维码',r.id,'seal'));
-      if(r.image)links.append(link('现场原照',r.image));
-      else if(r.physicalImage)links.append(link('现场原照',r.physicalImage.endsWith('.heic')?talentSources[r.sourceIds.find(id=>talentSources[id]?.url.includes('meipian'))]?.url||r.physicalImage:r.physicalImage));
+      if(!r.field&&(r.readingNote||r.evidenceNote)&&!(r.literature&&r.physicalImage)){const note=document.createElement('p');note.textContent=r.readingNote||r.evidenceNote;row.append(note);}
+      if(mark && mark.printedName!==r.name){const alias=document.createElement('p');alias.textContent=t('talentAliasPrefix')+mark.printedName;row.append(alias);}
+      if(r.field){
+        links.append(goButton(t('talentBtnVisit'),r.id),goButton(t('talentBtnReverse'),r.id,'reverse'),
+          goButton(t('talentBtnPortrait'),r.id,'portrait'),goButton(t('talentBtnInscription'),r.id,'inscription'),link(t('talentBtnZoomPhoto'),r.field.image));
+        if(r.literature)links.append(goButton(t('talentBtnRead'),r.id,'record'));
+      }
+      if(r.image)links.append(link(t('talentBtnOrigPhoto'),r.image));
+      else if(r.physicalImage)links.append(link(t('talentBtnOrigPhoto'),r.physicalImage.endsWith('.heic')?talentSources[r.sourceIds.find(id=>talentSources[id]?.url.includes('meipian'))]?.url||r.physicalImage:r.physicalImage));
       for(const id of r.sourceIds){
         if(id==='board2021')continue;
         const ref=talentSources[id];if(!ref)continue;
@@ -82,7 +94,7 @@ export function showTalentGuide(body,map,launch,documentsOnly=false){
       }
       row.append(links);list.append(row);
     }
-    if(!list.childElementCount)list.textContent='没有找到匹配的人物或柱号。';
+    if(!list.childElementCount)list.textContent=t('talentNoMatch');
   }
   search.oninput=render;render();
 }

@@ -1,0 +1,21 @@
+# Version control & local tooling
+.git
+.gitignore
+.openai
+.qa
+__pycache__
+
+# Dependencies & local builds
+node_modules
+dist
+*.log
+
+# Raw Blender source files, Python pipelines & docs (not needed in runtime image)
+models
+scripts
+docs
+*.md
+*.cmd
+.env
+.env.*
+!.env.example

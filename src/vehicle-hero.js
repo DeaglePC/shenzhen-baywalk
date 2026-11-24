@@ -58,6 +58,7 @@ export async function loadDetailedVehicle(id='e6') {
   const taxi=id==='e6',file=taxi?'e6-pengcheng':'model3-detail';
   const {scene:model}=await loader.loadAsync(import.meta.env.BASE_URL+'models/'+file+'.glb');
   const reflective=[],materials=new Set(),paintMeshes=new Set(),point=new T.Vector3();
+  const lightMats=[];
   model.updateMatrixWorld(true);
   model.traverse(node=>{
     if (!node.isMesh) return;
@@ -78,20 +79,6 @@ export async function loadDetailedVehicle(id='e6') {
       mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-1;
     }
     if(lacquer.test(mat.name)) finishPaint(mat);
-    if(!taxi&&mat.name==='Heated rear windscreen'&&mat.transparent){
-      mat.depthWrite=false;
-      // BLEND glass otherwise transmits a constant fraction even edge-on. Use
-      // the two glass/air interfaces for the transmitted alpha. The physical
-      // material still computes its own specular reflections from the scene.
-      mat.onBeforeCompile=shader=>{
-        shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
-          float backlightCosine=clamp(dot(normal,normalize(vViewPosition)),0.,1.);
-          float backlightTransmission=1.-pow(1.-backlightCosine,5.);
-          diffuseColor.a=1.-(1.-diffuseColor.a)*backlightTransmission*backlightTransmission;
-        `);
-      };
-      mat.customProgramCacheKey=()=> 'model3-backlight-fresnel';
-    }
     if(taxi&&glaze.test(mat.name) && mat.transparent) {
       mat.side=T.FrontSide;mat.depthWrite=false;mat.envMapIntensity=1.09;
       const automotiveGlass=!/lens/i.test(mat.name);
@@ -109,13 +96,58 @@ export async function loadDetailedVehicle(id='e6') {
       };
       mat.customProgramCacheKey=()=> 'e6-glazing-v2';
     }
-    if(mat.isMeshStandardMaterial) reflective.push(mat);
+    if(mat.isMeshStandardMaterial) {
+      reflective.push(mat);
+      const n=mat.name||'';
+      let role=null;
+      if(/White ribbon diffuser|Ln7Mtl/i.test(n))role='head';
+      else if(/Headlight moulded polycarbonate/i.test(n))role='headLens';
+      else if(/Ruby tail waveguide|Stop lamp diffuser|Garnet lens|Ln12Mtl/i.test(n))role='tail';
+      else if(/Ln1Mtl/i.test(n))role='amber';
+      else if(/Pengcheng vacancy LED matrix/i.test(n))role='sign';
+      if(role){
+        lightMats.push({
+          mat,role,
+          baseEmissive:mat.emissive.clone(),
+          baseIntensity:mat.emissiveIntensity??1
+        });
+      }
+    }
   });
-  model.name=taxi?'深圳巴士集团鹏程出租车 · AT-099':'特斯拉 Model 3 · 后轮驱动版';
+  model.name=taxi?'深圳巴士集团鹏程出租车 · AT-099':'特斯拉 Model 3 · 焕新版';
   model.userData.excludeFromProbe=true;
   let environment;
+  function setLights(strength=0,night=strength){
+    const s=T.MathUtils.clamp(Number(strength)||0,0,1.5);
+    const n=T.MathUtils.clamp(Number(night)||0,0,1.5);
+    for(const item of lightMats){
+      const {mat,role,baseEmissive,baseIntensity}=item;
+      if(role==='sign'){
+        mat.emissive.copy(baseEmissive);
+        mat.emissiveIntensity=baseIntensity*(1+n*1.5);
+        continue;
+      }
+      if(s<=.001){
+        mat.emissive.copy(baseEmissive);
+        mat.emissiveIntensity=baseIntensity;
+      }else if(role==='head'){
+        mat.emissive.setHex(taxi?0xfff5dc:0xf2f7ff);
+        mat.emissiveIntensity=(taxi?4.2:4.8)*s;
+      }else if(role==='headLens'){
+        mat.emissive.setHex(0xfff1d4);
+        mat.emissiveIntensity=.42*s;
+      }else if(role==='tail'){
+        mat.emissive.setHex(0xff1c14);
+        mat.emissiveIntensity=(taxi?3.0:3.5)*s;
+      }else if(role==='amber'){
+        mat.emissive.setHex(0xff8c1a);
+        mat.emissiveIntensity=1.5*s;
+      }
+    }
+  }
   return {
     model,
+    setLights,
     setEnvironment(texture,rotation=0) {
       if(texture===environment)return;
       environment=texture;

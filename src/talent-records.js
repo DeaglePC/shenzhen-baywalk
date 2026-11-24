@@ -1,3 +1,4 @@
+import {deckPlates,shorePlates,filmedPlates} from './talent-field.js';
 /** On-site observations and published membership evidence for the Shenzhen Talent Park Starlight Bridge. */
 import {bridgeSurvey} from './talent-survey.js';
 import {academicEvidence} from './talent-evidence-academics.js';
@@ -146,4 +147,16 @@ for(const collection of [academicEvidence,publicEvidence]){
 for(const [id,entry] of Object.entries(literature)){
   registry.get(id).literature=entry;
 }
-export const talentRecords=[...registry.values()].sort((a,b)=>(a.survey?.number??Infinity)-(b.survey?.number??Infinity));
+let fieldIndex=0;
+for(const [section,plates] of [['bridge',deckPlates],['shore',shorePlates],['video',filmedPlates]]){
+  for(const [source,id,name,,,excerpt] of plates){
+    const record=recordFor(id,{name});
+    if(record.name!==name)record.aliases=[...new Set([...(record.aliases||[]),record.name])];
+    record.name=name;
+    const order=section==='bridge'?fieldIndex+1:fieldIndex-deckPlates.length+1;
+    const location=(section==='bridge'?'桥面':'南岸步道')+'第 '+order+' 根';
+    const file=section==='video'?'IMG_0359.MOV · '+source+' 秒':'IMG_'+String(source).padStart(4,'0')+'.HEIC';
+    record.field={index:fieldIndex++,section,order,location,file,excerpt,image:'/talent/field/'+id+'.webp'};
+  }
+}
+export const talentRecords=[...registry.values()].sort((a,b)=>(a.field?.index??Infinity)-(b.field?.index??Infinity));

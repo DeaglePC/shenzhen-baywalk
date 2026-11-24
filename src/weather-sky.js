@@ -35,7 +35,15 @@ function skyDome(){
         float h=max(d.y,0.),haze=smoothstep(-.035,.52,d.y);
         vec2 plane=d.xz/(.16+h*.84);
         vec3 result;
-        if(skyMode>2.5){
+        if(skyMode>3.5){
+          vec2 drift=vec2(skyClock*.0018,skyClock*.0009);
+          float broad=cloud(plane*1.06+drift),edge=cloud(plane*3.85-drift+broad*1.6);
+          float cover=smoothstep(.32,.68,.74*broad+.26*edge);
+          float cityLight=.42+.58*pow(max(0.,dot(normalize(vec2(-1.,-.45)),normalize(d.xz+.00001))),2.);
+          vec3 clear=mix(vec3(.025,.029,.034),vec3(.006,.009,.015),smoothstep(0.,.68,h));
+          vec3 cloudLight=vec3(.065,.061,.053)*(.65+.48*cityLight)*(1.-.40*h);
+          result=mix(clear,cloudLight,cover)+.52*horizon*exp(-h*11.);
+        }else if(skyMode>2.5){
           float band=exp(-8.*abs(dot(d,normalize(vec3(.47,.49,-.72)))-.17));
           float dust=cloud(d.xz*12.+d.y*5.);
           vec3 high=vec3(.007,.015,.041)+band*dust*vec3(.014,.017,.025);
@@ -46,7 +54,7 @@ function skyDome(){
           float high=cloud(plane*1.83+travel),low=cloud(plane*3.23-travel*.74+high*.73);
           float deck=high*.60+low*.40;
           vec3 zenith=skyMode>1.5?vec3(.53,.61,.68):vec3(.17,.22,.28);
-          zenith*=mix(1.,.30,periodNight);
+          zenith*=mix(1.,.068,periodNight);
           vec3 base=mix(horizon,zenith,haze);
           float soft=pow(max(0.,dot(d,normalize(vec3(-.72,.46,-.28)))),3.);
           vec3 light=vec3(.99,1.02,1.04)+skyWarm*vec3(.10,.012,-.09);
@@ -79,13 +87,14 @@ function stars(low) {
   geom.setAttribute('temperature',new T.Float32BufferAttribute(tints,3));
   geom.setAttribute('diameter',new T.Float32BufferAttribute(sizes,1));
   const mat=new T.ShaderMaterial({transparent:false,blending:T.AdditiveBlending,depthTest:false,depthWrite:false,
-    uniforms:{skyClock:{value:0},skyScale:{value:1}},vertexShader:`
-      attribute float gain,diameter;attribute vec3 temperature;uniform float skyClock,skyScale;
+    uniforms:{skyClock:{value:0},skyScale:{value:1},urban:{value:0}},vertexShader:`
+      attribute float gain,diameter;attribute vec3 temperature;uniform float skyClock,skyScale,urban;
       varying vec3 starColor;varying float starGain;
       void main(){
         gl_Position=projectionMatrix*vec4(mat3(viewMatrix)*position,1.);gl_Position.z=gl_Position.w*.999999;
         gl_PointSize=clamp(diameter*skyScale,1.,5.);
         starColor=temperature;starGain=gain*(.95+.05*sin(skyClock*1.1+position.x*132.));
+        starGain*=mix(1.,smoothstep(.42,.84,position.y)*smoothstep(1.1,1.6,gain)*.19,urban);
       }`,fragmentShader:`
       varying vec3 starColor;varying float starGain;
       void main(){float r=length(gl_PointCoord-.5)*2.;
@@ -164,22 +173,206 @@ function aurora(low,texture){
   return group;
 }
 
+function moon(){
+  // Realistic warm-golden Moon with near-side maria, multi-scale 3D-shaded impact craters,
+  // realistic photographic scale, and subtle atmospheric halo.
+  const moonDir=new T.Vector3(-.24,.36,-.90).normalize();
+  const up=new T.Vector3(0,1,0);
+  const right=new T.Vector3().crossVectors(up,moonDir).normalize();
+  const trueUp=new T.Vector3().crossVectors(moonDir,right).normalize();
+  const mat=new T.ShaderMaterial({
+    transparent:true,depthTest:true,depthWrite:false,side:T.DoubleSide,
+    uniforms:{
+      moonDir:{value:moonDir},moonRight:{value:right},moonUp:{value:trueUp},
+      moonStrength:{value:1},moonCloud:{value:0},skyClock:{value:0}
+    },
+    vertexShader:`
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      varying vec2 vMoon;
+      varying vec3 vRay;
+      uniform vec3 moonDir,moonRight,moonUp;
+      void main(){
+        vMoon=position.xy;
+        // Tighter angular span (~11 deg total quad; disc itself ~1.6 deg) for realistic scale.
+        vec3 ray=normalize(moonDir+moonRight*(position.x*.105)+moonUp*(position.y*.105));
+        vRay=ray;
+        // Place moon at 28km sky distance with log-depth so skyscrapers occlude it properly.
+        gl_Position=projectionMatrix*vec4(mat3(viewMatrix)*(ray*28000.),1.);
+        #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader:`
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      varying vec2 vMoon;
+      varying vec3 vRay;
+      uniform float moonStrength,moonCloud,skyClock;
+      ${noise}
+      vec2 moonHash2(vec2 p){
+        vec3 a=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));
+        a+=dot(a,a.yzx+33.33);
+        return fract((a.xx+a.yz)*a.zy);
+      }
+      // Single-scale procedural impact craters returning vec3(height, gradX, gradY).
+      vec3 craterField(vec2 uv,float scale,float maxR){
+        vec2 g=uv*scale,id=floor(g),f=fract(g);
+        float h=0.;vec2 grad=vec2(0.);
+        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+          vec2 cell=id+vec2(float(x),float(y));
+          vec2 rnd=moonHash2(cell);
+          float spawn=skyHash(cell+19.3);
+          if(spawn<.38)continue;
+          vec2 center=vec2(float(x),float(y))+.18+.64*rnd;
+          vec2 diff=f-center;
+          float r=(.18+.30*skyHash(cell+71.7))*maxR;
+          float d=length(diff);
+          if(d>r*1.55)continue;
+          float u=d/max(r,.0001);
+          // Concave bowl inside u<1, raised annular rim around u=1, gentle outer ejecta skirt.
+          float bowl=-.55*(1.-u*u)*smoothstep(1.05,.62,u);
+          float rim=.32*exp(-16.*(u-1.)*(u-1.));
+          float ch=bowl+rim;
+          // Radial derivative for crisp 3D crater wall lighting & shadow.
+          float dhdu=(1.10*u*smoothstep(1.05,.62,u)) - (32.*(u-1.)*rim);
+          vec2 dir=diff/max(d,.0005);
+          h+=ch;
+          grad+=dir*(dhdu/max(r,.0001));
+        }
+        return vec3(h,grad);
+      }
+      float mareBlob(vec2 p,vec2 c,vec2 r,float rot){
+        float s=sin(rot),co=cos(rot);
+        vec2 q=mat2(co,-s,s,co)*(p-c)/r;
+        return exp(-dot(q,q)*1.85);
+      }
+      void main(){
+        if(moonStrength<=.001)discard;
+        float r=length(vMoon);
+        if(r>1.)discard;
+        #include <logdepthbuf_fragment>
+        // Photographic lunar disc occupies ~14.5% of quad radius.
+        float discR=.145;
+        vec2 p=vMoon/discR;
+        float d=length(p);
+        vec3 result=vec3(0.);
+        float alpha=0.;
+        // Subtle drifting night cloud veil matching the sky dome.
+        vec3 dir=normalize(vRay);
+        vec2 plane=dir.xz/(.16+max(dir.y,0.)*.84);
+        vec2 drift=vec2(skyClock*.0018,skyClock*.0009);
+        float cBroad=cloud(plane*1.06+drift);
+        float cEdge=cloud(plane*3.85-drift+cBroad*1.6);
+        float cloudCover=smoothstep(.34,.72,.74*cBroad+.26*cEdge);
+        float veil=mix(1.-cloudCover*.26,1.-cloudCover*.68,moonCloud);
+        if(d<1.04){
+          float z=sqrt(max(0.,1.-min(d*d,1.)));
+          vec3 sphereN=normalize(vec3(p.x,p.y,z));
+          // Spherical map coordinates so craters & maria curve naturally around the lunar limb.
+          vec2 sp=vec2(atan(sphereN.x,sphereN.z),asin(clamp(sphereN.y,-1.,1.)))*.85;
+          // Near-side inspired lunar maria basins + organic basalt edge breakup.
+          float breakup=(cloud(sp*4.8+1.3)-.5)*.45+(cloud(sp*11.2-2.7)-.5)*.22;
+          float m=0.;
+          m=max(m,mareBlob(p,vec2(-.28,.22),vec2(.36,.32),.2));   // Mare Imbrium
+          m=max(m,mareBlob(p,vec2(-.48,-.12),vec2(.30,.44),-.15));// Oceanus Procellarum
+          m=max(m,mareBlob(p,vec2(.14,.28),vec2(.22,.20),-.1));   // Mare Serenitatis
+          m=max(m,mareBlob(p,vec2(.34,.04),vec2(.26,.22),.3));    // Mare Tranquillitatis
+          m=max(m,mareBlob(p,vec2(.44,-.24),vec2(.22,.16),-.2));  // Mare Fecunditatis
+          m=max(m,mareBlob(p,vec2(.64,.16),vec2(.11,.13),.1));    // Mare Crisium
+          m=max(m,mareBlob(p,vec2(-.12,-.28),vec2(.26,.18),.1));  // Mare Nubium
+          float maria=smoothstep(.26,.72,m+breakup);
+          // Multi-scale impact craters (large basins, medium craters, fine pitting).
+          vec3 cLarge=craterField(sp+vec2(.4,-.2),3.4,1.05);
+          vec3 cMed=craterField(sp+vec2(-1.7,.9),8.2,.95);
+          vec3 cFine=craterField(sp+vec2(3.1,-2.4),18.5,.85);
+          // Highlands have denser cratering than smooth basaltic maria.
+          float rugged=mix(1.0,.42,maria);
+          float craterH=(cLarge.x*.52+cMed.x*.34+cFine.x*.18)*rugged;
+          vec2 craterGrad=(cLarge.yz*.26+cMed.yz*.17+cFine.yz*.09)*rugged;
+          // Bright Tycho-like southern crater + faint radial ejecta rays.
+          vec2 tycho=p-vec2(-.10,-.58);
+          float td=length(tycho);
+          float tAngle=atan(tycho.y,tycho.x);
+          float rays=pow(max(0.,sin(tAngle*7.+.4)*sin(tAngle*11.-.9)),2.)*exp(-td*3.4)*smoothstep(.04,.12,td);
+          float tychoRim=.28*exp(-380.*(td-.065)*(td-.065))-.20*smoothstep(.075,.02,td);
+          // Perturb lunar sphere normal with crater relief & micro regolith grain.
+          vec3 n=normalize(sphereN+vec3(craterGrad.x*.34,craterGrad.y*.34,0.));
+          // Warm golden-ivory highlands & muted brownish-grey basalt maria (coastal night warmth).
+          float regolith=cloud(sp*22.+4.1);
+          vec3 highland=vec3(.96,.83,.59)*(.90+.16*regolith);
+          vec3 sea=vec3(.46,.40,.32)*(.86+.20*regolith);
+          vec3 albedo=mix(highland,sea,maria*.76);
+          albedo+=vec3(.16,.13,.08)*(max(craterH,0.)*.55+rays*.55+max(tychoRim,0.));
+          albedo*=1.-clamp(-craterH*.26,0.,.28);
+          // Slightly angled waxing-gibbous sunlight so crater rims & bowls have clear 3D relief.
+          vec3 sunOnMoon=normalize(vec3(.42,.18,.89));
+          float ndl=dot(n,sunOnMoon);
+          float macroPhase=smoothstep(-.10,.24,dot(sphereN,sunOnMoon));
+          float reliefLight=smoothstep(-.18,.88,ndl);
+          // Soft Lommel-Seeliger-like lunar limb response (less harsh than Lambertian).
+          float limb=pow(max(z,.001),.22);
+          float discEdge=1.-smoothstep(.94,1.01,d);
+          // Non-clipping photographic brightness so maria & craters remain crisp, never pure white.
+          vec3 lit=albedo*(.04+.96*macroPhase*(.42+.58*reliefLight))*(.76+.24*limb)*.92;
+          result+=lit*discEdge*veil;
+          alpha=max(alpha,discEdge*min(1.,moonStrength*1.05)*veil);
+        }
+        // Subtle, natural warm lunar glow & whisper-soft atmospheric corona (no overexposure).
+        float innerGlow=exp(-7.5*max(0.,r-discR*.85))*.24;
+        float outerHalo=exp(-3.2*r)*smoothstep(1.,.14,r)*.085;
+        vec3 haloColor=vec3(.92,.78,.54);
+        float haloGain=(innerGlow+outerHalo)*mix(1.,1.3,moonCloud)*veil*moonStrength;
+        result+=haloColor*haloGain;
+        alpha=clamp(max(alpha,haloGain*.75),0.,1.);
+        gl_FragColor=vec4(result*moonStrength,alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`
+  });
+  const mesh=new T.Mesh(new T.PlaneGeometry(2,2),mat);
+  mesh.name='夜空 · 明月';mesh.frustumCulled=false;mesh.renderOrder=-18750;
+  return mesh;
+}
+
 export function weatherSky(scene,low){
   const root=new T.Group();root.name='季候天空';scene.add(root);
-  const dome=skyDome(),star=stars(low),texture=rayTexture(),lights=aurora(low,texture);
-  root.add(dome,star,lights);root.visible=false;
+  const dome=skyDome(),star=stars(low),texture=rayTexture(),lights=aurora(low,texture),lunar=moon();
+  root.add(dome,star,lights,lunar);root.visible=false;
+  let moonEnabled=true,moonAllowed=false;
+  function syncMoonVisibility(){
+    lunar.visible=moonEnabled&&moonAllowed;
+    root.visible=dome.visible||lunar.visible;
+  }
   return {
     set(weather,period,horizon){
-      root.visible=weather!=='clear';star.visible=lights.visible=weather==='aurora';
-      const u=dome.material.uniforms;u.skyMode.value=weather==='aurora'?3:weather==='snow'?2:1;
-      u.periodNight.value=period==='dusk'?1:0;u.skyWarm.value=period==='sunset'?1:0;
+      const showDome=weather!=='clear'||period==='night';
+      moonAllowed=period==='night'||weather==='aurora'||(period==='dusk'&&weather==='clear');
+      dome.visible=showDome;
+      lights.visible=weather==='aurora';
+      star.visible=lights.visible||(period==='night'&&weather==='clear');
+      syncMoonVisibility();
+      const u=dome.material.uniforms;u.skyMode.value=lights.visible?3:star.visible?4:weather==='snow'?2:1;
+      star.material.uniforms.urban.value=lights.visible?0:1;
+      u.periodNight.value=period==='night'?1:period==='dusk'?.65:0;u.skyWarm.value=period==='sunset'?1:0;
       u.horizon.value.setHex(horizon??0x9ba9b0);
+      const mu=lunar.material.uniforms;
+      const overcast=weather==='rain'||weather==='snow';
+      mu.moonStrength.value=period==='night'?(overcast?.34:1):weather==='aurora'?.85:period==='dusk'?.36:0;
+      mu.moonCloud.value=overcast?1:0;
     },
+    setMoonVisible(visible){
+      moonEnabled=!!visible;
+      syncMoonVisibility();
+      return moonEnabled;
+    },
+    get moonVisible(){return moonEnabled;},
     update(t,camera){
       if(!root.visible)return;
-      dome.material.uniforms.skyClock.value=t;
-      if(lights.visible){
+      if(dome.visible)dome.material.uniforms.skyClock.value=t;
+      if(lunar.visible)lunar.material.uniforms.skyClock.value=t;
+      if(star.visible){
         const u=star.material.uniforms;u.skyClock.value=t;u.skyScale.value=Math.max(.72,Math.min(1.65,67/(camera.fov||67)));
+      }
+      if(lights.visible){
         lights.children.forEach(m=>m.material.uniforms.skyClock.value=t);
       }
     },

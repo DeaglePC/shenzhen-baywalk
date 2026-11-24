@@ -21,6 +21,18 @@
 
 `scripts/geoheight.py` 可重算匹配表 `scripts/geoheight-matches.json`。其中记录建筑几何指纹、高度和来源分类，并保留 CMAB 的 shapefile 记录号与轮廓交并比，或供参照的邻楼 OSM 编号。
 
+## 沙河西路与后海大桥
+
+道路生成时保留 OpenStreetMap 中多条道路共用的节点，包括直线中间的匝道接入口。后海大桥和后海二桥采用各自的桥面外轮廓及双幅道路中心线。后海大桥按双向六车道、两侧人行道布置，中央分隔带、南向横向减速标线、路灯排列与岸边步梯的位置参考航片。西侧人行道设有打卡框和铜色地标。桥面标高、梁高、墩柱截面和灯距按场景比例估算。[后海大桥地图轮廓](https://www.openstreetmap.org/way/1425093756) · [沙河西路项目资料](https://www.szmedi.com.cn/gsxw/info_24.aspx?itemid=424) · [Esri World Imagery](https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer) · [深圳市政府打卡区介绍](https://www.sz.gov.cn/cn/xxgk/zfxxgj/zwdt/content/post_12113861.html)
+
+## 海岸城、观海栈桥与深圳湾公路大桥
+
+海岸城步行街平台和采光口沿 OSM 多边形建模，楼梯接入地图标注的上层步行路线。文心四路的中央隔离栏、黄色减速标线、浅色梁底、下照灯和街边花钵参考百度地图 2022 年 12 月全景。平台标高、栏板构造、灯距及横向标线间距为视觉估算。[百度地图文心四路街景](https://map.baidu.com/@12684153.34,2557932.91,21z#panoid=0900570012221204154425992AC&panotype=street&heading=7.27&pitch=0) · [深圳湾大街西段平台](https://www.openstreetmap.org/relation/10744153) · [跨后海滨路天桥项目](https://www.sz.gov.cn/cn/xxgk/zfxxgj/gqdt/content/post_12069020.html)
+
+南北观海栈桥的曲线、岔口和圆形观景台取自 OSM 轮廓。北栈桥现场照片用于辨认棕色宽扶手、弯折栏柱、多道横杆、砖面铺法和禁钓提示牌。两处的栏杆尺寸、桩距和入口坡度按场景估算。[北栈桥](https://www.openstreetmap.org/way/473291441) · [南栈桥](https://www.openstreetmap.org/way/428905877) · [深圳晚报现场照片](https://sznews.com/news/content/2025-06/05/content_31590296.htm)
+
+`scripts/geobay.py` 由 OSM 双向道路与海岸线重建地图南缘至香港落脚点的远景。航道桥采用相向倾斜的单塔，深圳、香港两侧主跨分别按 180 米、210 米布置，塔位参考航片。桥面纵坡、塔身截面和高程按画面比例估算。[香港路政署大桥资料](https://www.hyd.gov.hk/en/information_corner/hyd_factsheets/doc/e_Shenzhen_Bay_Bridge.pdf) · [深圳市规划和自然资源局海域使用论证](https://pnr.sz.gov.cn/attachment/1/1551/1551105/12048526.pdf)
+
 ## 卫星影像
 
 `houhai-sentinel.webp` 含经裁切、重投影和压缩的 Copernicus Sentinel 2025 数据（Contains modified Copernicus Sentinel data 2025）。影像使用 2025 年 12 月 9 日拍摄的 Sentinel-2C Level-2A 真彩色波段，场景为 `S2C_49QGE_20251209_0_L2A`。原始空间分辨率为 10 米。输出贴图上北下南，覆盖 6,400 × 6,400 米。可用 `scripts/geosatellite.py` 重建。[原始场景元数据](https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a/items/S2C_49QGE_20251209_0_L2A) · [Sentinel-2 Cloud-Optimized GeoTIFF 数据来源](https://registry.opendata.aws/sentinel-2-l2a-cogs/)

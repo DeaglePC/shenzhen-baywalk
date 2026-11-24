@@ -166,7 +166,7 @@ ROAD_WIDTH={"motorway":11,"trunk":11,"primary":10.5,"secondary":8,"tertiary":7,"
             "cycleway":3,"steps":2.4,"path":1.8,"track":3.2}
 
 
-def roadway(w,t,line):
+def roadway(w,t,line,junctions):
     kind=t["highway"]
     if kind not in ROAD_WIDTH and not kind.endswith("_link"): return
     if t.get("tunnel","no")!="no" or t.get("covered")=="building_passage" and t.get("indoor")=="yes": return
@@ -176,7 +176,12 @@ def roadway(w,t,line):
     if w["id"]==562534109:width=13
     for seg in components(line.intersection(WINDOW),"LineString"):
         if seg.length<.5: continue
-        points=coords(seg.simplify(.25).coords)
+        raw=list(seg.coords)
+        cuts=[0,*[i for i in range(1,len(raw)-1) if raw[i] in junctions],len(raw)-1]
+        simplified=[raw[0]]
+        for start,end in zip(cuts,cuts[1:]):
+            simplified.extend(list(LineString(raw[start:end+1]).simplify(.25).coords)[1:])
+        points=coords(simplified)
         if t.get("oneway")=="-1":points.reverse()
         d={"id":w["id"],"kind":kind,"p":points,"width":round(width,1),"name":t.get("name:zh",t.get("name","")),
            "oneway":t.get("oneway") in ("yes","true","1","-1") or (t.get("junction")=="roundabout" and t.get("oneway")!="no"),
@@ -193,6 +198,8 @@ def roadway(w,t,line):
 def build(elements):
     ways=elements["way"]
     projected={id_:project(n["lon"],n["lat"]) for id_,n in elements["node"].items()}
+    usage=Counter(n for w in ways.values() if w.get("tags",{}).get("highway") for n in set(w["nodes"]))
+    junctions={projected[n] for n,count in usage.items() if count>1 and n in projected}
     lines={}
     for id_,w in ways.items():
         nodes=w["nodes"]
@@ -223,7 +230,7 @@ def build(elements):
         if not line.intersects(WINDOW):continue
         area=line.is_closed and len(w["nodes"])>=4
         if t.get("highway") and t.get("area")!="yes" and not(area and t.get("highway")=="pedestrian"):
-            result["roads"].extend(roadway(w,t,line))
+            result["roads"].extend(roadway(w,t,line,junctions))
         if area and (cls:=area_class(t)):store_shape(*cls,id_,t,Polygon(line.coords))
 
     # Keep detailed building parts with their floor elevations. Avoid drawing

@@ -68,11 +68,14 @@ function cladding(group,m){
   const white=new T.Color('#e4edf1'),crownMetal=architecturalMetal(0xc8cdc9,.24);
   crownMetal.vertexColors=true;
   const mainFin=architecturalMetal(0xc4c9c6,.21);mainFin.vertexColors=true;mainFin.metalness=.74;mainFin.roughness=.25;
+  mainFin.emissive.setHex(0xffc052);m.parkLights.finish(mainFin,1.29);
+  crownMetal.emissive.setHex(0xffd985);m.parkLights.finish(crownMetal,1.14);
   mainFin.customProgramCacheKey=()=> 'column-cover-joints';
   mainFin.onBeforeCompile=shader=>{
-    shader.vertexShader='varying float vColumnY;\n'+shader.vertexShader.replace('#include <begin_vertex>',
-      '#include <begin_vertex>\n vColumnY=position.y;');
-    shader.fragmentShader='varying float vColumnY;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
+    shader.vertexShader='varying float vColumnY,vStrip;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n vColumnY=position.y; float n=floor(atan(position.x,position.z)*8.91268+.5); vStrip=.22+.78*smoothstep(-.80,.68,sin(n*.74)+.35*cos(n*2.2));');
+    shader.fragmentShader='varying float vColumnY,vStrip;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n totalEmissiveRadiance*=vStrip*(.80+.20*sin(vColumnY*.028));').replace('#include <color_fragment>',`
       #include <color_fragment>
       float grid=(vColumnY-38.07)/4.48,aa=max(.0001,fwidth(grid));
       float seam=(1.-smoothstep(.002,.004+aa*.50,abs(fract(grid+.5)-.5)));
@@ -81,13 +84,14 @@ function cladding(group,m){
     `).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n roughnessFactor+=.21*seam;');
   };
   const bronze=architecturalMetal(0xb5966c,.24);
+  bronze.emissive.setHex(0xffcf75);m.parkLights.finish(bronze,1.75);
   const glass=m.bambooGlass;
   const skyGlass=new T.MeshPhysicalMaterial({color:0x9caeb8,vertexColors:true,metalness:.32,roughness:.103,clearcoat:.93,
     clearcoatRoughness:.08,transparent:true,opacity:.56,side:T.FrontSide,depthWrite:false,envMapIntensity:1.25});
   skyGlass.userData.cityProbe='district';
   const innerFrame=new Instances(new T.CylinderGeometry(.80,1,1,6,1,true),architecturalMetal(0xd3bc9b,.23),'空中大厅内部金属桁架');
   const lightTube=new T.MeshStandardMaterial({color:0xdbccb2,emissive:0xffc181,emissiveIntensity:.18,roughness:.37});
-  m.walls.push(lightTube);
+  m.parkLights.finish(lightTube,3.1);
   const guides=new Instances(new T.CylinderGeometry(1,1,1,5,1,true),lightTube,'冠部内侧线性照明');
   const edge=new T.MeshStandardMaterial({color:0x536167,metalness:.52,roughness:.32,side:T.DoubleSide});
   const steps=66,N=112;
@@ -115,8 +119,9 @@ function cladding(group,m){
   for(const t of [.327,.646]){
     band(screen,t,1.62,.11);
     for(let k=0;k<5;k++)band(rails,t+k*.00084,.095,.16);
-    band(brass,t+.00428,.085,.17);
+    band(brass,t+.00428,.53,.24);
   }
+  for(const t of [.128,.219,.497,.745,.844])band(brass,t,.44,.26);
   // Folded stainless-steel sections have different optical normals across
   // the chamfer and the face, where a cylindrical tube would look flat.
   const tones=[new T.Color('#a3adae'),new T.Color('#e0e5df'),new T.Color('#d1dbd9'),new T.Color('#859298')];
@@ -156,6 +161,7 @@ function cladding(group,m){
   const hallFloor=new Surface(),spandrel=new Surface(),spire=new Surface(),floor=345;
   const stoneFloor=new T.MeshStandardMaterial({color:0x979a94,metalness:.28,roughness:.28,side:T.DoubleSide});
   const capMetal=architecturalMetal(0xc6c8c5,.27);
+  capMetal.emissive.setHex(0xffe6a3);m.parkLights.finish(capMetal,8);
   annulus(hallFloor,0,radius(floor/height)-.24,floor,112);
   orbitWall(spandrel,radius(floor/height)-.25,floor-.45,floor,112,new T.Color('#bcc4c1'));
   for(const t of [.900,.930,.956,.976,.986]){
@@ -179,6 +185,14 @@ function cladding(group,m){
     spire.quad(p,q,v,u);
   }
   annulus(spire,0,.42,height,28);
+  const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=96;
+  const ctx=glowCanvas.getContext('2d'),halo=ctx.createRadialGradient(48,48,0,48,48,48);
+  for(const [s,c] of [[0,'#fff9d9'],[.07,'#ffedb0'],[.20,'#e9a845'],[.50,'#52320c'],[1,'#000']])halo.addColorStop(s,c);
+  ctx.fillStyle=halo;ctx.fillRect(0,0,96,96);
+  const tex=new T.CanvasTexture(glowCanvas);tex.colorSpace=T.SRGBColorSpace;
+  const haloMat=new T.SpriteMaterial({map:tex,blending:T.AdditiveBlending,transparent:true,depthWrite:false});
+  const beacon=new T.Sprite(haloMat);beacon.name='春笋 · 冠顶灯晕';beacon.position.y=height+.45;beacon.scale.set(20,20,1);group.add(beacon);
+  beacon.onBeforeRender=()=>{haloMat.opacity=capMetal.emissiveIntensity/8;};
   hallFloor.mesh(group,stoneFloor,'345米空中大厅楼板');spandrel.mesh(group,m.rail,'空中大厅楼板包边');spire.mesh(group,capMetal,'不锈钢尖顶收口');
   innerFrame.flush(group);guides.flush(group);
   facade.mesh(group,glass,'低辐射弧面双层玻璃',true);crown.mesh(group,skyGlass,'锥形空中大厅玻璃');

@@ -1,4 +1,5 @@
 import {icon} from './icons.js';
+import {t,placeLabel} from './i18n.js';
 let raster;
 const full = 6400, size=2304, origin=size/2, ratio=size/full;
 const paths = new Set(['path','footway','cycleway','pedestrian','steps','track']);
@@ -42,12 +43,12 @@ export function drawMini(canvas,map,pos){
   drawBase(ctx,map,pos.x,pos.z,0.55,w,h);arrow(ctx,w/2,h/2,pos.heading);
 }
 export function showAtlas(body,map,current,player,onChoose){
-  body.innerHTML='<div class="map-grid"><div class="map-stage"><canvas aria-label="深圳湾区域地图"></canvas><div class="zoom"><button class="icon-button" aria-label="放大">'+icon('plus')+'</button><button class="icon-button" aria-label="缩小">'+icon('minus')+'</button></div><div class="map-credit">© <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></div></div><div class="atlas-side"><p class="side-title">漫游地点</p><div class="destinations" style="display:contents"></div><p class="map-hint">拖动平移，滚轮缩放。点击地图可选择其他街道。</p><button class="primary">从这里出发</button></div></div>';
+  body.innerHTML='<div class="map-grid"><div class="map-stage"><canvas aria-label="'+t('atlasCanvasAria')+'"></canvas><div class="zoom"><button class="icon-button" aria-label="'+t('atlasZoomIn')+'">'+icon('plus')+'</button><button class="icon-button" aria-label="'+t('atlasZoomOut')+'">'+icon('minus')+'</button></div><div class="map-credit">© <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></div></div><div class="atlas-side"><p class="side-title">'+t('atlasDestinations')+'</p><div class="destinations" style="display:contents"></div><p class="map-hint">'+t('atlasHint')+'</p><button class="primary">'+t('atlasStartHere')+'</button></div></div>';
   const canvas=body.querySelector('canvas'),ctx=canvas.getContext('2d');
   let selected=current, cx=player?.x??0,cz=player?.z??-90,zoom=1.1,lut=[],drag=null;
   const places=body.querySelector('.destinations');
   for(const v of map.views){
-    const b=document.createElement('button');b.className='place';b.innerHTML=icon('pin');b.append(v.name);b.onclick=()=>{selected=v;cx=v.x;cz=v.z;paint();};places.append(b);
+    const b=document.createElement('button');b.className='place';b.innerHTML=icon('pin');b.append(placeLabel(v));b.onclick=()=>{selected=v;cx=v.x;cz=v.z;paint();};places.append(b);
   }
   const scale=()=>Math.min(canvas.clientWidth,canvas.clientHeight)/1750*zoom;
   const updateZoom=amount=>{zoom=Math.max(.24,Math.min(6,zoom*amount));paint();};
@@ -60,8 +61,9 @@ export function showAtlas(body,map,current,player,onChoose){
     ctx.strokeStyle='#ffa67a90';ctx.setLineDash([5,7]);ctx.lineWidth=1;ctx.beginPath();ctx.arc(ox,oz,3000*s,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
     lut=[];for(const place of [...map.views,...(selected.id==='custom'?[selected]:[])]){
       const [x,y]=view([place.x,place.z]),active=selected.id===place.id;lut.push({x,y,place});
+      const label=placeLabel(place);
       ctx.beginPath();ctx.arc(x,y,active?6.5:4.5,0,Math.PI*2);ctx.fillStyle=active?'#ff925b':'#f1efda';ctx.fill();ctx.strokeStyle='#202728';ctx.lineWidth=2;ctx.stroke();
-      ctx.font=(active?'bold ':'')+'12px "Microsoft YaHei",sans-serif';ctx.lineWidth=3;ctx.strokeText(place.name,x+10,y-6);ctx.fillStyle=active?'#ffc6a0':'#f2f1e8';ctx.fillText(place.name,x+10,y-6);
+      ctx.font=(active?'bold ':'')+'12px "Microsoft YaHei",sans-serif';ctx.lineWidth=3;ctx.strokeText(label,x+10,y-6);ctx.fillStyle=active?'#ffc6a0':'#f2f1e8';ctx.fillText(label,x+10,y-6);
     }
     if(player){const [x,y]=view([player.x,player.z]);arrow(ctx,x,y,player.heading);}
     ctx.fillStyle='#fff';ctx.font='bold 12px monospace';ctx.fillText('N',14,23);ctx.fillText('↑',14,39);

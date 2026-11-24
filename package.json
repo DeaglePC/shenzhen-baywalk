@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "qa:daemon": "python scripts/qa_daemon.py",
+    "qa:probe": "python scripts/qa_probe.py --standalone"
   },
   "dependencies": {"three": "0.182.0"},
   "devDependencies": {"vite": "7.3.8"}

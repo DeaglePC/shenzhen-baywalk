@@ -1,40 +1,93 @@
-const seasons={spring:'春',summer:'夏',autumn:'秋',winter:'冬'};
-const skies={clear:'晴',rain:'雨',snow:'雪',aurora:'极光'};
+import {t,periodLabel} from './i18n.js';
+
+const seasonKeys={spring:'seasonSpring',summer:'seasonSummer',autumn:'seasonAutumn',winter:'seasonWinter'};
+const skyKeys={clear:'climateShortClear',rain:'climateShortRain',snow:'climateShortSnow',aurora:'climateShortAurora'};
 
 export function climateFromQuery(params){
   const weather=params.get('weather'),season=params.get('season');
-  return {weather:Object.hasOwn(skies,weather)?weather:'clear',season:Object.hasOwn(seasons,season)?season:'summer'};
+  return {weather:Object.hasOwn(skyKeys,weather)?weather:'clear',season:Object.hasOwn(seasonKeys,season)?season:'summer'};
 }
 
 export function climateControls(getWorld,report,onChange){
   const panel=document.querySelector('#climatePanel'),toggle=document.querySelector('#climateButton');
+  const periodPanel=document.querySelector('#periodPanel'),periodToggle=document.querySelector('#period');
   const weatherButtons=[...panel.querySelectorAll('[data-weather]')],seasonButtons=[...panel.querySelectorAll('[data-season]')];
+  const periodButtons=[...periodPanel.querySelectorAll('[data-period]')];
+  const moonToggle=document.querySelector('#moonToggle');
   let request=0;
-  function open(value){
-    panel.hidden=!value;toggle.setAttribute('aria-expanded',value);
-    if(value&&document.pointerLockElement)document.exitPointerLock();
+  function openClimate(value){
+    if(value)openPeriod(false);
+    panel.hidden=!value;toggle.setAttribute('aria-expanded',String(value));
+    if(value)getWorld()?.releaseLook();
   }
+  function openPeriod(value){
+    if(value)openClimate(false);
+    periodPanel.hidden=!value;periodToggle.setAttribute('aria-expanded',String(value));
+    if(value)getWorld()?.releaseLook();
+  }
+  function closeAll(){openClimate(false);openPeriod(false);}
   function sync(){
     const world=getWorld();if(!world)return;
     const {weather,season}=world.climate;
-    for(const b of weatherButtons)b.setAttribute('aria-pressed',b.dataset.weather===weather);
-    for(const b of seasonButtons)b.setAttribute('aria-pressed',b.dataset.season===season);
-    document.querySelector('#climateName').textContent=seasons[season]+' · '+skies[weather];
-    document.querySelector('#periodName').textContent=world.period;
-    document.querySelector('#period').disabled=weather==='aurora';
+    const pKey=world.periodKey;
+    for(const b of weatherButtons)b.setAttribute('aria-pressed',String(b.dataset.weather===weather));
+    for(const b of seasonButtons)b.setAttribute('aria-pressed',String(b.dataset.season===season));
+    for(const b of periodButtons)b.setAttribute('aria-pressed',String(b.dataset.period===pKey));
+    document.querySelector('#climateName').textContent=t(seasonKeys[season])+' · '+t(skyKeys[weather]);
+    document.querySelector('#periodName').textContent=periodLabel(world.period);
+    const lampBtn=document.querySelector('#headlights');
+    if(lampBtn){
+      const on=!!world.headlightsOn;
+      lampBtn.setAttribute('aria-pressed',String(on));
+      const label=document.querySelector('#headlightsName');
+      if(label)label.textContent=on?t('headlightsShortOn'):t('headlightsShortOff');
+    }
+    if(moonToggle){
+      const shown=world.moonVisible!==false;
+      moonToggle.setAttribute('aria-pressed',String(shown));
+      moonToggle.textContent=shown?t('moonShown'):t('moonHidden');
+    }
     onChange(world.climate);
   }
-  toggle.onclick=()=>open(panel.hidden);
-  document.querySelector('#closeClimate').onclick=()=>{open(false);toggle.focus();};
-  document.addEventListener('pointerdown',e=>{if(!panel.hidden&&!panel.contains(e.target)&&!toggle.contains(e.target))open(false);});
+  toggle.onclick=()=>openClimate(panel.hidden);
+  periodToggle.onclick=()=>openPeriod(periodPanel.hidden);
+  document.querySelector('#closeClimate').onclick=()=>{openClimate(false);toggle.focus();};
+  document.querySelector('#closePeriod').onclick=()=>{openPeriod(false);periodToggle.focus();};
+  document.addEventListener('pointerdown',e=>{
+    if(!panel.hidden&&!panel.contains(e.target)&&!toggle.contains(e.target))openClimate(false);
+    if(!periodPanel.hidden&&!periodPanel.contains(e.target)&&!periodToggle.contains(e.target))openPeriod(false);
+  });
   panel.addEventListener('click',async e=>{
     const b=e.target.closest('button[data-season],button[data-weather]');if(!b)return;
     const world=getWorld(),patch=b.dataset.season?{season:b.dataset.season}:{weather:b.dataset.weather};
     const token=++request;
     panel.setAttribute('aria-busy','true');
-    try{await world.setClimate(patch);}
-    catch{report('天气资源读取失败，请重试');}
-    finally{if(token===request){sync();panel.setAttribute('aria-busy','false');}}
+    toggle.classList.add('is-loading');
+    try{await world.setClimate(patch,b.textContent?.trim()||'');}
+    catch{report(t('toastWeatherErr'));}
+    finally{if(token===request){toggle.classList.remove('is-loading');sync();panel.setAttribute('aria-busy','false');}}
   });
-  return {sync,close:()=>open(false),get visible(){return !panel.hidden;}};
+  periodPanel.addEventListener('click',async e=>{
+    if(e.target.closest('#moonToggle')){
+      const world=getWorld();if(!world)return;
+      const shown=world.toggleMoon();
+      sync();
+      report(shown?t('toastMoonOn'):t('toastMoonOff'));
+      return;
+    }
+    const b=e.target.closest('button[data-period]');if(!b)return;
+    const world=getWorld();if(!world)return;
+    const token=++request;
+    periodPanel.setAttribute('aria-busy','true');
+    periodToggle.classList.add('is-loading');
+    try{await world.setPeriod(b.dataset.period,b.textContent?.trim()||'');}
+    catch{report(t('toastSkyErr'));}
+    finally{if(token===request){periodToggle.classList.remove('is-loading');sync();periodPanel.setAttribute('aria-busy','false');}}
+  });
+  return {
+    sync,
+    close:closeAll,
+    get visible(){return !panel.hidden||!periodPanel.hidden;},
+    focusTrigger(){(!panel.hidden?toggle:periodToggle).focus();}
+  };
 }

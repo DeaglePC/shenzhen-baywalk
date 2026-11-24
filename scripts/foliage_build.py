@@ -15,7 +15,9 @@ import numpy as np
 from numba import njit
 from PIL import Image
 from scipy.spatial import cKDTree
-from scipy.ndimage import distance_transform_edt
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components, dijkstra
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 import requests
 
 SOURCE=Path(gettempdir())/"shenzhen-foliage-models"
@@ -87,7 +89,7 @@ class MeshFile:
         file.write_bytes(b"BT01"+b"".join(self.arrays))
 
 
-def bake(model):
+def source_parts(model):
     download(model);DEST.mkdir(parents=True,exist_ok=True)
     gltf=json.loads((SOURCE/(model+".gltf")).read_text());buffer=(SOURCE/(model+".bin")).read_bytes()
     def get(i):
@@ -101,6 +103,11 @@ def bake(model):
         key="leaves" if mat.endswith("_leaves") else "twigs" if mat.endswith("_branches") else "wood"
         attrs=p["attributes"]
         parts[key]=(get(attrs["POSITION"]),get(attrs["NORMAL"]),get(attrs["TEXCOORD_0"]),get(p["indices"]).reshape(-1,3))
+    return parts
+
+
+def bake(model):
+    parts=source_parts(model)
     pts=parts["leaves"][0];overall=pts.max(axis=0)-pts.min(axis=0)
     bottom=float(parts["wood"][0][:,1].min());height=float(pts[:,1].max()-bottom)
     cellw=height*.135
@@ -169,5 +176,126 @@ def bake(model):
     print("Ready",model,len(ti),len(idx)//3,"runtime triangles",flush=True)
 
 
+def twig_tubes(parts,bottom,height):
+    """Trace each disconnected scanned twig and keep its two attachment points."""
+    original,_,_,faces=parts["twigs"]
+    pts,rev=np.unique(original.round(5),axis=0,return_inverse=True)
+    ids=rev[faces]
+    edges,count=np.unique(np.sort(np.c_[ids.ravel(),ids[:,[1,2,0]].ravel()],axis=1),axis=0,return_counts=True)
+    graph=coo_matrix((np.ones(len(edges)),(edges[:,0],edges[:,1])),shape=(len(pts),len(pts))).tocsr()
+    _,label=connected_components(graph,directed=False)
+    # These scans have one open collar per twig and a capped tip. Distances in
+    # the triangle graph recover the actual cross-sections even on curved twigs.
+    collars=np.unique(edges[count==1])
+    depth=dijkstra(graph,directed=False,indices=collars,min_only=True,unweighted=True)
+    assert np.isfinite(depth).all()
+    step=int(depth.max())+1
+    rings,which,counts=np.unique(label*step+depth.astype(int),return_inverse=True,return_counts=True)
+    centers=np.zeros((len(rings),3));np.add.at(centers,which,pts);centers/=counts[:,None]
+    radii=np.bincount(which,np.linalg.norm(pts-centers[which],axis=1))/counts
+    pos=[];norm=[];uv=[];segments=[]
+    for group in np.split(np.arange(len(rings)),np.flatnonzero(np.diff(rings//step))+1):
+        keep=[0,len(group)-1]
+        pending=[(0,len(group)-1)]
+        tolerance=max(.0018,np.linalg.norm(centers[group[-1]]-centers[group[0]])*.042)
+        while pending:
+            a,b=pending.pop()
+            if b-a<2:continue
+            chord=centers[group[b]]-centers[group[a]]
+            span=centers[group[a+1:b]]-centers[group[a]]
+            t=np.clip((span@chord)/max(chord@chord,1e-12),0,1)
+            error=np.linalg.norm(span-t[:,None]*chord,axis=1)
+            peak=error.argmax()
+            if error[peak]>tolerance:
+                split=a+1+peak;keep.append(split);pending.extend(((a,split),(split,b)))
+        keep=group[sorted(keep)]
+        line=centers[keep];delta=np.gradient(line,axis=0)
+        direction=delta/np.maximum(1e-10,np.linalg.norm(delta,axis=1,keepdims=True))
+        ref=np.eye(3)[np.argmin(np.max(np.abs(direction),axis=0))]
+        side=np.cross(direction,ref);side/=np.maximum(1e-8,np.linalg.norm(side,axis=1,keepdims=True))
+        other=np.cross(direction,side)
+        sides=4 if radii[keep[0]]>.018 else 3
+        angle=np.linspace(0,2*np.pi,sides+1)
+        for r,k in enumerate(keep):
+            radial=np.cos(angle)[:,None]*side[r]+np.sin(angle)[:,None]*other[r]
+            pos.extend(line[r]+radial*radii[k]);norm.extend(radial)
+            uv.extend(zip(angle/(2*np.pi),np.full(sides+1,r/(len(keep)-1))))
+        segments.append((len(keep),sides))
+    points=np.array(pos);points[:,1]-=bottom
+    return points/height,np.asarray(norm),np.asarray(uv),np.asarray(segments,"uint8")
+
+
+def bake_close(model):
+    """Fit a bent, UV-matched strip to individual scanned blades for the closest trees."""
+    parts=source_parts(model)
+    pts,_,uv,tri=parts["leaves"]
+    # Both original meshes have 21 vertices and 24 ordered faces per physical blade.
+    blades=pts.reshape(-1,21,3)
+    assert np.all(tri.reshape(-1,72)//21==np.arange(len(blades))[:,None])
+    bottom=parts["wood"][0][:,1].min()
+    height=pts[:,1].max()-bottom
+    center=(pts.max(axis=0)+pts.min(axis=0))*.5
+    rng=np.random.default_rng(782)
+    selected=np.flatnonzero(rng.random(len(blades))<.55)
+    pos=[];norm=[];tex=[]
+    for batch in np.array_split(selected,16):
+        local=blades[batch]
+        leaf_uv=uv.reshape(-1,21,2)[batch]
+        low=leaf_uv.min(axis=1,keepdims=True);span=leaf_uv.max(axis=1,keepdims=True)-low
+        sample=(leaf_uv-low)/span-.5
+        def basis(s):
+            u,v=s[:,:,0],s[:,:,1]
+            return np.stack((np.ones_like(u),u,v,v*v),axis=-1)
+        corners=np.broadcast_to(np.array([[u,v] for v in [-.5,0,.5] for u in [-.5,.5]],np.float32),(len(batch),6,2))
+        fitted=basis(corners)@(np.linalg.pinv(basis(sample))@local)
+        # Preserve blade centres and the arch along each midrib.
+        mean=fitted.mean(axis=1,keepdims=True)
+        fitted=mean+(fitted-mean)*1.33
+        face=np.cross(fitted[:,1]-fitted[:,0],fitted[:,4]-fitted[:,0])
+        face/=np.maximum(1e-8,np.linalg.norm(face,axis=1,keepdims=True))
+        outward=mean[:,0]-center;outward[:,1]=outward[:,1]*.55+height*.18
+        outward/=np.maximum(1e-8,np.linalg.norm(outward,axis=1,keepdims=True))
+        face*=np.where((face*outward).sum(axis=1,keepdims=True)<0,-1,1)
+        n=face*.55+outward*.70;n/=np.maximum(1e-8,np.linalg.norm(n,axis=1,keepdims=True))
+        norm.append(np.repeat(n,6,axis=0));tex.append(((corners+.5)*span+low).reshape(-1,2))
+        fitted[:,:,1]-=bottom;pos.append(fitted.reshape(-1,3)/height)
+    tp,tn,tu,segments=twig_tubes(parts,bottom,height)
+    path=DEST/(model+"-close.bin")
+    with path.open("wb") as f:
+        f.write(struct.pack("<4sIII",b"BC02",len(tp),len(segments),len(selected)))
+        for data in [np.round(np.clip(tp,-1,1)*32767).astype("<i2"),np.round(tn*127).astype("i1"),
+                     np.round(tu*65535).astype("<u2"),segments]:
+            f.write(data.tobytes());f.write(bytes((-f.tell())%4))
+        # Normalized vertex attributes; shared strip indices are generated on load.
+        f.write(np.round(np.clip(np.concatenate(pos),-1,1)*32767).astype("<i2").tobytes())
+        f.write(np.round(np.concatenate(norm)*127).astype("i1").tobytes())
+        f.write(np.round(np.clip(np.concatenate(tex),0,1)*65535).astype("<u2").tobytes())
+    if model=="island_tree_01":
+        # The two models use identical leaf and twig textures.
+        alpha=(np.asarray(Image.open(SOURCE/(model+"_alpha.png")))/257).astype("uint8")
+        leaf=np.asarray(Image.open(SOURCE/(model+"_leaves_diff_1k.jpg")).convert("RGB")).copy()
+        _,nearest=distance_transform_edt(alpha<32,return_indices=True)
+        leaf[alpha<32]=leaf[nearest[0][alpha<32],nearest[1][alpha<32]]
+        Image.fromarray(np.dstack((leaf,alpha))).save(DEST/"leaf-blades.webp",quality=93,exact=True,method=5)
+        for src,dest,size in [("leaves_nor_gl","leaf-veins",768),("branches_diff","twig-bark",512)]:
+            im=Image.open(SOURCE/f"{model}_{src}_1k.jpg").convert("RGB");im.thumbnail((size,size))
+            im.save(DEST/f"{dest}.webp",quality=90,method=5)
+        # Irregular exposed soil between grass and leaves, using the same photographed ground as the park.
+        ground=np.asarray(Image.open(DEST.parent/"city"/"grass.webp").convert("RGB").resize((512,512))).astype("float32")
+        luma=ground@np.array([.28,.57,.15])
+        soil=np.clip((luma[:,:,None]*.72+13)*np.array([1.08,.84,.59]),0,255).astype("uint8")
+        y,x=np.mgrid[-1:1:512j,-1:1:512j]
+        grain=rng.normal(0,1,luma.shape)
+        mottling=np.zeros_like(luma)
+        for sigma,weight in [(30,.19),(8,.11),(2,.08),(.5,.07)]:
+            noise=gaussian_filter(grain,sigma);mottling+=weight*noise/max(.0001,noise.std())
+        opacity=np.clip((.68-np.hypot(x,y)+mottling)*4,0,1)*np.clip((1-np.hypot(x,y))*10,0,1)
+        Image.fromarray(np.dstack((soil,(255*opacity).astype("uint8")))).save(DEST/"root-soil.webp",quality=89,method=5)
+    print(model,len(selected),"individual blades,",len(segments),"connected twigs,",path.stat().st_size,"bytes",flush=True)
+
+
 if __name__=="__main__":
-    for model in ["island_tree_01","island_tree_02"]:bake(model)
+    import sys
+    for model in ["island_tree_01","island_tree_02"]:
+        if "--close-only" not in sys.argv:bake(model)
+        bake_close(model)

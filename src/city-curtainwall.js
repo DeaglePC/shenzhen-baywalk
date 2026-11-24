@@ -10,6 +10,7 @@ const styles={
   bamboo: { tint:0x9fb7c4, panel:[1.37,4.48], metal:.54, rough:.13, slab:.075, room:.32 },
   bayOffice: { tint:0xa8bac5, panel:[1.47,4.56], metal:.50, rough:.151, slab:.062, room:.39 },
   bayHome: { tint:0x98a7a6, panel:[1.72,4.15], metal:.32, rough:.163, slab:.056, room:.55 },
+  seafront: { tint:0x92afbe, panel:[1.50,4.82], metal:.44, rough:.16, slab:.08, room:.43 },
   atrium: { tint:0xa7c3c4, panel:[1.83,4.5], metal:.36, rough:.12, slab:.038, room:.68 }
 };
 export function curtainWall(style,uvScale=[1,1],probe='district'){
@@ -26,7 +27,7 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
     const at=mat.envMap?.userData.capturePosition;
     local.value=at?1:0;if(at)anchor.value.copy(at);
   };
-  mat.customProgramCacheKey=()=> 'office-glass-v3';
+  mat.customProgramCacheKey=()=> 'office-glass-v4';
   mat.onBeforeCompile=shader=>{
     Object.assign(shader.uniforms,{
       glassUVScale:{value:new T.Vector2(...uvScale)},glassPane:{value:new T.Vector2(...opt.panel)},
@@ -44,7 +45,8 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
       #include <begin_vertex>
       vFacadeMeters=uv*glassUVScale;
       vPanePosition=(modelMatrix*vec4(position,1.)).xyz;
-      vPaneNormal=normalize(mat3(modelMatrix)*normal);
+      vec3 rawPaneN=mat3(modelMatrix)*normal;
+      vPaneNormal=dot(rawPaneN,rawPaneN)>1e-8?normalize(rawPaneN):vec3(0.,1.,0.);
     `);
     shader.fragmentShader=`
       uniform vec2 glassPane;
@@ -72,9 +74,11 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
       #include <color_fragment>
       vec2 grid=vFacadeMeters/glassPane;
       vec2 paneId=floor(grid),pane=fract(grid),aa=max(fwidth(grid),vec2(.0002));
-      vec3 surfaceN=normalize(vPaneNormal);
-      vec3 tangent=normalize(vec3(surfaceN.z,0.,-surfaceN.x)+vec3(.0001,0.,0.));
-      vec3 eyeRay=normalize(vPanePosition-cameraPosition);
+      vec3 surfaceN=dot(vPaneNormal,vPaneNormal)>1e-8?normalize(vPaneNormal):vec3(0.,1.,0.);
+      vec3 rawTan=vec3(surfaceN.z,0.,-surfaceN.x);
+      vec3 tangent=dot(rawTan,rawTan)>1e-8?normalize(rawTan):vec3(1.,0.,0.);
+      vec3 rawEye=vPanePosition-cameraPosition;
+      vec3 eyeRay=dot(rawEye,rawEye)>1e-8?normalize(rawEye):vec3(0.,0.,-1.);
       float facing=max(.13,abs(dot(eyeRay,surfaceN)));
       float closeDetail=1.-smoothstep(.08,.65,max(aa.x,aa.y));
       float branch=officeHash(floor(vec2(vPanePosition.x*.003+vPanePosition.z*.004,1.)));
@@ -82,40 +86,47 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
       float bayRnd=officeHash(paneId+floor(vPanePosition.xz*.015));
       float roomGroup=officeHash(vec2(floor((paneId.x+floorRnd*3.)/4.),paneId.y)+branch*11.);
       float night=clamp(max(emissive.r,max(emissive.g,emissive.b)),0.,1.);
-      float occupancy=smoothstep(.71-.19*night,.87-.19*night,roomGroup*.68+floorRnd*.32);
+      float occupancy=smoothstep(.71-.055*night,.87-.055*night,roomGroup*.68+floorRnd*.32);
       float frameX=glazingBand(pane.x,.020,aa.x);
       float frameY=glazingBand(pane.y,.013,aa.y);
       float slab=glazingBand(pane.y,glassProfile.z*.5,aa.y);
       float glassArea=(1.-frameX)*(1.-frameY)*(1.-slab*.86);
-      // A room is three bays wide and a floor high. Intersect the viewing ray
-      // with its box to expose the ceiling/side walls as the observer moves.
+      // Enhanced 3D Parallax Interior Mapping: intersect viewing ray with a recessed
+      // office volume (depth=0.95) to reveal receding ceilings, light troffers, partitions & floor slabs.
       vec2 roomUV=vec2(fract((grid.x+floorRnd)/3.),pane.y);
-      vec2 slope=vec2(dot(eyeRay,tangent),eyeRay.y)/facing*vec2(.72,.85);
+      vec2 slope=vec2(dot(eyeRay,tangent),eyeRay.y)/facing*vec2(.92,1.08);
       vec2 edge=mix(vec2(0.),vec2(1.),step(vec2(0.),slope));
-      vec2 exitT=(edge-roomUV)/(slope+vec2(.00003));
-      float depth=clamp(min(exitT.x,exitT.y),.0,1.);
+      vec2 safeSlope=vec2(abs(slope.x)<1e-4?(slope.x<0.?-1e-4:1e-4):slope.x,abs(slope.y)<1e-4?(slope.y<0.?-1e-4:1e-4):slope.y);
+      vec2 exitT=(edge-roomUV)/safeSlope;
+      float depth=clamp(min(min(exitT.x,exitT.y),.96),0.,1.);
       vec2 hit=clamp(roomUV+slope*depth,vec2(.001),vec2(.999));
-      float top=step(.988,hit.y),floorHit=1.-step(.013,hit.y);
+      float top=step(.982,hit.y),floorHit=1.-step(.018,hit.y);
+      float sideWallHit=step(.982,hit.x)+(1.-step(.018,hit.x));
+      float backWall=step(.94,depth);
       float glazing=1.-max(top,floorHit);
-      float interior=mix(.44,.75,depth)+top*.14-floorHit*.18;
-      float shade=step(.84,bayRnd)*(1.-smoothstep(-.015,.02,pane.y-(.71+bayRnd*.15)));
-      float furniture=(1.-smoothstep(.014,.045,abs(hit.y-.31)))*glazing;
-      float wallReveal=(1.-smoothstep(.005,.017,abs(fract(hit.x*3.+floorRnd)-.48)))*glazing;
-      interior-=.17*furniture+.1*wallReveal;
-      float closeRoom=mix(.63,interior,closeDetail);
-      float shadeLevel=mix(1.,.74,shade*closeDetail);
-      vec3 finish=glassTint*(.48+.49*closeRoom+.08*bayRnd)*shadeLevel;
-      finish=mix(finish,vec3(.25,.27,.265),shade*closeDetail*.43);
+      // Recessed ceiling troffer strips moving in true parallax depth
+      float troffer=top*smoothstep(.15,.45,sin(hit.x*18.85+floorRnd*6.28))*smoothstep(.20,.65,sin(depth*12.56));
+      float deskLine=(1.-smoothstep(.016,.052,abs(hit.y-.29)))*glazing*(.5+.5*backWall);
+      float roomDiv=(1.-smoothstep(.006,.022,abs(fract(hit.x*2.+floorRnd)-.5)))*glazing;
+      float depthAO=mix(.92,.36,depth);
+      float interior=(.38+.54*depthAO)+top*.22-floorHit*.22-sideWallHit*.10+troffer*.26;
+      interior-=.20*deskLine+.13*roomDiv;
+      float shade=step(.82,bayRnd)*(1.-smoothstep(-.015,.02,pane.y-(.68+bayRnd*.18)));
+      float closeRoom=mix(.60,clamp(interior,.16,1.15),closeDetail);
+      float shadeLevel=mix(1.,.70,shade*closeDetail);
+      vec3 roomTint=mix(vec3(.88,.93,.98),vec3(1.02,.95,.86),floorRnd);
+      vec3 finish=glassTint*roomTint*(.42+.58*closeRoom+.08*bayRnd)*shadeLevel;
+      finish=mix(finish,vec3(.24,.26,.26),shade*closeDetail*.46);
       float curtain=1.-smoothstep(.03,.12,abs(hit.x-.11)-(.025+.12*roomGroup));
       float pleat=.93+.07*cos(130.*hit.x);
       finish=mix(finish,vec3(.345,.326,.286)*pleat,residence*curtain*closeDetail*.64);
-      vec3 satin=mix(vec3(.15,.19,.195),vec3(.39,.42,.42),frameX*.75+frameY*.2);
+      vec3 satin=mix(vec3(.13,.17,.18),vec3(.41,.44,.44),frameX*.75+frameY*.2);
       diffuseColor.rgb=mix(satin,finish,glassArea)*diffuseColor.rgb;
       float lamella=glazingBand(fract(grid.y*1.0+.15),.012,aa.y);
-      vec3 lampColor=mix(vec3(1.0,.52,.24),vec3(.80,.89,.97),smoothstep(.85,1.11,roomGroup+floorRnd*.24));
-      float luminance=occupancy*(.12+.89*night)*glassArea;
-      float ceiling=1.-smoothstep(.025+aa.y*.38,.13+aa.y*.65,abs(pane.y-.87));
-      float interiorLamp=roomStrength*(.22+.34*closeRoom+.90*ceiling+.48*lamella)*luminance*mix(1.,.52+.48*night,bayCladding);
+      vec3 lampColor=mix(vec3(1.0,.64,.34),vec3(.78,.89,1.0),smoothstep(.62,1.05,roomGroup+floorRnd*.32));
+      float luminance=occupancy*(.14+.56*night)*glassArea;
+      float ceiling=(1.-smoothstep(.025+aa.y*.38,.14+aa.y*.65,abs(pane.y-.87)))+.85*troffer*closeDetail;
+      float interiorLamp=roomStrength*(.20+.38*closeRoom+.88*ceiling+.45*lamella)*luminance*mix(1.,.52+.48*night,bayCladding);
     `);
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`
       #include <roughnessmap_fragment>
@@ -141,11 +152,13 @@ export function curtainWall(style,uvScale=[1,1],probe='district'){
         float localWeight=hasGlassCapture*(1.-smoothstep(220.,920.,distance(vPanePosition.xz,glassCapture.xz)));
         localWeight*=1.-smoothstep(.12,.65,reflectedRay.y);
         vec3 offset=vPanePosition-glassCapture;
-        vec3 corrected=normalize(reflectedRay+offset/360.);
-        vec3 lookup=normalize(mix(reflectedRay,corrected,localWeight));
+        vec3 rawCorr=reflectedRay+offset/360.;
+        vec3 corrected=dot(rawCorr,rawCorr)>1e-8?normalize(rawCorr):reflectedRay;
+        vec3 rawLookup=mix(reflectedRay,corrected,localWeight);
+        vec3 lookup=dot(rawLookup,rawLookup)>1e-8?normalize(rawLookup):reflectedRay;
         vec3 surroundings=textureCubeUV(envMap,envMapRotation*lookup,glassProfile.x*.78).rgb*envMapIntensity;
         float incidence=clamp(abs(dot(worldN,-eyeRay)),0.,1.);
-        float grazing=pow(1.-incidence,4.);
+        float grazing=pow(max(1.-incidence,1e-4),4.);
         float coating=(.26+.47*grazing)*glassArea;
         vec3 laminated=surroundings*mix(vec3(.88,.96,1.),vec3(1.),grazing)+totalEmissiveRadiance;
         outgoingLight=mix(outgoingLight,laminated,coating);
