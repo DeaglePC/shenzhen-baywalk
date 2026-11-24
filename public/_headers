@@ -1,0 +1,49 @@
+# Cloudflare Pages caching & security headers for 深圳漫游 · BAYWALK
+# Non-overlapping path rules to avoid duplicate Cache-Control headers.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# HTML entrypoints: always revalidate so new deploys appear immediately
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/credits.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/comparison/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/comparison/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/comparison/plaques.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Vite fingerprinted JS/CSS bundles: immutable 1-year cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static 3D models, PBR textures, HDRIs, foliage bins & 124 pillar textures: 7-day cache
+/models/*
+  Cache-Control: public, max-age=604800
+
+/city/*
+  Cache-Control: public, max-age=604800
+
+/foliage/*
+  Cache-Control: public, max-age=604800
+
+/talent/*
+  Cache-Control: public, max-age=604800
+
+/media/*
+  Cache-Control: public, max-age=604800
+
+# GIS datasets (shenzhen.json, satellite map, canopy data): 1-day cache
+/data/*
+  Cache-Control: public, max-age=86400
