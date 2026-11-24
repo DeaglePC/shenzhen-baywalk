@@ -1,10 +1,14 @@
+import sys
 from pathlib import Path
 from PIL import Image
 
-brain = Path(r"C:\Users\dupen\.gemini\antigravity\brain\db807d96-953c-429d-b751-572f4c18a1bb")
-img_a_path = brain / "shenzhen_houhai_storefronts_elevation_1795439286120.jpg"
-img_b_path = brain / "shenzhen_houhai_storefronts_1795439285820.jpg"
-out_path = Path(r"d:\my_git\bilibiliGame\shenzhen-bay\public\city\retail-fronts-sz.webp")
+if len(sys.argv) < 3:
+    print("Usage: python scripts/pack_storefronts.py <strip_a.jpg> <strip_b.jpg> [output.webp]")
+    sys.exit(1)
+
+img_a_path = Path(sys.argv[1])
+img_b_path = Path(sys.argv[2])
+out_path = Path(sys.argv[3]) if len(sys.argv) >= 4 else Path(__file__).resolve().parent.parent / "public" / "city" / "retail-fronts-sz.webp"
 
 im_a = Image.open(img_a_path).convert("RGB")
 im_b = Image.open(img_b_path).convert("RGB")
