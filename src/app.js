@@ -47,7 +47,8 @@ function geo(){
       {id:'star-south',name:'星光桥 · 南岸花树步道',period:'overcast',x:139.0,z:284.0,lookX:131.0,lookZ:317.0},
       {id:'garden',name:'人才公园 · 林间步道',x:150.9,z:344.1,lookX:164.7,lookZ:341.8},
       {id:'palm-grove',name:'人才公园 · 棕榈林步道',x:-471.05,z:172.75,lookX:-507.6,lookZ:189.0},
-      {id:'sw-blossoms',name:'人才公园 · 异木棉大道',x:-294.0,z:390.0,lookX:-328.0,lookZ:387.0},
+      {id:'sw-blossoms',name:'人才公园 · 异木棉大道',x:-282.5,z:393.4,lookX:-293.5,lookZ:395.5,
+        portrait:{height:1.88,target:[-293.5,5.4,395.5],fov:58}},
       {id:'north-ramp',name:'人才公园 · 北岸无障碍坡道',x:20.2,z:-320.6,lookX:42.0,lookZ:-305.0},model3Street());
     const talent=personView(d,route.get('person')||undefined,route.get('detail'))||personView(d);
     if(talent)d.views.push(talent);

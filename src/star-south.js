@@ -5,6 +5,7 @@ import {photo} from './city-materials.js';
 import {southWalk} from './talent-field.js';
 import {routePoint} from './talent-bridge.js';
 import {drape,groundIndex,landingPaving} from './star-south-ground.js';
+import {parkShrubs} from './park-shrubs.js';
 
 const tau=Math.PI*2,brickHalf=2.05,blueOffset=-5.65;
 const segments=new Grid(20);
@@ -89,29 +90,22 @@ function trees(root,at,m,landing){
     crowns.at(p.x,p.y+h-.1,p.z,1.12,1.12,1.12,rand()*tau);
 
   }
-  const barkMap=new T.TextureLoader().load('/foliage/island_tree_01-bark.webp');barkMap.colorSpace=T.SRGBColorSpace;
+  const barkMap=new T.TextureLoader().load(import.meta.env.BASE_URL+'foliage/twig-bark.webp');
+  barkMap.colorSpace=T.SRGBColorSpace;barkMap.wrapS=barkMap.wrapT=T.RepeatWrapping;barkMap.repeat.set(1,2);
   const boughs=new Instances(new T.CylinderGeometry(.58,1,1,7),new T.MeshStandardMaterial({map:barkMap,color:0xbdada0,roughness:.99}),'南岸 · 乔木分枝');
-  const flowerMap=new T.TextureLoader().load('/talent/field/pink-flowers.webp');flowerMap.colorSpace=T.SRGBColorSpace;
   const leafMap=new T.TextureLoader().load('/talent/field/leaf-sprays.webp');leafMap.colorSpace=T.SRGBColorSpace;
-  const petals=new Surface(),leaves=new Surface(),v=(x,y,z)=>new T.Vector3(x,y,z);
-  const green=new T.Color(),bud=new T.Color();
+  const leaves=new Surface(),v=(x,y,z)=>new T.Vector3(x,y,z);
+  const green=new T.Color();
   function twig(a,b,r){boughs.between(a.x,a.y,a.z,b.x,b.y,b.z,r);}
-  function spray(tip,flower,scale){
+  function spray(tip,scale){
     const yaw=rand()*tau,cs=Math.cos(yaw),sn=Math.sin(yaw);
     const tile=Math.floor(rand()*4),leafUv=[[tile/4,0],[(tile+1)/4,0],[(tile+1)/4,1],[tile/4,1]];
-    const reach=(flower?.26:.47)*(1+rand()*.46)*scale,up=v((rand()-.5)*.32,reach*.6,(rand()-.5)*.32);
+    const reach=.47*(1+rand()*.46)*scale,up=v((rand()-.5)*.32,reach*.6,(rand()-.5)*.32);
     const side=v(cs*reach,0,sn*reach),centre=tip.clone().addScaledVector(side,.23);
     green.setRGB(.92+rand()*.22,1.00+rand()*.12,.91);
-    if(!flower||rand()<.35)leaves.quad(...[[-1,-1],[1,-1],[1,1],[-1,1]].map(([i,j])=>centre.clone().addScaledVector(side,i).addScaledVector(up,j).toArray()),leafUv,green);
-    if(!flower)return;
-    const size=(.24+rand()*.18)*scale,k=Math.floor(rand()*4),uv=[[k/4,0],[(k+1)/4,0],[(k+1)/4,1],[k/4,1]];
-    bud.setRGB(1.0,.93+rand()*.07,.99);
-    for(const [c,s] of [[cs,sn],[-sn,cs]]){
-      const u=v(c*size,0,s*size),up=v(.05,size*(.7+rand()*.36),-.04);
-      petals.quad(...[[-1,-1],[1,-1],[1,1],[-1,1]].map(([i,j])=>tip.clone().addScaledVector(u,i+.28).addScaledVector(up,j+.28).toArray()),uv,bud);
-    }
+    leaves.quad(...[[-1,-1],[1,-1],[1,1],[-1,1]].map(([i,j])=>centre.clone().addScaledVector(side,i).addScaledVector(up,j).toArray()),leafUv,green);
   }
-  function tree(s,off,height,bloom){
+  function tree(s,off,height){
     const p=at(s,off),base=v(p.x,p.y,p.z),lean=v((rand()-.5)*.7,0,(rand()-.5)*.7);
     // Never plant a tree on top of Starlight Bridge's paved south landing ramp!
     if(landing?.heightAt(p.x,p.z)!=null)return;
@@ -130,19 +124,23 @@ function trees(root,at,m,landing){
           const b=a+(rand()-.5)*2.8,l=height*(.06+rand()*.095);
           const tip=outer.clone().add(v(Math.cos(b)*l,height*(.014+rand()*.13),Math.sin(b)*l));
           twig(outer,tip,.017+rand()*.012);
-          for(let cluster=0;cluster<(bloom?3:2);cluster++){
+          for(let cluster=0;cluster<2;cluster++){
             const t=tip.clone().lerp(outer,rand()*.71);
-            spray(t,bloom&&rand()<.78,.85+rand()*.7);
+            spray(t,.85+rand()*.7);
           }
         }
       }
     }
   }
-  for(const [s,off,h] of [[9,5.5,5],[23,5.8,5.2],[39,4.8,5.5],[55,5.8,7.5],[71,-3.8,6.3],[84,5.6,6.7],[101,5.2,6.4],[118,-3.8,6.7],[131,5.2,6.4],[148,6.4,5.8],[168,4.8,6.1]])tree(s,off,h,false);
-  for(const [s,off,h] of [[127,-13,6.8],[151,6.8,6.3],[176,6.7,7.1],[192,6.5,6.1],[201,6.3,7.5],[220,-7.3,7.8],[239,-9,6.9],[254,-7.1,7.2],[268,-8.5,6.7]])tree(s,off,h,true);
+  for(const [s,off,h] of [[9,5.5,5],[23,5.8,5.2],[39,4.8,5.5],[55,5.8,7.5],[71,-3.8,6.3],[84,5.6,6.7],[101,5.2,6.4],[118,-3.8,6.7],[131,5.2,6.4],[148,6.4,5.8],[168,4.8,6.1]])tree(s,off,h);
   leaves.mesh(root,new T.MeshStandardMaterial({map:leafMap,alphaTest:.24,vertexColors:true,roughness:.88,side:T.DoubleSide}),'南岸 · 乔木疏叶');
-  petals.mesh(root,new T.MeshStandardMaterial({map:flowerMap,alphaTest:.23,vertexColors:true,roughness:.92,side:T.DoubleSide}),'南岸 · 实拍粉色花簇');
   for(const b of [stems,crowns,boughs])b.flush(root,true);
+  const blossoms=[];
+  for(const [s,off,h] of [[127,-13,6.8],[151,6.8,6.3],[176,6.7,7.1],[192,6.5,6.1],[201,6.3,7.5],[220,-7.3,7.8],[239,-7.4,6.9],[254,-7.1,7.2],[268,-7.4,6.7]]){
+    const p=at(s,off);
+    if(landing?.heightAt(p.x,p.z)==null)blossoms.push([p.x,p.z,h,rand(),p.y]);
+  }
+  return blossoms;
 }
 
 function overlook(root,at,m){
@@ -203,7 +201,7 @@ export function southPromenade(root,m,landing,ground){
   strip('南岸 · 浅石步行道',-10.65,-8.05,m.path,34,length,landingPaving);
   const edging=new T.MeshStandardMaterial({color:0xb6b4a6,roughness:.95,side:T.DoubleSide});
   for(const offset of [-brickHalf,brickHalf])strip('砖道边石',offset-.08,offset+.08,edging,0,length,landingPaving+.009);
-  const hedge=new Instances(new T.SphereGeometry(1,9,5),new T.MeshStandardMaterial({map:photo('flowerbed-hedge.webp'),color:0x97a269,roughness:1}),'南岸 · 修剪绿篱');
+  const hedge=parkShrubs(root,'南岸 · 修剪绿篱',(x,z)=>ground.heightAt(x,z)??.039);
   const rand=random(344);
   // Keep clear of Starlight Bridge south landing ramp (s < 32); place hedges strictly on turf strips between paths.
   for(const [a,b,off] of [[32,135,-7.42],[143,182,-7.45],[199,220,4.1],[221,226,3.8],[232,238,3.7],[241,272,4.1]]){
@@ -220,12 +218,12 @@ export function southPromenade(root,m,landing,ground){
     for(const t of [-.82,.82])feet.at(p.x+p.dx*t,p.y+.18,p.z+p.dz*t,.59,.36,.30,rot);
     for(let i=-2;i<=2;i++)seats.at(p.x-p.dz*i*.115,p.y+.44,p.z+p.dx*i*.115,.108,.09,2.89,rot);
   }
-  seats.flush(root,true);feet.flush(root,true);trees(root,at,m,landing);
+  seats.flush(root,true);feet.flush(root,true);const blossoms=trees(root,at,m,landing);
   const onLookout=overlook(root,at,m),pathHeight=groundIndex(paths);
   const pavedHeightAt=(x,z)=>onLookout(x,z)?Math.max(.32,pathHeight(x,z)??0):pathHeight(x,z);
   const southBlueEnd=at(length,blueOffset);
   return {
-    southBlueEnd,
+    southBlueEnd,blossoms,
     trees:Array.from({length:60},(_,i)=>{
       const s=6+i*4.45,off=i%3===0?-21-rand()*3:-14.8-rand()*3.5,p=at(s,off);
       return [p.x,p.z,6.4+rand()*3.8,i%2];

@@ -6,6 +6,7 @@ import {makeTraffic} from '../src/vehicles.js';
 import {bayHeight} from '../src/bay-alignment.js';
 import {streetJunctions,wenxinDivider} from '../src/street-junctions.js';
 import {streetObstacles} from '../src/traffic-collision.js';
+import {quadHeight} from '../src/city-geometry.js';
 
 const map=JSON.parse(readFileSync(new URL('../public/data/shenzhen.json',import.meta.url),'utf8'));
 const profiles=roadProfiles(map);
@@ -65,6 +66,50 @@ test('mapped junctions and merge points retain a common driving height',()=>{
       assert(Math.abs(b.y-a.y)<.083*(b.s-a.s),'steep motor approach on '+road.id);
     }
   }
+});
+
+test('both divided crossroads on Keyuan South Road have open, paved centres',()=>{
+  const layout=streetJunctions(map);
+  for(const p of [[-553,60],[-453,-355]]){
+    const patch=layout.junctionAt(...p);
+    assert.equal(patch?.corners.length,4);
+    for(const [i,a] of patch.corners.entries()){
+      const b=patch.corners[(i+1)%4];
+      const road=map.roads.find(r=>r.oneway&&[a,b].every(p=>r.p.some(q=>q.join()===p.join())));
+      assert.ok(road);
+      let s=0;
+      const stations=road.p.map((q,i)=>{if(i)s+=Math.hypot(q[0]-road.p[i-1][0],q[1]-road.p[i-1][1]);return s;});
+      const mid=[a,b].reduce((sum,q)=>sum+stations[road.p.findIndex(v=>v.join()===q.join())]/2,0);
+      for(const side of [-1,0,1])assert.equal(layout.isClear(road,mid,side),false);
+    }
+  }
+  assert.equal(layout.junctionAt(-553,100),undefined,'keep the median outside the junction');
+});
+
+test('the Shahe West service entrance follows the main deck across its full mouth',()=>{
+  const [before,after,side]=[232498905,359908864,535456369].map(id=>map.roads.find(r=>r.id===id));
+  const a=profiles.get(before),b=profiles.get(after),ramp=profiles.get(side),layout=streetJunctions(map);
+  assert(Math.abs(a.points.at(-1).width-b.points[0].width)<.001);
+  // Each branch edge should meet the height of the corresponding point on
+  // the through road, including its longitudinal grade across the entrance.
+  for(const station of [3,6,8])for(const offset of [-side.width/2,0,side.width/2]){
+    const p=atStation(ramp,station),dx=p.x+p.nx*offset-b.points[0].x,dz=p.z+p.nz*offset-b.points[0].z;
+    const along=dx*b.points[0].nz-dz*b.points[0].nx;
+    const through=along<0?atStation(a,a.length+along):atStation(b,along);
+    assert(Math.abs(p.y+offset*p.crossSlope-through.y)<.025,'step at '+station+','+offset);
+  }
+  for(const [road,s] of [[before,a.length-1.5],[after,1.5]]){
+    assert.equal(layout.isClear(road,s,1),false);
+    assert.equal(layout.isClear(road,s,-1),true,'retain the opposite edge');
+  }
+});
+
+test('a sloping deck ends at its measured edges and interpolates its transverse slope',()=>{
+  const deck=[[0,1,4],[5,2,3],[5,1.7,-3],[0,.6,-4]];
+  assert.equal(quadHeight(deck,-.5,0),null);
+  assert.equal(quadHeight(deck,5.3,1),null);
+  assert.equal(quadHeight(deck,5,3.1),null);
+  assert(Math.abs(quadHeight(deck,2.5,.5)-1.35)<1e-6);
 });
 
 test('drivers enter, cross and leave both carriageways of Houhai Bridge',()=>{

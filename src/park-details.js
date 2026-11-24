@@ -4,6 +4,8 @@ import {mountSculpture} from './park-sculpture.js';
 import {parkLetters} from './park-lettering.js';
 import {photo} from './city-materials.js';
 import {parkPhotoDetails} from './park-photo-details.js';
+import {parkShrubs,shrubTurf} from './park-shrubs.js';
+import {parkPlayground} from './park-playground.js';
 
 function makeCanvasTex(w,h,paint){
   const c=document.createElement('canvas');c.width=w;c.height=h;
@@ -149,7 +151,7 @@ export function parkDetails(root,map,m,grid){
     obstacles.add({p,bbox:bounds(p)},bounds(p));
   };
   const addBoxObstacle=(p)=>obstacles.add({p,bbox:bounds(p)},bounds(p));
-  const addPavedArea=(p)=>pavedAreas.push({p,bbox:bounds(p)});
+  const addPavedArea=(p,holes=[])=>pavedAreas.push({p,holes,bbox:bounds(p)});
   const addPavedSeg=(a,b,halfW)=>{
     const pad=halfW+2;
     pavedSegs.add({a,b,halfW},[Math.min(a[0],b[0])-pad,Math.min(a[1],b[1])-pad,Math.max(a[0],b[0])+pad,Math.max(a[1],b[1])+pad]);
@@ -248,8 +250,9 @@ export function parkDetails(root,map,m,grid){
     ];
 
     const planterSurf=new Surface(),soilSurf=new Surface(),foliageSurf=new Surface(),salviaSurf=new Surface(),apronSurf=new Surface();
-    const backHedge=new Instances(new T.IcosahedronGeometry(1,2),new T.MeshStandardMaterial({map:photo('flowerbed-hedge.webp'),color:0x76924e,roughness:.96}),'文化墙 · 墙后自然绿篱灌木');
-    const backBloomSurf=new Surface(),backPurpleSurf=new Surface();
+    const wallTurf=(x,z)=>shrubTurf(map,x,z);
+    const pinkHedge=parkShrubs(root,'文化墙 · 墙后粉花灌木',wallTurf,'flower');
+    const purpleHedge=parkShrubs(root,'文化墙 · 墙后紫花灌木',wallTurf,'violet');
     const rng=random(1772);
 
     for(const slab of slabs){
@@ -360,15 +363,8 @@ export function parkDetails(root,map,m,grid){
         const u=(i+.5)/nHedge*len,dist=1.75+rng()*.95;
         const bp=pt(u,wallY0,-(halfT+dist));
         const rx=.95+rng()*.45,ry=.82+rng()*.28;
-        backHedge.at(bp[0],wallY0+ry*.85,bp[2],rx,ry,rx*.85,rng()*6.28);
-        // Fine scattered floral flecks resting on top of the textured hedge (pink left, blue-purple right like IMG_0172!)
-        for(let f=0;f<5;f++){
-          const fx=bp[0]+(rng()-.5)*rx*1.1,fz=bp[2]+(rng()-.5)*rx*.9,fy=wallY0+ry*1.62+rng()*.12;
-          const fw=.045+rng()*.028;
-          const target=u<len*.52?backBloomSurf:backPurpleSurf;
-          target.quad([fx-fw,fy,fz],[fx+fw,fy,fz],[fx+fw*.5,fy+fw*1.2,fz],[fx-fw*.5,fy+fw*1.2,fz]);
-          target.quad([fx,fy,fz-fw],[fx,fy,fz+fw],[fx,fy+fw*1.2,fz+fw*.5],[fx,fy+fw*1.2,fz-fw*.5]);
-        }
+        const hedge=u<len*.52?pinkHedge:purpleHedge;
+        hedge.at(bp[0],wallY0+ry*.65,bp[2],rx,ry,rx*.85,rng()*6.28);
       }
 
       addBoxObstacle([
@@ -382,9 +378,7 @@ export function parkDetails(root,map,m,grid){
     soilSurf.mesh(wallGroup,new T.MeshStandardMaterial({color:0x3d332a,roughness:1,side:T.DoubleSide}),'文化墙 · 种植土');
     foliageSurf.mesh(wallGroup,new T.MeshStandardMaterial({color:0x4b703a,roughness:.92,side:T.DoubleSide}),'文化墙 · 鼠尾草绿叶');
     salviaSurf.mesh(wallGroup,new T.MeshStandardMaterial({color:0x6656c2,roughness:.80,side:T.DoubleSide}),'文化墙 · 蓝紫鼠尾草花穗');
-    backHedge.flush(wallGroup,true);
-    backBloomSurf.mesh(wallGroup,new T.MeshStandardMaterial({color:0xc86b86,roughness:.85,side:T.DoubleSide}),'文化墙 · 墙后粉红花簇');
-    backPurpleSurf.mesh(wallGroup,new T.MeshStandardMaterial({color:0x6e5ec4,roughness:.84,side:T.DoubleSide}),'文化墙 · 墙后蓝紫鼠尾草带');
+    pinkHedge.flush(wallGroup,true);purpleHedge.flush(wallGroup,true);
   }
 
   // =========================================================================
@@ -510,7 +504,7 @@ export function parkDetails(root,map,m,grid){
     for(let k=0;k<10;k++)rail.at(standPos[0]+.45+k*.18,.68,standPos[1]-.4-k*.07,.022,.82,.022,-.35);
     rail.at(standPos[0]+1.25,1.08,standPos[1]-.72,1.85,.04,.04,-.35);
     rail.flush(piShore);
-    const piHedge=new Instances(new T.SphereGeometry(1,9,6),new T.MeshStandardMaterial({map:photo('flowerbed-hedge.webp'),color:0x889958,roughness:1}),'π桥南岸 · 修剪灌木绿篱');
+    const piHedge=parkShrubs(root,'π桥南岸 · 修剪灌木绿篱',(x,z)=>shrubTurf(map,x,z));
     const hRng=random(3694);
     for(let i=0;i<28;i++){
       const t=i/27,hx=-63.5+t*17.5,hz=356.0-Math.sin(t*Math.PI)*3.8;
@@ -806,13 +800,15 @@ export function parkDetails(root,map,m,grid){
         const a=s*Math.PI*2/SEGS;
         row.push([lawnCX+Math.cos(a)*rad,y,lawnCZ+Math.sin(a)*rad]);
       }
+      const ids=row.slice(0,SEGS).map(q=>domeSurf.vertex(q,[q[0]/3.6,q[2]/3.6],lawnTone));
       if(r===1){
-        const apex=[lawnCX,.25+lawnRise,lawnCZ];
-        for(let s=0;s<SEGS;s++)domeSurf.quad(apex,row[s],row[s+1],apex,[apex,row[s],row[s+1],apex].map(q=>[q[0]/3.6,q[2]/3.6]),lawnTone);
-      }else{
-        for(let s=0;s<SEGS;s++)domeSurf.quad(prevRing[s],row[s],row[s+1],prevRing[s+1],[prevRing[s],row[s],row[s+1],prevRing[s+1]].map(q=>[q[0]/3.6,q[2]/3.6]),lawnTone);
+        const apex=domeSurf.vertex([lawnCX,.25+lawnRise,lawnCZ],[lawnCX/3.6,lawnCZ/3.6],lawnTone);
+        for(let s=0;s<SEGS;s++)domeSurf.indices.push(apex,ids[(s+1)%SEGS],ids[s]);
+      }else for(let s=0;s<SEGS;s++){
+        const next=(s+1)%SEGS;
+        domeSurf.indices.push(prevRing[s],prevRing[next],ids[next],prevRing[s],ids[next],ids[s]);
       }
-      prevRing=row;
+      prevRing=ids;
     }
     // Crisp curved light-grey granite seating curb ringing the circular lawn
     const curbR0=lawnR-.12,curbR1=lawnR+.58,curbY=.50;
@@ -823,8 +819,9 @@ export function parkDetails(root,map,m,grid){
       const o0=[lawnCX+Math.cos(a0)*curbR1,curbY,lawnCZ+Math.sin(a0)*curbR1];
       const o1=[lawnCX+Math.cos(a1)*curbR1,curbY,lawnCZ+Math.sin(a1)*curbR1];
       const b0=[o0[0],.25,o0[2]],b1=[o1[0],.25,o1[2]];
-      curbSurf.quad(i0,o0,o1,i1);
+      curbSurf.quad(i0,i1,o1,o0);
       curbSurf.quad(b0,o0,o1,b1);
+      curbSurf.quad([i1[0],.25,i1[2]],i1,i0,[i0[0],.25,i0[2]]);
     }
 
     // 9b. Upgrade muddy brown circular & radial footways to crisp warm-grey linear granite paving
@@ -939,19 +936,21 @@ export function parkDetails(root,map,m,grid){
     }
 
     // Lush manicured ornamental shrub clusters at outer circular lawn lawn-path wedges (clear of paths!)
-    const westShrubs=new Instances(new T.SphereGeometry(1,8,6),new T.MeshStandardMaterial({map:photo('flowerbed-hedge.webp'),color:0x7c9652,roughness:.96}),'西岸草坡 · 景观灌木组团');
+    const westShrubs=parkShrubs(root,'西岸草坡 · 景观灌木组团',(x,z)=>westLawnHeight(x,z)??shrubTurf(map,x,z));
     const sRng=random(562599);
     for(const [sx,sz,cnt] of [[-222,-66,7],[-218,-112,7],[-252,-128,6],[-256,-52,6],[-214,-154,6],[-238,-18,6]]){
       for(let k=0;k<cnt;k++){
         const ox=(sRng()-.5)*4.2,oz=(sRng()-.5)*4.2,rx=.75+sRng()*.45,ry=.48+sRng()*.28;
-        westShrubs.at(sx+ox,.25+ry*.65,sz+oz,rx,ry,rx*.9,sRng()*6.28);
+        const x=sx+ox,z=sz+oz,yaw=sRng()*6.28;
+        if(pavedSegs.query(x,z).some(s=>segmentDistance(x,z,s.a,s.b)<s.halfW+rx*.85))continue;
+        westShrubs.at(x,.25+ry*.65,z,rx,ry,rx*.9,yaw);
       }
     }
 
     domeSurf.mesh(westGroup,m.grass,'西岸 · 百杰山微地形圆环草坡');
     westPave.mesh(westGroup,stoneMat,'西岸 · 圆环广场线性花岗石步道');
     stepSurf.mesh(westGroup,lightCurbMat,'西岸 · 临湖三级花岗石观景台阶');
-    curbSurf.mesh(westGroup,lightCurbMat,'西岸 · 圆环坐凳压顶与梯级收边',true);
+    curbSurf.mesh(westGroup,m.curb,'西岸 · 圆环坐凳压顶与梯级收边',true);
     for(const inst of [shoreBollards,shoreBenches,shoreLegs,westShrubs])inst.flush(westGroup,inst!==shoreBollards);
   }
 
@@ -968,17 +967,17 @@ export function parkDetails(root,map,m,grid){
   }
 
   for(const b of [bollards,bollardCaps,leafPosts])b.flush(group,b===leafPosts);
-  const photoExtra=parkPhotoDetails(root,map,m,grid,{addObstacle,addPavedSeg});
-
   const onPromenade=(x,z,margin=.65)=>{
     if(pavedAreas.some(a=>inArea(x,z,a)))return true;
     return pavedSegs.query(x,z).some(s=>segmentDistance(x,z,s.a,s.b)<s.halfW+margin);
   };
+  const photoExtra=parkPhotoDetails(root,map,m,grid,{addObstacle,addPavedSeg,onPromenade});
+  const playgroundTrees=parkPlayground(group,map,m,{addBoxObstacle,addPavedArea,trackTex});
   return {
     ready:sculptureReady,
     blocked:(x,z)=>obstacles.query(x,z).some(o=>inArea(x,z,o)),
     heightAt:westLawnHeight,
-    trees:westTrees,
+    trees:[...westTrees,...playgroundTrees],
     onPromenade,
     dispose(){photoExtra.dispose();disposables.forEach(t=>t.dispose());}
   };

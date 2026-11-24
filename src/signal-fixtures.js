@@ -331,6 +331,20 @@ export function signalFixtures(root,plan,m,grid){
     if(site.midblock||site.arms.length<3)continue;
     const primary=site.arms[0];
     const span=Math.max(8,Math.min(18,site.radius*.78));
+    const crossing=grid.junctions.junctionAt(...site.center);
+    if(crossing){
+      const [a,b,c,d]=crossing.corners;
+      // The two streets can meet obliquely. Carry both measured directions
+      // into the painted grid, centred between the four carriageways.
+      const axis=(p,q,r,s)=>new T.Vector3((q[0]-p[0]+s[0]-r[0])/2,0,(q[1]-p[1]+s[1]-r[1])/2);
+      const x=axis(a,b,d,c),z=axis(a,d,b,c);
+      if(x.x*z.z-x.z*z.x<0)z.negate();
+      for(const dir of [x,z])dir.multiplyScalar(1+Math.min(.4,4/dir.length()));
+      const center=crossing.corners.reduce((v,p)=>v.add(new T.Vector3(p[0]/4,0,p[1]/4)),new T.Vector3());
+      center.y=.347;
+      yellowBoxBatch.matrices.push(new T.Matrix4().makeBasis(x,new T.Vector3(0,1,0),z).setPosition(center));
+      continue;
+    }
     const syaw=Math.atan2(primary.dir[0],primary.dir[1]);
     yellowBoxBatch.at(site.center[0],.347,site.center[1],span,1,span,syaw);
   }

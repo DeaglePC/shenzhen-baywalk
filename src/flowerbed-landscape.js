@@ -114,7 +114,7 @@ export function flowerbedLandscape(root,map,m){
   const shoreRuns=[[[122,-224],[127,-220],[133,-216],[139,-212]],
     [[146,-208],[151,-204],[156,-199],[161,-194]],
     [[164,-190],[167,-186],[170,-181]],[[174,-174],[176,-168],[178,-161]]];
-  shorePlanting(root,meadowHeight,leafMap,shootMap,shoreRuns);
+  shorePlanting(root,meadowHeight,shootMap,shoreRuns);
   const local=(s,inland)=>[181.2+.68*s+.733*inland,-229.7+.733*s-.68*inland];
   const lobe=(surface,points,r,h,color)=>{
     const line=points.map(([s,n])=>local(s,n));

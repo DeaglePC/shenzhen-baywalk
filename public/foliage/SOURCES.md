@@ -7,3 +7,5 @@
 除全图区的 9,000 个候选点外，内湖近岸与登良路附近另选取 121 个较矮或较小的树冠峰点，来自同一份 Meta / WRI 卫星树冠高度预测。补点位于已有树点之外，并避让建筑、水体及标绘道路。源研究为 *Version 2 High Resolution Canopy Height Maps (CHMv2)*（Meta and WRI，2026），按 CC BY 4.0 发布。Source imagery for CHM © 2016 Vantor. Accessed 21 November 2026. [树冠资料说明](../data/SOURCES.md) · [数据来源](https://registry.opendata.aws/dataforgood-fb-forestsv2/) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
 公园边界内另补入 56 个树冠峰点和 633 个连续林冠内的候选树位。后者依据连续的预测冠高与株距布置。可通过 `python scripts/geocanopy.py --park-infill` 从相同数据重建，近景网格和纹理可通过 `python scripts/foliage_build.py --close-only` 重建。
+
+人才公园的灌木与草丛共用 `understory.webp`。枝梢和草簇从 Poly Haven 的 CC0 模型沿多个方向烘焙，近处的独立叶片保留叶脉，弯折草叶使用单根草叶的纹理。运行 `python scripts/shrub_sprays.py` 可重建图集。[Shrub 04](https://polyhaven.com/a/shrub_04) · [Grass Medium 01](https://polyhaven.com/a/grass_medium_01) · [Grass Medium 02](https://polyhaven.com/a/grass_medium_02) · [CC0 许可](https://polyhaven.com/license)

@@ -6,7 +6,7 @@ import {districtDecks} from './district-decks.js';
 import {navigationSpan,northernBayWays} from './bay-alignment.js';
 import {skywalkHeight} from './walk-deck-data.js';
 
-const point=(p,off,dy)=>[p.x+p.nx*off,p.y+dy,p.z+p.nz*off];
+const point=(p,off,dy)=>[p.x+p.nx*off,p.y+dy+off*(p.crossSlope??0),p.z+p.nz*off];
 function strip(surface,a,b,ao,ai,bo,bi,ah=0,al=ah,bh=ah,bl=al,scale=4){
   surface.quad(point(a,ao,ah),point(b,bo,bh),point(b,bi,bl),point(a,ai,al),
     [[ao/scale,a.s/scale],[bo/scale,b.s/scale],[bi/scale,b.s/scale],[ai/scale,a.s/scale]]);
@@ -106,11 +106,14 @@ export function viaducts(root,m,grid,map,layout=null){
   const lenses=new Instances(box,lightMat,'桥面灯具透镜');
   grid.bridgePiers=new Grid(48);
   const platforms=grid.platforms=districtDecks(root,map,m,grid);
-  function collision(a,b,lo,hi,base,width,rd,solid=false,foot=false,clipEnds=false){
-    const d=(lo+hi)*.5,A=point(a,d,0),B=point(b,d,0),pad=width*.5+1;
-    grid.roads.add({a:[A[0],A[2]],b:[B[0],B[2]],width,y:a.y+base,endY:b.y+base,rd,graded:true,solid,foot,
-      rampStart:clipEnds,rampEnd:clipEnds,depth:solid?Math.min(1.5,width*.117):0},
-      [Math.min(A[0],B[0])-pad,Math.min(A[2],B[2])-pad,Math.max(A[0],B[0])+pad,Math.max(A[2],B[2])+pad]);
+  function collision(a,b,lo,hi,loB,hiB,base,rd,solid=false,foot=false){
+    const A=point(a,(lo+hi)*.5,base),B=point(b,(loB+hiB)*.5,base),width=Math.max(hi-lo,hiB-loB);
+    const quad=[point(a,hi,base),point(b,hiB,base),point(b,loB,base),point(a,lo,base)];
+    const xs=quad.map(p=>p[0]),zs=quad.map(p=>p[2]);
+    const bbox=[Math.min(...xs),Math.min(...zs),Math.max(...xs),Math.max(...zs)];
+    grid.roads.add({a:[A[0],A[2]],b:[B[0],B[2]],width,y:A[1],endY:B[1],quad,bbox,rd,graded:true,solid,foot,
+      depth:solid?Math.min(1.5,width*.117):0},
+      [bbox[0]-1,bbox[1]-1,bbox[2]+1,bbox[3]+1]);
   }
   function barrier(a,b,x,y,sign,height=1){
     const face=(wa,ha,wb,hb)=>strip(parapet,a,b,x+sign*wa,x+sign*wb,y+sign*wa,y+sign*wb,ha*height,hb*height);
@@ -135,16 +138,15 @@ export function viaducts(root,m,grid,map,layout=null){
   // Emit a surface strip split at street junctions on low/at-grade segments so
   // sidewalks and edge lines never cut across intersecting side streets.
   function clearSubStrip(profile,rd,a,b,side,emit){
-    if(!layout||Math.max(a.y,b.y)>=.85){emit(a,b);return;}
-    const len=b.s-a.s;
-    if(len<.05)return;
-    const steps=Math.max(1,Math.ceil(len/2.0));
-    let prev=a;
-    for(let k=1;k<=steps;k++){
-      const next=k===steps?b:atStation(profile,a.s+len*k/steps);
-      if(layout.isClear(rd,(prev.s+next.s)*.5,side))emit(prev,next);
-      prev=next;
+    let start=a;
+    for(const [lo,hi] of layout?.blockedSpans(rd,side)??[]){
+      if(hi<=start.s)continue;
+      if(lo>=b.s)break;
+      if(lo>start.s)emit(start,atStation(profile,lo));
+      if(hi>=b.s)return;
+      start=atStation(profile,hi);
     }
+    emit(start,b);
   }
   function surfaceLift(rd,y){
     if(y>=.85)return 0;
@@ -212,7 +214,7 @@ export function viaducts(root,m,grid,map,layout=null){
             [Math.min(a.x,b.x)-pad,Math.min(a.z,b.z)-pad,Math.max(a.x,b.x)+pad,Math.max(a.z,b.z)+pad]);
         }
         if(profile.urban&&Math.min(a.y,b.y)>6.1&&platforms.areaAt((a.x+b.x)/2,(a.z+b.z)/2))continue;
-        collision(a,b,-wa,wa,0,rd.width,rd,profile.urban,true,profile.urban||rd.kind==='steps');
+        collision(a,b,-wa,wa,-wb,wb,0,rd,profile.urban,true);
         if(isSide)continue;
         if(rd.kind!=='steps'||Math.abs(b.y-a.y)<.025)
           strip(pavement,a,b,wa,-wa,wb,-wb,.005,.005,.005,.005,2.4);
@@ -227,7 +229,7 @@ export function viaducts(root,m,grid,map,layout=null){
       const la=surfaceLift(rd,a.y),lb=surfaceLift(rd,b.y);
       strip(asphalt,a,b,wa,-wa,wb,-wb,la,la,lb,lb,4.7);
       for(const [u,p] of [[a.width,a],[b.width,b],[0,b],[0,a]])lanes.push(u,p.width/laneCount);
-      collision(a,b,-wa,wa,0,Math.max(a.width,b.width),rd,physical);
+      collision(a,b,-wa,wa,-wb,wb,0,rd,physical);
       const raised=Math.max(a.y,b.y)>.38;
       if(raised){
         const da=Math.min(1.36,a.y+.35),db=Math.min(1.36,b.y+.35);
@@ -245,12 +247,21 @@ export function viaducts(root,m,grid,map,layout=null){
         strip(underside,a,b,ao,ai,bo,bi,-.42);
       }
       if(cityBridge&&raised){
-        strip(pavement,a,b,ao,wa,bo,wb,.15,.15,.15,.15,2.4);
-        strip(deck,a,b,wa,wa,wb,wb,.15,0);
-        strip(deck,a,b,-wa,-wa, -wb,-wb,0,.19);
-        strip(deck,a,b,-wa,-wa-.17,-wb,-wb-.17,.19);
-        const sidewalk=(ao-wa+bo-wb)/2;
-        if(sidewalk>.2)collision(a,b,wa,ao,.15,sidewalk,rd,physical,true);
+        // The concrete wing also carries the asphalt landing beneath openings
+        // in the raised sidewalk. Keep it below the intersecting road surface.
+        strip(asphalt,a,b,ao,wa,bo,wb,la-.015,la-.015,lb-.015,lb-.015,4.7);
+        lanes.push(0,0,0,0,0,0,0,0);
+        clearSubStrip(profile,rd,a,b,1,(u,v)=>{
+          const ou=limits(u,profile)[1],ov=limits(v,profile)[1],wu=u.width/2,wv=v.width/2;
+          strip(pavement,u,v,ou,wu,ov,wv,.15,.15,.15,.15,2.4);
+          strip(deck,u,v,wu,wu,wv,wv,.15,0);
+          collision(u,v,wu,ou,wv,ov,.15,rd,physical,true);
+        });
+        clearSubStrip(profile,rd,a,b,-1,(u,v)=>{
+          const wu=-u.width/2,wv=-v.width/2;
+          strip(deck,u,v,wu,wu,wv,wv,0,.19);
+          strip(deck,u,v,wu,wu-.17,wv,wv-.17,.19);
+        });
       }else if(physical){
         for(const sign of [-1,1])barrier(a,b,sign*(wa-.04),sign*(wb-.04),sign);
       }else if(!flatBridge&&!/trunk|motorway|_link/.test(rd.kind)&&rd.kind!=='service'){
@@ -300,7 +311,7 @@ export function viaducts(root,m,grid,map,layout=null){
     if(rd.kind!=='service'&&rd.width>=5){
       for(let s=2;s<profile.length-.7;s+=10){
         const stop=Math.min(profile.length,s+3.7);
-        if(layout&&atStation(profile,(s+stop)*.5).y<.85&&!layout.isClear(rd,(s+stop)*.5,0))continue;
+        if(layout&&!layout.isClear(rd,(s+stop)*.5,0))continue;
         const cuts=[atStation(profile,s),...pts.filter(p=>p.s>s&&p.s<stop),atStation(profile,stop)];
         for(let j=1;j<cuts.length;j++)for(let i=1;i<laneCount;i++){
           if(!rd.oneway&&2*i===laneCount)continue;
@@ -374,13 +385,17 @@ export function viaducts(root,m,grid,map,layout=null){
       const firstLamp=profile.family.lampSpacing/2;
       for(let d=firstLamp;d<profile.length;d+=31){
         const p=atStation(profile,bridgeStartsHere?d:profile.length-d);
-        if(p.y>.48)lamp(p,p.width/2+.42);
+        if(p.y>.48&&(!layout||layout.isClear(rd,p.s,1)))lamp(p,p.width/2+.42);
       }
       // Continue the outside railing down the actual road, stopping only once it reaches shore level.
       let start=null;
       for(let i=0;i<pts.length;i++){
         if(pts[i].y>1.15&&start===null)start=pts[i].s;
-        if(start!==null&&(pts[i].y<=1.15||i===pts.length-1)){guard(profile,start,pts[i].s,p=>limits(p,profile)[1]-.13);start=null;}
+        if(start!==null&&(pts[i].y<=1.15||i===pts.length-1)){
+          guard(profile,start,pts[i].s,p=>limits(p,profile)[1]-.13,
+            (a,b)=>layout&&(!layout.isClear(rd,a,1)||!layout.isClear(rd,b,1)));
+          start=null;
+        }
       }
     }
   }

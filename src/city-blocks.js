@@ -16,6 +16,7 @@ import {tencentFrontage} from './tencent-frontage.js';
 import {streetJunctions} from './street-junctions.js';
 import {markBuildingFacade,cityFacadeMesh} from './city-lightshow.js';
 import {parkBridgeIds} from './park-bridges.js';
+import {roofPlantSite,supportsRoofSetback} from './roof-layout.js';
 
 const walking=new Set(['footway','path','pedestrian','steps','cycleway']);
 export function roadHeight(r){
@@ -116,8 +117,8 @@ export function cityBlocks(root,map,m,grid){
     }
     detail.add(f,cx,cz,wallStart);
     let cap=f.p;
-    if(h>85&&!f.holes?.length&&f.p.length<55){
-      const crownHeight=Math.min(8.3,h*.046);
+    const crownHeight=Math.min(8.3,h*.046);
+    if(h>85&&h-crownHeight>wallStart&&!f.holes?.length&&f.p.length<55&&supportsRoofSetback(f.p,cx,cz)){
       const inset=1-Math.min(.095,1.6/Math.max(8,Math.min(b[2]-b[0],b[3]-b[1])));
       cap=f.p.map(([x,z])=>[cx+(x-cx)*inset,cz+(z-cz)*inset]);
       sideWall(c.walls[type],f.p,wallStart,h-crownHeight,subdiv,repeatY,col);
@@ -132,10 +133,14 @@ export function cityBlocks(root,map,m,grid){
     const w=b[2]-b[0],d=b[3]-b[1];
     if(dist<1700&&w>12&&d>12&&h>15&&!(f.holes?.length)){
       const rw=Math.min(w*(.13+rand()*.14),12),rd=Math.min(d*.18,10),rh=1.4+Math.min(3.2,h*.016);
-      plant.at(cx,h+rh*.5,cz,rw,rh,rd,0);lids.at(cx,h+rh+.04,cz,rw*.82,.12,rd*.75,0);
-      if(h>75&&rand()>.50)roofAntennas.at(cx+rw*.3,h+rh+1.9,cz,.085,4,.085,0);
+      const site=roofPlantSite(cap,rw,rd);
+      if(site){
+        const [x,z]=site;
+        plant.at(x,h+rh*.5,z,rw,rh,rd,0);lids.at(x,h+rh+.04,z,rw*.82,.12,rd*.75,0);
+        if(h>75&&rand()>.50)roofAntennas.at(x+rw*.3,h+rh+1.9,z,.085,4,.085,0);
+      }
     }
-    if(!ruifu&&shopH>0&&dist<880&&f.p.length<28)for(let i=0;i<f.p.length;i++){
+    if(!ruifu&&retailEligible&&dist<880&&f.p.length<28)for(let i=0;i<f.p.length;i++){
       const A=f.p[i],B=f.p[(i+1)%f.p.length],dx=B[0]-A[0],dz=B[1]-A[1],l=Math.hypot(dx,dz);
       if(l>5&&l<70)awnings.at((A[0]+B[0])/2,shopH-.43,(A[1]+B[1])/2,1.05,.13,l,Math.atan2(dx,dz));
     }
@@ -150,10 +155,12 @@ export function cityBlocks(root,map,m,grid){
 }
 export function streets(root,map,m,grid){
   const profiles=roadProfiles(map),layout=streetJunctions(map),elevated=viaducts(root,m,grid,map,layout);
-  grid.profiles=profiles;
+  grid.profiles=profiles;grid.junctions=layout;
   const ramps=new Surface(),gutter=new Surface(),kerb=new Surface(),sidewalk=new Surface();
   const snowLanes=[];
   const asphalt=new Surface(),paths=new Surface(),curbs=new Surface(),bridges=new Surface(),runners=new Surface(),white=new Surface(),yellow=new Surface();
+  for(const patch of layout.patches)asphalt.polygon(patch.ring,[],.277,5.5);
+  for(let i=0;i<asphalt.uv.length;i++)snowLanes.push(0);
   const stripes=new Instances(new T.PlaneGeometry(1,1).rotateX(-Math.PI/2),m.paint,'车道划线');
   const poles=new Instances(new T.CylinderGeometry(1,1,1,7),m.curb,'桥墩');
   const rail=new Instances(new T.BoxGeometry(1,1,1),m.curb,'桥侧防撞墙');

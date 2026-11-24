@@ -34,6 +34,19 @@ export function segmentDistance(x,z,a,b){
   const dx=b[0]-a[0], dz=b[1]-a[1],t=clamp(((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz||1),0,1);
   return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t);
 }
+// The same diagonal as Surface.quad. Restrict ramp heights to the deck's
+// actual outline so a higher neighbouring segment cannot lift the walker.
+export function quadHeight(q,x,z){
+  const [a,b,c,d]=q;
+  const dx=x-a[0],dz=z-a[2];
+  function triangle(p,r){
+    const px=p[0]-a[0],pz=p[2]-a[2],rx=r[0]-a[0],rz=r[2]-a[2],det=px*rz-pz*rx;
+    if(Math.abs(det)<1e-8)return null;
+    const u=(dx*rz-dz*rx)/det,v=(px*dz-pz*dx)/det;
+    return u>=-1e-6&&v>=-1e-6&&u+v<=1.000001 ? a[1]+u*(p[1]-a[1])+v*(r[1]-a[1]) : null;
+  }
+  return triangle(b,c)??triangle(c,d);
+}
 export class Surface {
   constructor(){this.p=[];this.uv=[];this.c=[];this.indices=[];}
   vertex(v,u=[0,0],color=null){const id=this.p.length/3;this.p.push(...v);this.uv.push(...u);if(color)this.c.push(color.r,color.g,color.b);return id;}

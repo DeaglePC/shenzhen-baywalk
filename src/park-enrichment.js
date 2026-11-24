@@ -1,6 +1,7 @@
 import * as T from 'three';
+import {parkShrubs,shrubTurf} from './park-shrubs.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {Instances,along,random,inArea,segmentDistance} from './city-geometry.js';
+import {Grid,Instances,along,random,inArea,segmentDistance} from './city-geometry.js';
 import {applyDetailMaps} from './procedural-textures.js';
 import {buildSdfGeometry, smin, sdEllipsoid} from './sdf-mesh.js';
 
@@ -130,29 +131,7 @@ function buildParkKits() {
   addPart(sParts, new T.BoxGeometry(1.32, 1.18, 0.06), 0x263f45, 0, 1.38, 0);
   const signFrameGeo = mergeColored(sParts);
 
-  // 6. Organic tufted leafy shrub bush geometry (replaces smooth spheres with natural broken-edge foliage)
-  function makeLeafyBushGeo(bloomTint) {
-    const bParts = [];
-    const rng = random(bloomTint ? 5581 : 5527);
-    for (let i = 0; i < 34; i++) {
-      const a = rng() * Math.PI * 2;
-      const r = Math.pow(rng(), 0.55) * 0.68;
-      const y = 0.16 + Math.sqrt(Math.max(0, 1 - r * r * 1.15)) * 0.52 * (0.65 + rng() * 0.5);
-      const blade = new T.OctahedronGeometry(0.16 + rng() * 0.14, 0);
-      blade.scale(1.15, 0.68 + rng() * 0.5, 0.85);
-      const isBloom = bloomTint && rng() < 0.28 && y > 0.34;
-      const shade = 0.72 + rng() * 0.48;
-      const baseCol = isBloom
-        ? new T.Color(bloomTint).multiplyScalar(0.85 + rng() * 0.25)
-        : new T.Color(0x284d22).lerp(new T.Color(0x3f672e), rng()).multiplyScalar(shade);
-      addPart(bParts, blade, baseCol.getHex(), Math.cos(a) * r, y, Math.sin(a) * r, rng() * 3.1, rng() * 6.28, rng() * 3.1);
-    }
-    return mergeColored(bParts);
-  }
-  const greenBushGeo = makeLeafyBushGeo(0);
-  const flowerBushGeo = makeLeafyBushGeo(0xa82e5c); // muted natural Shenzhen bougainvillea crimson
-
-  return { pergolaGeo, fountainGeo, stoneBenchGeo, reedGeo, signFrameGeo, greenBushGeo, flowerBushGeo };
+  return { pergolaGeo, fountainGeo, stoneBenchGeo, reedGeo, signFrameGeo };
 }
 
 function makeParkMapSignTexture() {
@@ -213,7 +192,6 @@ export function buildParkEnrichment(root, map, m, grid) {
     'granite',
     { normalScale: 0.56, repeat: 2 }
   );
-  const shrubMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.90, metalness: 0.0 });
   const darkMetal = applyDetailMaps(
     new T.MeshStandardMaterial({ color: 0x354045, roughness: 0.38, metalness: 0.58 }),
     'brushedMetal',
@@ -226,8 +204,9 @@ export function buildParkEnrichment(root, map, m, grid) {
 
   const rocksA = new Instances(boulderA, boulderMat, '园林自然置石 · 卧石');
   const rocksB = new Instances(boulderB, boulderMat, '园林自然置石 · 立石');
-  const greenShrubs = new Instances(kits.greenBushGeo, shrubMat, '滨水与草坪常绿灌木丛');
-  const flowerShrubs = new Instances(kits.flowerBushGeo, shrubMat, '滨水与草坪三角梅花境');
+  const turf=(x,z)=>grid.southGround?.heightAt(x,z)??grid.parkDetails?.heightAt(x,z)??shrubTurf(map,x,z);
+  const greenShrubs=parkShrubs(root,'滨水与草坪常绿灌木丛',turf);
+  const flowerShrubs=parkShrubs(root,'滨水与草坪三角梅花境',turf,true);
   const reeds = new Instances(kits.reedGeo, kitMat, '人才湖亲水岸线芒草带');
   const pergolas = new Instances(kits.pergolaGeo, kitMat, '人才公园现代木钢遮阳廊架');
   const fountains = new Instances(kits.fountainGeo, kitMat, '公园直饮水台');
@@ -244,6 +223,10 @@ export function buildParkEnrichment(root, map, m, grid) {
   const park = map.land.find(f => f.kind === 'park' && inArea(0, 0, f));
   const lake = map.water.find(f => Number(f.id) === -10175109);
   const rng = random(20260918);
+  const hardscape=new Grid(64);
+  for(const f of map.land){
+    if(['parking','plaza','pitch','track'].includes(f.kind))hardscape.add(f,f.bbox);
+  }
 
   const inBuilding = (x, z) => grid.buildings.query(x, z).some(b => inArea(x, z, b));
   const inWater = (x, z) => grid.water.query(x, z).some(w => inArea(x, z, w));
@@ -260,7 +243,8 @@ export function buildParkEnrichment(root, map, m, grid) {
   const inReservedForeground = (x, z) => x > 125 && x < 230 && z > -245 && z < -155;
 
   const isFreeLawn = (x, z, roadPad = 1.6) =>
-    !inWater(x, z) && !inBuilding(x, z) && !onRoad(x, z, roadPad) && !onSpecialDeck(x, z) && !inReservedForeground(x, z);
+    !inWater(x, z) && !inBuilding(x, z) && !onRoad(x, z, roadPad) && !onSpecialDeck(x, z) && !inReservedForeground(x, z)
+    && !hardscape.query(x,z).some(f=>inArea(x,z,f));
 
   function addShrubCluster(cx, cz, count, spread, withBoulder = false) {
     if (withBoulder) {
@@ -281,7 +265,9 @@ export function buildParkEnrichment(root, map, m, grid) {
       const rad = 0.68 + rng() * 0.68;
       const h = rad * (0.72 + rng() * 0.42);
       const batch = rng() < 0.28 ? flowerShrubs : greenShrubs;
-      batch.at(sx, 0.13, sz, rad, h, rad * (0.85 + rng() * 0.3), rng() * 6.28);
+      const depth=rad*(.85+rng()*.3),yaw=rng()*6.28;
+      if(!isFreeLawn(sx,sz,Math.max(rad,depth)*.90))continue;
+      batch.at(sx,turf(sx,sz)+h*.38,sz,rad,h*.67,depth,yaw);
     }
   }
 
@@ -418,9 +404,10 @@ export function buildParkEnrichment(root, map, m, grid) {
     });
   }
 
-  for (const batch of [rocksA, rocksB, greenShrubs, flowerShrubs, reeds, pergolas, fountains, benches, signFrames, signFaces, bollardPosts, bollardLamps]) {
+  greenShrubs.flush(group,false);flowerShrubs.flush(group,false);
+  for (const batch of [rocksA, rocksB, reeds, pergolas, fountains, benches, signFrames, signFaces, bollardPosts, bollardLamps]) {
     const cast = batch === rocksA || batch === rocksB || batch === pergolas || batch === benches || batch === signFrames;
-    const range = (batch === greenShrubs || batch === flowerShrubs || batch === pergolas || batch === rocksA || batch === rocksB) ? 540 : 280;
+    const range = (batch === pergolas || batch === rocksA || batch === rocksB) ? 540 : 280;
     batch.flush(group, cast, range);
   }
 }

@@ -29,6 +29,7 @@ const declarations = `
 `+surfaceNoise;
 
 function kind(name) {
+  if(name.startsWith('美丽异木棉'))return name.endsWith('花枝')?'branch':name.endsWith('疏叶')?'leaf':'flower';
   if (/张拉膜帆棚/.test(name)) return 'roof';
   if (/临水深色木栈道|潮汐广场 · 错缝深浅条石|七级弧形看台|滨水花池石座/.test(name)) return 'paving';
   if (/真实树干与分叉/.test(name)) return 'branch';
@@ -57,7 +58,8 @@ function patch(mat, type, controls) {
     if(leaf){
       shader.vertexShader='varying float wxLeafHeight;\n'+shader.vertexShader;
       shader.fragmentShader='varying float wxLeafHeight;\n'+shader.fragmentShader;
-      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwxLeafHeight=position.y;');
+      const height=mat.userData.individualFlower?'(instanceMatrix*vec4(position,1.)).y':'position.y';
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwxLeafHeight='+height+';');
     }
     if(asphalt){
       shader.vertexShader='attribute vec2 snowLane;varying vec2 wxLane;\n'+shader.vertexShader;

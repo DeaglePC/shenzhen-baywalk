@@ -2,7 +2,7 @@ import * as T from 'three';
 import {along,Instances,Surface,ribbon,segmentDistance,bounds,inArea,random} from './city-geometry.js';
 import {footRoad} from './road-profiles.js';
 import {wenxinDivider} from './street-junctions.js';
-import {photo} from './city-materials.js';
+import {parkShrubs} from './park-shrubs.js';
 import {applyDetailMaps} from './procedural-textures.js';
 
 export function mappedCrosswalks(root,map,m,grid,marks,pads,dots){
@@ -59,23 +59,16 @@ export function mappedCrosswalks(root,map,m,grid,marks,pads,dots){
     const granite=applyDetailMaps(new T.MeshStandardMaterial({color:0x8b8981,roughness:.84}),'granite',{normalScale:.36});
     const tubs=new Instances(new T.CylinderGeometry(1,.84,1,20),granite,'文心四路花岗岩花钵');
     const soil=new Instances(new T.CylinderGeometry(1,1,1,20),m.dark,'花钵种植土');
-    const hedgeMap=photo('flowerbed-hedge.webp');hedgeMap.repeat.set(2,2);
-    const bushMat=applyDetailMaps(new T.MeshStandardMaterial({map:hedgeMap,roughness:.90}),'granite',{normalScale:.48});
-    const bushGeo=new T.SphereGeometry(0.52,16,12,0,Math.PI*2,0,Math.PI*.62);
-    const leaves=new Instances(bushGeo,bushMat,'桥下花钵实拍灌木丛');
+    const leaves=parkShrubs(root,'桥下花钵 · 常绿灌木',()=>1.06);
     const rng=random(235113766);
     for(const station of [32,58,87,105])for(const side of [-1,1]){
       const [px,pz]=at(station,side*(road.width/2+2.1));
       if(grid.buildings.query(px,pz).some(b=>inArea(px,pz,b)))continue;
       tubs.at(px,.67,pz,.54,.77,.54);soil.at(px,1.053,pz,.49,.014,.49);
-      leaves.at(px,1.03,pz,.98,.92,.98,rng()*Math.PI*2);
-      for(let j=0;j<4;j++){
-        const a=j*Math.PI*.5+rng()*.5;
-        leaves.at(px+Math.cos(a)*.22,1.04,pz+Math.sin(a)*.22,.56,.62,.56,rng()*Math.PI*2);
-      }
+      leaves.at(px,1.14,pz,.48,.43,.48,rng()*Math.PI*2);
       grid.bridgePiers.add({x:px,z:pz,r:.54,top:1.10},[px-.8,pz-.8,px+.8,pz+.8]);
     }
-    tubs.flush(root,true,145);soil.flush(root,false,105);leaves.flush(root,true,105);
+    tubs.flush(root,true,145);soil.flush(root,false,105);leaves.flush(root,true);
     for(const s of [51,83])for(const shift of [0,.69,1.38]){
       const a=at(s+shift,.29),b=at(s+shift,road.width/2-.28);
       ribbon(yellow,[a,b],.24,.342,2);

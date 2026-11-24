@@ -31,7 +31,14 @@ function makeBillboards(scene,plants,photoName,ratio){
   const geometry=new T.PlaneGeometry(1,1);geometry.translate(0,.5,0);
   const mesh=new T.InstancedMesh(geometry,mat,plants.length),M=new T.Matrix4(),color=new T.Color();mesh.name='树冠 · '+photoName;
   plants.forEach((p,i)=>{
-    p.photoX=p[2]*ratio*(p[3]>.5?-1:1);p.mesh=mesh;p.slot=i;
+    let spread=1;
+    if(!photoName.startsWith('shrub')){
+      const form=random(Math.round(p[0]*1613+p[1]*7229));
+      p.crownWidth=p.street?.91+.17*form():.77+.43*form();
+      p.crownDepth=.83+.31*form();
+      spread=Math.sqrt(p.crownWidth*p.crownDepth);
+    }
+    p.photoX=p[2]*ratio*spread*(p[3]>.5?-1:1);p.mesh=mesh;p.slot=i;
     M.makeScale(p.photoX,p[2],p[2]);M.setPosition(p[0],p.baseY??.05,p[1]);mesh.setMatrixAt(i,M);
     color.setRGB(.92+.27*p[3],1.03+.24*p[3],.85+.15*p[3]);mesh.setColorAt(i,color);
   });

@@ -141,9 +141,27 @@ function buildUrbanKits() {
   }
   const plazaBenchGeo = mergeColored(pbParts);
 
-  // 8. Smoothly sculpted manicured roadside hedge blocks (textured with real Shenzhen hedge photography)
-  const hedgeBlockGeo = new RoundedBoxGeometry(0.82, 0.56, 2.28, 3, 0.16);
-  hedgeBlockGeo.translate(0, 0.36, 0);
+  // A clipped crown still has individual shoots projecting from its top and sides.
+  // Keep these in the same mesh and draw as the interior of each near hedge.
+  const core = new RoundedBoxGeometry(.80,.52,2.30,1,.13).translate(0,.35,0);
+  const tips=new Surface(),leafRand=random(21644),shade=new T.Color();
+  for(let i=0;i<96;i++){
+    const z=(leafRand()-.5)*2.24,side=i%2?1:-1,top=i%3!==0;
+    const x=top?(leafRand()-.5)*.72:side*(.378+leafRand()*.018);
+    const y=top?.59-.060*Math.pow(Math.abs(x)/.36,3):.26+leafRand()*.28;
+    const dx=top?(leafRand()-.5)*.09:side*(.026+.038*leafRand()),dz=(leafRand()-.5)*.13;
+    const height=.035+.048*leafRand(),u=leafRand()*.9,v=leafRand()*.9;
+    shade.setScalar(.79+leafRand()*.42);
+    tips.quad([x,y,z],[x+dx*.5+.019,y+height*.5,z+dz*.5-.012],[x+dx,y+height,z+dz],
+      [x+dx*.5-.018,y+height*.62,z+dz*.5+.015],[[u,v],[u+.03,v+.04],[u+.06,v+.08],[u,v+.05]],shade);
+  }
+  const baseColors=new Float32Array(core.attributes.position.count*3);
+  for(let i=0;i<core.attributes.position.count;i++){
+    const y=core.attributes.position.getY(i),tone=.64+.32*y/.62;
+    baseColors.set([tone,tone,tone],i*3);
+  }
+  core.setAttribute('color',new T.BufferAttribute(baseColors,3));
+  const hedgeBlockGeo=mergeColored([core,tips.geometry().toNonIndexed()]);
   const hedgeKerbGeo = new T.BoxGeometry(0.94, 0.14, 2.32);
   hedgeKerbGeo.translate(0, 0.07, 0);
 
@@ -254,11 +272,7 @@ export function buildUrbanLife(root, map, m, grid) {
   const makeRealHedgeMat = (file) => {
     const tex = photo(file);
     tex.repeat.set(2.2, 1.0);
-    return applyDetailMaps(
-      new T.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0.0 }),
-      'granite',
-      { normalScale: 0.55, repeat: 2 }
-    );
+    return new T.MeshStandardMaterial({map:tex,roughness:.96,vertexColors:true,color:0xc9ceac,side:T.DoubleSide});
   };
   const hedgesGreen = new Instances(kits.hedgeBlockGeo, makeRealHedgeMat('flowerbed-hedge.webp'), '绿道与路侧实拍常绿绿篱带');
   const hedgesGold = new Instances(kits.hedgeBlockGeo, makeRealHedgeMat('flowerbed-gold.webp'), '绿道与路侧实拍金叶绿篱带');
@@ -435,7 +449,7 @@ export function buildUrbanLife(root, map, m, grid) {
         const gx = x + nx * (w * 0.5 + 0.34), gz = z + nz * (w * 0.5 + 0.34);
 
         // Intermittent sidewalk curb guardrails (leave openings every ~22m & near intersections/side-streets)
-        if (!nearSignal(gx, gz, 20) && (idx % 11) < 8 && !inWater(gx, gz) && !inBuilding(gx, gz) && !onRoad(gx, gz, 0.15) && !onOtherMotor(gx, gz, rd, 2.2)) {
+        if (grid.junctions.isClear(rd,s,side) && !nearSignal(gx, gz, 20) && (idx % 11) < 8 && !inWater(gx, gz) && !inBuilding(gx, gz) && !onRoad(gx, gz, 0.15) && !onOtherMotor(gx, gz, rd, 2.2)) {
           guardrails.at(gx, yBase + 0.07, gz, 1, 0.88, 1, yaw);
         }
 
@@ -536,10 +550,9 @@ export function buildUrbanLife(root, map, m, grid) {
         if (onAnyPath(hx, hz, 0.55) || onOtherMotor(hx, hz, rd, 2.0) || inBuilding(hx, hz) || inWater(hx, hz) || onDeck(hx, hz)) continue;
         if (nearSignal(hx, hz, 16)) continue;
 
-        // Real-photo landscaped ribbons: alternating evergreen, golden privet & burgundy loropetalum
-        const band = ((idx >> 2) + (side > 0 ? 1 : 0)) % 4;
-        const batch = band === 1 ? hedgesGold : band === 3 ? hedgesBurgundy : hedgesGreen;
-        batch.at(hx, 0.12, hz, 1, 0.88 + rng() * 0.24, 1, yaw);
+        const band=Math.sin(hx*.041+hz*.052)+.62*Math.cos(hx*.079-hz*.023);
+        const batch=band>1.12?hedgesGold:band<-1.16?hedgesBurgundy:hedgesGreen;
+        batch.at(hx,.12,hz,1,.88+rng()*.24,1,yaw+(idx%2)*Math.PI);
         hedgeKerbs.at(hx, 0.12, hz, 1, 1, 1, yaw);
 
         // Feed native volumetric / real-photo trees & shrubs into city-nature.js (zero low-poly look!)
@@ -564,6 +577,7 @@ export function buildUrbanLife(root, map, m, grid) {
   // The distant segments meet end to end along the surveyed road. Reuse their
   // instance transforms and leaf materials when swapping the rounded profile.
   const distantHedge = new T.BoxGeometry(.82,.56,2.31).translate(0,.36,0);
+  distantHedge.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(distantHedge.attributes.position.count*3).fill(.86),3));
   const hedgeLod = {near:kits.hedgeBlockGeo, far:distantHedge, distance:95, tileSize:128};
   for (const hedge of [hedgesGreen, hedgesGold, hedgesBurgundy]) hedge.flush(group,true,780,hedgeLod);
   for (const part of [guardrails, planters, hydrants, bins, utilBoxes, blueBikes, yellowBikes, plazaBenches, hedgeKerbs, stoneSpheres, plazaPosts, lampHeads, poolRims]) {

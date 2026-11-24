@@ -122,6 +122,7 @@ function sampleLane(car) {
   if(lane.profile?.family&&lane.road.oneway&&count>=3)
     drivingOffset+=(car.lanePreference??0)*(width-.68)/count*section.blend;
   const offset=car.kerb??drivingOffset;
+  if(section?.crossSlope)car.y+=section.crossSlope*offset*lane.direction;
   car.x = lane.points[i][0] + dx * d - hz * offset;
   car.z = lane.points[i][1] + dz * d + hx * offset;
   car.yaw = Math.atan2(hx, hz);

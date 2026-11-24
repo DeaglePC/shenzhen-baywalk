@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {parkFloor} from './park-floor.js';
+import {silkFlossGrove} from './silk-floss.js';
 
 const url=name=>import.meta.env.BASE_URL+'foliage/'+name;
 const closeRange=95, middleRange=265;
@@ -61,7 +62,8 @@ async function geometryFile(name,close=false){
   const r=await fetch(url(name+'.bin'));if(!r.ok)throw Error(r.status);return unpack(await r.arrayBuffer(),close);
 }
 
-function windMaterial(mat,wind,flutter=false){
+function windMaterial(mat,wind,flutter=false,part='broadleaf'){
+  const single=part==='flower',tree=single?'modelMatrix':'instanceMatrix';
   const previous=mat.onBeforeCompile,key=mat.customProgramCacheKey();
   mat.onBeforeCompile=function(shader,renderer){
     previous.call(this,shader,renderer);
@@ -70,30 +72,35 @@ function windMaterial(mat,wind,flutter=false){
     shader.vertexShader='uniform float parkWindTime,parkWindStrength;\nuniform vec3 parkWakePos;\n'+shader.vertexShader;
     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`
       #include <begin_vertex>
-      vec2 site=instanceMatrix[3].xz;
+      vec2 site=${tree}[3].xz;
+      vec3 treePoint=${single?'(instanceMatrix*vec4(transformed,1.)).xyz':'transformed'};
+      ${part==='broadleaf'?`float fork=fract(dot(site,vec2(.151,.237)))-.5;
+      treePoint.y+=.57*fork*treePoint.y*(1.-treePoint.y);`:''}
+      vec3 displacement=vec3(0.);
       float phase=dot(site,vec2(.085,.059))-.91*parkWindTime;
       float gust=sin(phase)*.63+sin(phase*.46+.34*parkWindTime+site.x*.021)*.37;
       vec2 windDir=vec2(.84,.54);
-      vec2 ax0=instanceMatrix[0].xz,ax2=instanceMatrix[2].xz;
+      vec2 ax0=${tree}[0].xz,ax2=${tree}[2].xz;
       vec2 u0=dot(ax0,ax0)>1e-8?normalize(ax0):vec2(1.,0.);
       vec2 u2=dot(ax2,ax2)>1e-8?normalize(ax2):vec2(0.,1.);
       vec2 bend=vec2(dot(u0,windDir),dot(u2,windDir));
-      float tip=max(position.y,0.);
-      transformed.xz+=bend*(.010*gust*tip*tip)*parkWindStrength;
+      float tip=max(treePoint.y,0.);
+      displacement.xz+=bend*(.010*gust*tip*tip)*parkWindStrength;
       // Subtle physical wake bend when walker/camera brushes close to foliage (inspired by Crimson Loong 66_wake.js)
-      vec3 wakeWorld=(instanceMatrix*vec4(transformed,1.)).xyz;
+      vec3 wakeWorld=(${tree}*vec4(treePoint+displacement,1.)).xyz;
       vec2 wakeDelta=wakeWorld.xz-parkWakePos.xz;
       float wakeDist=length(wakeDelta);
       if(wakeDist<4.8 && wakeDist>.02 && abs(wakeWorld.y-parkWakePos.y)<4.5){
         float push=(1.-smoothstep(.4,4.8,wakeDist))*.22*clamp(tip,0.,1.6);
         vec2 pushWorld=wakeDelta/wakeDist*push;
-        transformed.xz+=vec2(dot(u0,pushWorld),dot(u2,pushWorld));
+        displacement.xz+=vec2(dot(u0,pushWorld),dot(u2,pushWorld));
       }
-      ${flutter?`float flicker=sin(phase*2.3+parkWindTime*3.6+dot(position,vec3(44.,37.,28.)));
-      transformed.y+=flicker*.0017*tip*parkWindStrength;`:''}
+      ${flutter?`float flicker=sin(phase*2.3+parkWindTime*3.6+dot(treePoint,vec3(44.,37.,28.)));
+      displacement.y+=flicker*.0017*tip*parkWindStrength;`:''}
+      ${single?'transformed+=transpose(mat3(instanceMatrix))*displacement/max(dot(instanceMatrix[0].xyz,instanceMatrix[0].xyz),1.e-8);':'transformed=treePoint+displacement;'}
     `);
   };
-  mat.customProgramCacheKey=()=>key+'|park-wind-wake-'+Number(flutter);return mat;
+  mat.customProgramCacheKey=()=>key+'|park-wind-'+part+Number(flutter);return mat;
 }
 
 async function readModel(name,wind){
@@ -175,46 +182,6 @@ function togglePhoto(p,on){
   p.mesh.instanceMatrix.needsUpdate=true;
 }
 
-function makeBlossomLeafMaterial(baseLeaf,wind){
-  const leaf=new T.MeshStandardMaterial({map:baseLeaf.map,roughness:.84,metalness:0,alphaTest:.23,side:T.DoubleSide});
-  leaf.onBeforeCompile=shader=>{
-    shader.vertexShader='varying vec3 blossomPos;\n'+shader.vertexShader;
-    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`
-      #include <begin_vertex>
-      blossomPos=position;
-    `);
-    shader.fragmentShader='varying vec3 blossomPos;\n'+shader.fragmentShader;
-    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
-      #include <map_fragment>
-      float luma=clamp(dot(diffuseColor.rgb,vec3(.299,.587,.114)),0.,1.);
-      float cluster=.5+.5*sin(blossomPos.x*19.3+sin(blossomPos.z*17.1)*1.4)*cos(blossomPos.y*21.7-blossomPos.x*11.2);
-      float outer=smoothstep(.16,.52,length(blossomPos.xz))+smoothstep(.54,.86,blossomPos.y)*.55;
-      float bloomMix=smoothstep(.26,.70,outer*.72+cluster*.48);
-      vec3 deepPink=vec3(.74,.27,.47);
-      vec3 softPink=vec3(.92,.56,.71);
-      vec3 palePetal=vec3(.98,.85,.90);
-      vec3 flowerCol=mix(deepPink,softPink,smoothstep(.12,.52,luma));
-      flowerCol=mix(flowerCol,palePetal,smoothstep(.46,.88,luma+cluster*.22));
-      vec3 oliveLeaf=vec3(.24,.38,.17)*(.58+1.25*luma);
-      diffuseColor.rgb=mix(oliveLeaf,flowerCol,bloomMix);
-    `);
-    shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_begin>',
-      '#include <normal_fragment_begin>\n normal *= gl_FrontFacing ? 1.0 : -1.0;');
-    shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>',`
-      #include <lights_fragment_end>
-      #if NUM_DIR_LIGHTS > 0
-        float throughLeaf=.14+.22*max(0.,-dot(normal,directionalLights[0].direction));
-        vec3 viewDir=dot(vViewPosition,vViewPosition)>1e-8?normalize(-vViewPosition):vec3(0.,0.,1.);
-        float glow=pow(max(1e-4,dot(viewDir,directionalLights[0].direction)),3.);
-        reflectedLight.indirectDiffuse+=diffuseColor.rgb*directionalLights[0].color*
-          vec3(1.0,.76,.86)*(throughLeaf+glow*.24);
-      #endif
-    `);
-  };
-  leaf.customProgramCacheKey=()=>'silk-floss-canopy-v1';
-  return windMaterial(leaf,wind,true);
-}
-
 export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
   const scene=root.parent;
   if(!scene||(!plants.length&&!blossomTrees.length))return;
@@ -222,32 +189,25 @@ export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
   const wind={time:{value:0},strength:{value:1},wake:{value:new T.Vector3(1e6,0,1e6)}};
   root.userData.setTreeWeather=weather=>{wind.strength.value=weather==='rain'?2.1:weather==='snow'?.65:1;};
   root.userData.setTreeWeather(root.userData.treeWeather);
+  const grove=silkFlossGrove(root,blossomTrees,wind,windMaterial,lowQuality);
+  const last=new T.Vector3(Infinity,0,0);
+  let lastProbe=false,updateBroadleaves;
+  root.userData.updateTrees=(position,time)=>{
+    wind.time.value=time;
+    const probe=!!scene.userData.capturingProbe;
+    if(!probe)wind.wake.value.copy(position);
+    if(!root.parent||(lastProbe===probe&&last.distanceToSquared(position)<4))return;
+    lastProbe=probe;
+    last.copy(position);
+    grove?.update(position,probe);
+    updateBroadleaves?.(probe);
+  };
+  if(grove){
+    root.userData.disposeBlossoms=grove.dispose;
+    root.dispatchEvent({type:'foliageadded'});
+  }
   const promise=Promise.all(names.map(n=>readModel(n,wind))).then(models=>{
     if(!root.parent)return;
-    if(blossomTrees.length){
-      const m2=models[1],bLeaf=makeBlossomLeafMaterial(m2.leaf,wind);
-      const bTrunk=new T.InstancedMesh(m2.geometry[0],m2.wood,blossomTrees.length);
-      const bCrown=new T.InstancedMesh(m2.geometry[1],bLeaf,blossomTrees.length);
-      bTrunk.name='美丽异木棉 · 三维真实树干';bCrown.name='美丽异木棉 · 三维真实繁花树冠';
-      const bm=new T.Matrix4(),bq=new T.Quaternion(),bp=new T.Vector3(),bs=new T.Vector3(),bup=new T.Vector3(0,1,0),bt=new T.Color();
-      blossomTrees.forEach(([x,z,h,r],i)=>{
-        const girth=.86+.14*r;
-        bp.set(x,.14-h*.035,z);bq.setFromAxisAngle(bup,6.2831853*r);
-        bs.set(h*girth,h,h*girth*(.92+.14*r));bm.compose(bp,bq,bs);
-        bTrunk.setMatrixAt(i,bm);bCrown.setMatrixAt(i,bm);
-        bt.setRGB(.96+.06*r,.94+.06*r,.97+.05*r);bCrown.setColorAt(i,bt);
-      });
-      for(const mesh of [bTrunk,bCrown]){
-        mesh.castShadow=true;mesh.receiveShadow=true;
-        mesh.instanceMatrix.needsUpdate=true;
-        if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
-        const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:mesh===bCrown?bLeaf.map:null,alphaTest:mesh===bCrown?bLeaf.alphaTest:0,side:mesh.material.side});
-        mesh.customDepthMaterial=windMaterial(depth,wind,mesh===bCrown);
-        mesh.computeBoundingSphere();mesh.boundingSphere.radius+=.6;
-        root.add(mesh);
-      }
-      root.dispatchEvent({type:'foliageadded'});
-    }
     const heroLimit=lowQuality?2:4;
     const updateFloor=parkFloor(root,lowQuality?9:20);
     const groups=models.map(m=>[batch(root,m,'near',closeLimit,wind),batch(root,m,'far',middleLimit,wind)]);
@@ -256,8 +216,8 @@ export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
       const key=cell(p[0],p[1]);let list=tiles.get(key);if(!list){list=[];tiles.set(key,list);}list.push(p);
     }
     const matrix=new T.Matrix4(),rot=new T.Quaternion(),pos=new T.Vector3(),scale=new T.Vector3(),up=new T.Vector3(0,1,0),tint=new T.Color();
-    let active=new Set(),previousClose=new Set(),last=new T.Vector3(Infinity,0,0);
-    let loadingClose=false,retryAfter=0,lastProbe=false;
+    let active=new Set(),previousClose=new Set();
+    let loadingClose=false,retryAfter=0;
     async function loadClose(){
       loadingClose=true;
       try{
@@ -270,13 +230,9 @@ export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
       }catch(e){retryAfter=performance.now()+30000;console.warn('Close tree asset unavailable',e);}
       finally{loadingClose=false;last.x=Infinity;}
     }
-    root.userData.updateTrees=function(position,time){
-      wind.time.value=time;
-      if(!scene.userData.capturingProbe)wind.wake.value.copy(position);
-      const probe=!!scene.userData.capturingProbe;
-      if(!root.parent||(lastProbe===probe&&last.distanceToSquared(position)<4))return;
-      lastProbe=probe;
-      last.copy(position);
+    last.x=Infinity;
+    root.dispatchEvent({type:'foliageadded'});
+    updateBroadleaves=function(probe){
       const candidates=[],cx=Math.floor(last.x/tileSize),cz=Math.floor(last.z/tileSize);
       if(last.y<middleRange)for(let x=cx-3;x<=cx+3;x++)for(let z=cz-3;z<=cz+3;z++){
         for(const p of tiles.get(x+':'+z)||[]){
@@ -302,7 +258,7 @@ export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
         const r=p[3],type=p.species??(r>.58?1:0),group=groups[type][close.has(p)?2:near?0:1],i=group.used++,h=p[2];
         const girth=(.77+.18*r)*(p.street?.81:1);
         pos.set(p[0],p.street?.29-h*.022:(p.baseY??.055)-h*.043,p[1]);rot.setFromAxisAngle(up,6.2831853*r);
-        scale.set(h*girth,h,h*girth*(.87+.19*r));matrix.compose(pos,rot,scale);
+        scale.set(h*girth*(p.crownWidth??1),h,h*girth*(.87+.19*r)*(p.crownDepth??1));matrix.compose(pos,rot,scale);
         for(const mesh of group.meshes)mesh.setMatrixAt(i,matrix);
         tint.setRGB(.54+r*.16,.97+r*.18,.74+r*.27);group.leaves.setColorAt(i,tint);
         shown.add(p);if(!active.has(p))togglePhoto(p,false);
@@ -316,5 +272,5 @@ export function volumetricTrees(root,plants,lowQuality=false,blossomTrees=[]){
       root.userData.activeCrownCount=shown.size;active=shown;
     };
   }).catch(e=>{console.warn('Detailed tree asset unavailable',e);});
-  return promise;
+  return Promise.all([promise,grove?.ready]);
 }

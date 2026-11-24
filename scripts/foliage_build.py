@@ -1,20 +1,18 @@
 """Bake Poly Haven's CC0 Island Trees into volumetric crown clusters.
 
-Dependencies: numpy, scipy, numba, Pillow, requests, fast-simplification.
+Dependencies: numpy, scipy, numba, Pillow, requests, pymeshlab.
 The runtime meshes and WebP layers are written into public/foliage.
 """
 from pathlib import Path
-from tempfile import gettempdir
+from tempfile import gettempdir, TemporaryDirectory
 from concurrent.futures import ThreadPoolExecutor
 import json
 import math
 import struct
 
-import fast_simplification
 import numpy as np
 from numba import njit
 from PIL import Image
-from scipy.spatial import cKDTree
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
 from scipy.ndimage import distance_transform_edt, gaussian_filter
@@ -106,6 +104,35 @@ def source_parts(model):
     return parts
 
 
+def bark_lods(wood,bottom,height):
+    """Decimate each branch together with its per-corner texture coordinates."""
+    import pymeshlab
+    pos,_,uv,faces=wood
+    points,position_index=np.unique(pos,axis=0,return_inverse=True)
+    # OBJ carries independent position and UV indices. MeshLab can join the
+    # geometry at a fork while keeping both sides of a bark atlas seam.
+    with TemporaryDirectory() as folder:
+        path=Path(folder)/"trunk.obj"
+        with path.open("w") as obj:
+            np.savetxt(obj,points,fmt="v %.9g %.9g %.9g")
+            np.savetxt(obj,uv,fmt="vt %.9g %.9g")
+            corners=np.stack((position_index[faces]+1,faces.astype(np.int32)+1),axis=2)
+            np.savetxt(obj,corners.reshape(-1,6),fmt="f %d/%d %d/%d %d/%d")
+        meshes=pymeshlab.MeshSet()
+        meshes.load_new_mesh(str(path))
+    levels=[]
+    for budget in [3800,420]:
+        meshes.meshing_decimation_quadric_edge_collapse_with_texture(targetfacenum=budget,preservenormal=True)
+        mesh=meshes.current_mesh()
+        corners=np.column_stack((mesh.face_matrix().ravel(),mesh.wedge_tex_coord_matrix()))
+        vertices,indices=np.unique(corners,axis=0,return_inverse=True)
+        original=vertices[:,0].astype(np.intp)
+        position=mesh.vertex_matrix()[original]
+        position[:,1]-=bottom
+        levels.append((position/height,mesh.vertex_normal_matrix()[original],vertices[:,1:],indices))
+    return levels
+
+
 def bake(model):
     parts=source_parts(model)
     pts=parts["leaves"][0];overall=pts.max(axis=0)-pts.min(axis=0)
@@ -164,16 +191,12 @@ def bake(model):
                 uv.append([(col*SIDE+.5+ux*(SIDE-1))/size,(row*SIDE+.5+vy*(SIDE-1))/size])
             idx+= [k,k+1,k+2,k,k+2,k+3]
     cp=np.array(pos,np.float32);cp[:,1]-=bottom;cp/=height
-    trunk,nrm,tuv,tri=parts["wood"]
-    tp,ti=fast_simplification.simplify(trunk.copy().astype("float64"),tri.copy().astype("int32"),target_count=min(3800,len(tri)-1))
-    _,nearest=cKDTree(trunk).query(tp);tp[:,1]-=bottom;tp=tp/height
-    mp,mi=fast_simplification.simplify(trunk.copy().astype("float64"),tri.copy().astype("int32"),target_count=min(420,len(tri)-1))
-    _,mnear=cKDTree(trunk).query(mp);mp[:,1]-=bottom;mp/=height
-    MeshFile().write(DEST/(model+".bin"),[(tp,nrm[nearest],tuv[nearest],ti),(cp,norm,uv,idx),(mp,nrm[mnear],tuv[mnear],mi)])
+    near,far=bark_lods(parts["wood"],bottom,height)
+    MeshFile().write(DEST/(model+".bin"),[near,(cp,norm,uv,idx),far])
     for word,kind in [("diff","bark"),("nor_gl","normal")]:
         img=Image.open(SOURCE/f"{model}_{word}_1k.jpg").convert("RGB");img.thumbnail((768,768))
         img.save(DEST/f"{model}-{kind}.webp",quality=89,method=5)
-    print("Ready",model,len(ti),len(idx)//3,"runtime triangles",flush=True)
+    print("Ready",model,len(near[3])//3,len(idx)//3,"runtime triangles",flush=True)
 
 
 def twig_tubes(parts,bottom,height):

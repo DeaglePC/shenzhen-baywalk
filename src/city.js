@@ -9,7 +9,7 @@ import {makeLake} from './lake.js';
 import {bayBridge} from './bay-bridge.js';
 import {islandShores} from './lake-shores.js';
 import {streetSurface} from './street-surface.js';
-import {Surface,Grid,Instances,bounds,inArea,random,segmentDistance,ribbon,clamp} from './city-geometry.js';
+import {Surface,Grid,Instances,bounds,inArea,random,segmentDistance,quadHeight,ribbon,clamp} from './city-geometry.js';
 import {materials,asset} from './city-materials.js';
 import {calibrateTencent,tencentLinks} from './tencent-towers.js';
 import {landmarks} from './city-landmarks.js';
@@ -84,17 +84,33 @@ function terrain(root,map,m,grid){
   // the actual canopy patterns in the orthophoto as the viewer rises.
   m.grass.onBeforeCompile=shader=>{
     shader.uniforms.citySatellite={value:satellite};shader.vertexShader='varying vec3 cityGround;\n'+shader.vertexShader;
-    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ncityGround=position;');
+    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ncityGround=(modelMatrix*vec4(transformed,1.)).xyz;');
     const landscape=grid.flowerLandscape;
     if(landscape)shader.uniforms.shoreLawn={value:landscape.lawnMap};
     shader.fragmentShader=(landscape?'uniform sampler2D shoreLawn;\n':'')+'uniform sampler2D citySatellite; varying vec3 cityGround;\n'+shader.fragmentShader;
+    // Keep the photographed blades at walking scale. Two grain directions
+    // and slower changes in turf colour break up the four-metre repeat.
+    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
+      vec2 site=cityGround.xz;
+      vec2 drift=sin(site*vec2(.097,.073)+sin(site.yx*.14));
+      vec2 grain=vMapUv+.24*drift;
+      vec2 crossed=mat2(.8,.6,-.6,.8)*grain*.76+vec2(.37,.62);
+      vec3 blades=mix(texture2D(map,grain).rgb,texture2D(map,crossed).rgb,.44);
+      float growth=drift.x*drift.y*.62+sin(dot(site,vec2(.22,-.14))+drift.y)*.38;
+      diffuseColor.rgb*=blades*mix(vec3(.83,.92,.83),vec3(1.15,1.04,.91),.5+.5*growth);`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
       ${landscape?`vec2 local=cityGround.xz-vec2(177.,-208.);
       vec2 lawnAxis=vec2(dot(local,vec2(.65,.76))/114.,dot(local,vec2(.76,-.65))/47.);
       float turf=1.-smoothstep(.75,1.1,length(lawnAxis));
       if(turf>0.)diffuseColor.rgb=mix(diffuseColor.rgb,texture2D(shoreLawn,cityGround.xz/2.8).rgb,turf);`:''}
       vec3 aerial=texture2D(citySatellite,vec2(cityGround.x,-cityGround.z)/6400.+.5).rgb;
-      diffuseColor.rgb=mix(diffuseColor.rgb,aerial*1.10,smoothstep(110.,1000.,distance(cityGround,cameraPosition))*.72);`);
+      // A ten-metre satellite pixel may straddle a path or a bright roof.
+      // Keep local turf colour there, retaining broad canopy shade from the image.
+      float green=smoothstep(-.028,.052,aerial.g-max(aerial.r,aerial.b));
+      float shade=clamp(.80+dot(aerial,vec3(.31,.64,.05))*1.4,.80,1.18);
+      vec3 distant=mix(diffuseColor.rgb*shade,aerial*1.10,green*.76);
+      float aerialWeight=smoothstep(110.,1000.,distance(cityGround,cameraPosition))*(1.-smoothstep(3.,12.,cityGround.y));
+      diffuseColor.rgb=mix(diffuseColor.rgb,distant,aerialWeight*.72);`);
   };
   grass.mesh(root,m.grass,'园林草地');plazas.mesh(root,m.paving,'硬质铺装广场');const lot=parking.mesh(root,m.asphalt,'停车场');
   if(lot)lot.geometry.setAttribute('snowLane',new T.Float32BufferAttribute(new Float32Array(lot.geometry.attributes.position.count*2),2));
@@ -152,6 +168,7 @@ export function createCity(scene,map,options={}){
   const postGrid=new Grid(4),postRadius=sleeve.radius+.16;
   if(bridge){
     grid.southWalk=southPromenade(root,m,grid.starLandings,grid.southGround);
+    grid.blossomTrees=grid.southWalk.blossoms;
     grid.talentColumns=starBridge(root,bridge,m,grid);
     for(const c of grid.talentColumns)postGrid.add(c,[c.x-postRadius,c.z-postRadius,c.x+postRadius,c.z+postRadius]);
   }
@@ -177,23 +194,28 @@ export function createCity(scene,map,options={}){
   const ready=canopyData.then(async trees=>{
     if(!far.active)return;
     foliage=furnishing(root,map,m,grid,trees,options.quality==='low');
-    await Promise.all([root.userData.foliageReady,root.userData.talentReady,monumentsReady,artworkReady,details.ready]);
+    await Promise.all([root.userData.foliageReady,root.userData.shrubReady,root.userData.talentReady,monumentsReady,artworkReady,details.ready]);
   });
   function segmentHeight(seg,x,z){
+    if(seg.quad){
+      const [x0,z0,x1,z1]=seg.bbox;
+      if(x<x0||z<z0||x>x1||z>z1)return null;
+      return quadHeight(seg.quad,x,z);
+    }
     if(seg.endY===undefined)return seg.y;
     const dx=seg.b[0]-seg.a[0],dz=seg.b[1]-seg.a[1],u=clamp(((x-seg.a[0])*dx+(z-seg.a[1])*dz)/(dx*dx+dz*dz||1),0,1);
     return T.MathUtils.lerp(seg.y,seg.endY,u);
   }
   function roadAt(x,z,ceiling=Infinity){
-    let height=0;
+    let height=ceiling>=.277&&grid.junctions.junctionAt(x,z) ? .277 : 0;
     for(const seg of grid.roads.query(x,z)){
-      if(Math.max(seg.y,seg.endY??seg.y)<=height||segmentDistance(x,z,seg.a,seg.b)>=seg.width*.5+.28)continue;
+      if(!seg.quad&&(Math.max(seg.y,seg.endY??seg.y)<=height||segmentDistance(x,z,seg.a,seg.b)>=seg.width*.5+.28))continue;
       if(seg.rampStart||seg.rampEnd){
         const dx=seg.b[0]-seg.a[0],dz=seg.b[1]-seg.a[1],along=(x-seg.a[0])*dx+(z-seg.a[1])*dz;
         if((seg.rampStart&&along<0)||(seg.rampEnd&&along>dx*dx+dz*dz))continue;
       }
       const y=segmentHeight(seg,x,z);
-      if(!seg.graded||y<=ceiling)height=Math.max(height,y);
+      if(y!=null&&(!seg.graded||y<=ceiling))height=Math.max(height,y);
     }
     return height;
   }
@@ -215,9 +237,9 @@ export function createCity(scene,map,options={}){
     if(deck&&y>top-deck.depth-.2&&y<top+.2||grid.platforms.railAt(x,z,y))return true;
     if(grid.bridgePiers.query(x,z).some(p=>y<p.top+.3&&Math.hypot(x-p.x,z-p.z)<p.r+.27))return true;
     for(const s of grid.roads.query(x,z)){
-      if(!s.graded||s.foot&&!s.solid||segmentDistance(x,z,s.a,s.b)>s.width*.5+.15)continue;
+      if(!s.graded||s.foot&&!s.solid||!s.quad&&segmentDistance(x,z,s.a,s.b)>s.width*.5+.15)continue;
       const top=segmentHeight(s,x,z);
-      if(y<top+.22&&y>(s.solid?top-s.depth-.22:-1))return true;
+      if(top!=null&&y<top+.22&&y>(s.solid?top-s.depth-.22:-1))return true;
     }
     const shore=grid.starLandings?.heightAt(x,z);
     if(shore!=null&&y<shore+.1)return true;
@@ -246,7 +268,7 @@ export function createCity(scene,map,options={}){
     if(grid.starLandings?.heightAt(x,z)!=null||grid.southWalk?.pavedHeightAt(x,z)!=null)return true;
     if(Number.isFinite(ceiling)){
       if(grid.bridgePiers.query(x,z).some(p=>ceiling<p.top+1&&Math.hypot(x-p.x,z-p.z)<p.r+.22))return false;
-      if(grid.roads.query(x,z).some(s=>s.graded&&!s.solid&&!s.foot&&segmentHeight(s,x,z)>ceiling&&segmentDistance(x,z,s.a,s.b)<s.width*.5))return false;
+      if(grid.roads.query(x,z).some(s=>s.graded&&!s.solid&&!s.foot&&(segmentHeight(s,x,z)??-Infinity)>ceiling&&(s.quad||segmentDistance(x,z,s.a,s.b)<s.width*.5)))return false;
     }
     const h=roadAt(x,z,ceiling);if(h>1.2)return true;
     if(tidal?.heightAt(x,z)!=null)return !grid.buildings.query(x,z).some(f=>!stadium?.ownsFootprint(f)&&inArea(x,z,f));
@@ -256,6 +278,7 @@ export function createCity(scene,map,options={}){
   }
   let lastTone=-1;const lastDetailEye=new T.Vector3(Infinity,0,0);let detailCount=-1;
   function update(time,camera,showTime=time){
+    if(root.userData.shrubWindTime)root.userData.shrubWindTime.value=time;
     grid.updateSignals(showTime);
     show.update(showTime);
     branding.update(showTime);
@@ -265,7 +288,7 @@ export function createCity(scene,map,options={}){
     const details=root.userData.localDetails||[];
     if(camera&&(detailCount!==details.length||lastDetailEye.distanceToSquared(camera.position)>25)){
       for(const {item,range,lod} of details){
-        const s=item.boundingSphere,d=s.center.distanceTo(camera.position)-s.radius;
+        const s=item.boundingSphere??item.geometry.boundingSphere,d=s.center.distanceTo(camera.position)-s.radius;
         item.visible=d<range;
         if(lod&&item.visible)item.geometry=d<lod.distance?lod.near:lod.far;
       }
@@ -287,6 +310,6 @@ export function createCity(scene,map,options={}){
     m.shop.emissiveIntensity=.36+night*.72;
   }
   function setSun(direction,color){ground.invalidate();if(!water)return;water.material.uniforms.sunDirection.value.copy(direction).normalize();if(color)water.material.uniforms.sunColor.value.set(color);}
-  function dispose(){root.userData.disposeTalentPlates?.();weatherCover?.texture.dispose();ground.dispose();water?.dispose();flowerbed?.dispose();landscape?.dispose();bridges?.dispose();details?.dispose();far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
+  function dispose(){root.userData.disposeTalentPlates?.();root.userData.disposeBlossoms?.();weatherCover?.texture.dispose();ground.dispose();water?.dispose();flowerbed?.dispose();landscape?.dispose();bridges?.dispose();details?.dispose();far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
   return {root,ready,update,talentColumns:grid.talentColumns??[],signals:grid.signals,parkWalkPaths:tidal?.walkPaths??[],stadiumAreas:stadium?.motorExclusions??[],captureStreet:ground.capture,groundHeight,isWalkable,flightBlocked,getWeatherCover,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
 }

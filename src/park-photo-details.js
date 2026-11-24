@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {Surface,Instances,inArea,random,segmentDistance} from './city-geometry.js';
 import {photo} from './city-materials.js';
+import {parkShrubs,shrubTurf} from './park-shrubs.js';
 
 const TAU=Math.PI*2;
 
@@ -123,45 +124,9 @@ function cobblePathMat(){
 }
 
 // IMG_0383 & IMG_0384 foreground: Arching variegated green-white spider grass & copper sedge clump geometry.
-function ornamentalGrassGeo(copper=false){
-  const s=new Surface(),rng=random(copper?3835:3834),col=new T.Color();
-  const blades=copper?56:64;
-  for(let i=0;i<blades;i++){
-    const a=rng()*TAU,r=.08+.36*Math.sqrt(rng());
-    const bx=Math.cos(a)*r,bz=Math.sin(a)*r;
-    const dx=Math.cos(a+(rng()-.5)*.45),dz=Math.sin(a+(rng()-.5)*.45);
-    const out=.28+rng()*.46,h=.34+rng()*.44,w=.024+rng()*.018;
-    const stripe=!copper&&rng()<.44;
-    let px=bx,py=0,pz=bz,pw=w;
-    for(let j=1;j<=3;j++){
-      const t=j/3;
-      const nx=bx+dx*out*t*t,nz=bz+dz*out*t*t;
-      const ny=h*Math.sin(t*2.18);
-      const nw=w*(1-t*.88);
-      if(copper){
-        const shade=.78+.38*t;
-        col.setRGB(.34*shade,.16*shade,.09*shade);
-      }else if(stripe){
-        const shade=.86+.26*t;
-        col.setRGB(.66*shade,.74*shade,.52*shade);
-      }else{
-        const shade=.75+.35*t;
-        col.setRGB(.14*shade,.31*shade,.11*shade);
-      }
-      s.quad(
-        [px-dz*pw,py,pz+dx*pw],[px+dz*pw,py,pz-dx*pw],
-        [nx+dz*nw,ny,nz-dx*nw],[nx-dz*nw,ny,nz+dx*nw],
-        undefined,col
-      );
-      px=nx;py=ny;pz=nz;pw=nw;
-    }
-  }
-  return s.geometry();
-}
 
-// IMG_0373 & IMG_0360: Register blooming pink Shenzhen Silk Floss Trees (美丽异木棉)
-// into grid.blossomTrees so foliage-volume.js renders them with true volumetric bark,
-// branches, and alpha-cutout blossom foliage instead of low-poly ellipsoids.
+
+// Flowering silk floss trees surveyed along the walking route in IMG_0373 and IMG_0360.
 function registerSilkFlossTree(grid,x,z,scale=1,seed=373){
   grid.blossomTrees=grid.blossomTrees||[];
   const rng=random(seed);
@@ -310,21 +275,27 @@ export function parkPhotoDetails(root,map,m,grid,hooks={}){
   // =========================================================================
   {
     const rng=random(3601);
-    const bushGeo=new T.IcosahedronGeometry(1,1);
-    const shoreBushes=new Instances(bushGeo,new T.MeshStandardMaterial({map:photo('flowerbed-hedge.webp'),color:0x6e8842,roughness:.96}),'南岸亲水 · 沿岸灌木花丛');
-    const bougMat=new T.MeshStandardMaterial({roughness:.84});
-    const bougFlowers=new Instances(bushGeo,bougMat,'南岸亲水 · 勒杜鹃花团');
-    const magentas=[new T.Color('#b82874'),new T.Color('#d44292'),new T.Color('#962266'),new T.Color('#de6ca8')];
+    const turf=(x,z)=>shrubTurf(map,x,z);
+    const shoreBushes=parkShrubs(root,'南岸亲水 · 沿岸灌木',turf);
+    const flowering=parkShrubs(root,'π桥东岸 · 勒杜鹃花丛',turf,true);
+    const lake=map.water.find(area=>area.name==='深圳湾内湖');
     // Lush flowering shrub berm along lake edge east of π bridge (IMG_0360 at 28..74, 351..362)
-    for(let i=0;i<36;i++){
-      const t=i/35,x=28+t*46,z=353.8-Math.sin(t*Math.PI)*3.4+(rng()-.5)*1.4;
+    for(let i=0;lake&&i<36;i++){
+      const x=28+i/35*46+.34*Math.sin(i*1.91);
       const sx=.85+rng()*.55,sy=.55+rng()*.34,sz=.85+rng()*.55;
-      shoreBushes.at(x,.26+sy*.55,z,sx,sy,sz,rng()*TAU);
-      if(rng()<.58){
-        for(let k=0;k<3;k++){
-          bougFlowers.at(x+(rng()-.5)*sx*1.1,.28+sy*.92+(rng()-.3)*.22,z+(rng()-.5)*sz*1.1,.22+rng()*.18,.16+rng()*.12,.22+rng()*.18,rng()*TAU,magentas[Math.floor(rng()*magentas.length)]);
-        }
+      // This bed follows the south bank, which bends north at its western
+      // end. Use its mapped edge and keep the whole crown off the footways.
+      const hits=[];
+      for(let j=0;j<lake.p.length;j++){
+        const a=lake.p[j],b=lake.p[(j+1)%lake.p.length];
+        if((a[0]>x)!==(b[0]>x))hits.push(a[1]+(x-a[0])/(b[0]-a[0])*(b[1]-a[1]));
       }
+      if(!hits.length)continue;
+      const z=Math.max(...hits)+2.2+.45*Math.sin(i*.72)+rng()*.65;
+      if(grid.roads.query(x,z).some(s=>segmentDistance(x,z,s.a,s.b)<s.width/2+Math.max(sx,sz)))continue;
+      const height=sy*(.93+.20*Math.sin(i*.64));
+      (rng()<.67?flowering:shoreBushes).at(x,.12+height*.61,z,sx,height,sz,rng()*TAU);
+      if(i%4<2)shoreBushes.at(x+.34,.31,z-.61,sx*.72,height*.56,sz*.68,i*2.4);
     }
     // Southwest promenade low granite seating curb & lush border bushes (IMG_0373 at -318..-278, 384..395)
     const swCurb=new Surface();
@@ -341,13 +312,32 @@ export function parkPhotoDetails(root,map,m,grid,hooks={}){
         swCurb.quad([prevSw.a[0],.24,prevSw.a[2]],[a[0],.24,a[2]],a,prevSw.a);
       }
       prevSw={a,b};
-      // Dense green shrubs behind the seating curb & opposite lakeside border
-      shoreBushes.at(p.x+nx*4.1,.68,p.z+nz*4.1,1.0+rng()*.4,.65+rng()*.25,1.0,rng()*TAU);
-      shoreBushes.at(p.x-nx*3.2,.62,p.z-nz*3.2,.95+rng()*.35,.58+rng()*.22,.95,rng()*TAU);
     }
     swCurb.mesh(group,concreteMat,'西南大道 · 花岗石条石坐凳矮墙',true);
-    shoreBushes.flush(group,true,680);
-    bougFlowers.flush(group,false,520);
+    // Overlapping, lengthwise drifts on the outer sides of the curb and path.
+    // Each bed has its own rhythm and tapers at both entrances.
+    for(const [side,offset,phase] of [[1,4.25,.4],[-1,3.45,2.8]]){
+      for(let s=1.35;s<swLen-1;){
+        const u=s/swLen,p=swCurve.getPointAt(u),t=swCurve.getTangentAt(u);
+        const end=Math.min(1,s/4,(swLen-s)/4),crest=.5+.5*Math.sin(s*.43+phase);
+        const off=side*(offset+.24*Math.sin(s*.58+phase));
+        const depth=.66+.19*crest,height=(.38+.36*crest+.12*rng())*(.62+.38*end);
+        const reach=(1.15+.82*rng()+.36*crest)*(.64+.36*end);
+        const yaw=Math.atan2(t.x,t.z)+(rng()-.5)*.22;
+        for(const extra of [0,.6,1.2,1.8,2.4,3.0,3.6]){
+          const x=p.x-t.z*(off+side*extra),z=p.z+t.x*(off+side*extra);
+          const clear=[-1,0,1].every(k=>{
+            const px=x+k*reach*Math.sin(yaw),pz=z+k*reach*Math.cos(yaw);
+            return !hooks.onPromenade?.(px,pz,depth+.17)&&(!lake||!inArea(px,pz,lake))&&
+              !grid.roads.query(px,pz).some(s=>s.y<1&&segmentDistance(px,pz,s.a,s.b)<s.width*.5+depth);
+          });
+          if(clear){shoreBushes.at(x,turf(x,z)+height*.46,z,depth,height,reach,yaw);break;}
+        }
+        s+=reach*(1.10+.32*rng());
+      }
+    }
+    shoreBushes.flush(group,true);
+    flowering.flush(group,true);
 
     // Blooming pink Shenzhen November Silk Floss Trees (美丽异木棉 — IMG_0373 & IMG_0360)
     registerSilkFlossTree(grid,39.5,355.2,.95,3602);
@@ -445,32 +435,41 @@ export function parkPhotoDetails(root,map,m,grid,hooks={}){
     cobbleEdging.mesh(group,concreteMat,'西岸棕榈林 · 曲径石材收边');
 
     // 5c. Multi-layered variegated spider grass, copper sedge & violet flowerbeds flanking brick path (IMG_0383, IMG_0384)
-    const varGrass=new Instances(ornamentalGrassGeo(false),new T.MeshStandardMaterial({vertexColors:true,roughness:.84,side:T.DoubleSide}),'棕榈林花境 · 银边吊兰与鸢尾');
-    const copGrass=new Instances(ornamentalGrassGeo(true),new T.MeshStandardMaterial({vertexColors:true,roughness:.86,side:T.DoubleSide}),'棕榈林花境 · 铜红狼尾草');
-    const violetGeo=new T.IcosahedronGeometry(1,1);
-    const violetMound=new Instances(violetGeo,new T.MeshStandardMaterial({color:0x7e64b8,roughness:.86}),'棕榈林花境 · 紫花翠芦莉');
-    const cushionShrub=new Instances(violetGeo,new T.MeshStandardMaterial({map:photo('flowerbed-hedge.webp'),color:0x668443,roughness:.95}),'棕榈林花境 · 矮球灌木');
+    const turf=(x,z)=>shrubTurf(map,x,z);
+    const varGrass=parkShrubs(root,'棕榈林花境 · 银边吊兰',turf,'silver');
+    const copGrass=parkShrubs(root,'棕榈林花境 · 铜红狼尾草',turf,'copper');
+    const violets=parkShrubs(root,'棕榈林花境 · 紫花翠芦莉',turf,'violet');
+    const cushionShrub=parkShrubs(root,'棕榈林花境 · 常绿灌木',turf);
+    const nearPath=(x,z,r)=>hooks.onPromenade?.(x,z,r)||
+      grid.roads.query(x,z).some(s=>s.y<1&&segmentDistance(x,z,s.a,s.b)<s.width*.5+r);
     const gRng=random(3836);
     // Left foreground variegated spider-grass bed (IMG_0383 bottom-left)
     for(let i=0;i<24;i++){
-      const x=-474.5-gRng()*8.5,z=176.2+gRng()*4.2;
+      const x=-474.5-gRng()*8.5;
+      let z=176.2+gRng()*4.2;
       const sc=.85+gRng()*.55;
-      varGrass.at(x,.23,z,sc,sc*(.85+gRng()*.3),sc,gRng()*TAU);
-      if(i%3===0)violetMound.at(x+(gRng()-.5)*.6,.52,z+(gRng()-.5)*.6,.14,.11,.14,gRng()*TAU);
+      const h=sc*(.45+gRng()*.15),yaw=gRng()*TAU;
+      for(let n=0;n<5&&nearPath(x,z,sc);n++)z+=.62;
+      if(nearPath(x,z,sc))continue;
+      varGrass.at(x,turf(x,z),z,sc,h,sc,yaw);
+      if(i%3===0)violets.at(x,turf(x,z),z,.32,.43,.29,gRng()*TAU);
     }
     // Right-center copper-bronze sedge + rounded green cushions (IMG_0383 mid-right)
     for(let i=0;i<18;i++){
-      const x=-477.5-gRng()*7.0,z=170.0-gRng()*4.6;
+      const x=-477.5-gRng()*7.0;
+      let z=170.0-gRng()*4.6;
       const sc=.82+gRng()*.52;
-      copGrass.at(x,.23,z,sc,sc*(.9+gRng()*.3),sc,gRng()*TAU);
+      const h=sc*(.48+gRng()*.15),yaw=gRng()*TAU;
+      for(let n=0;n<5&&nearPath(x,z,sc);n++)z-=.62;
+      if(!nearPath(x,z,sc))copGrass.at(x,turf(x,z),z,sc,h,sc,yaw);
     }
     for(const [cx,cz,rx,ry] of [
       [-474.8,169.5,1.25,.52],[-476.8,166.4,1.45,.56],[-482.0,168.0,1.35,.54],
       [-486.0,174.5,1.15,.48],[-481.2,179.8,1.30,.52],[-475.5,180.5,1.15,.48]
     ]){
-      cushionShrub.at(cx,.24+ry*.65,cz,rx,ry,rx*.85,gRng()*TAU);
+      if(!nearPath(cx,cz,rx*.86))cushionShrub.at(cx,.24+ry*.65,cz,rx,ry,rx*.85,gRng()*TAU);
     }
-    for(const b of [varGrass,copGrass,violetMound,cushionShrub])b.flush(group,false,380);
+    for(const b of [varGrass,copGrass,violets,cushionShrub])b.flush(group,false);
 
     // 5d. Tall dark-grey Smart Park Poles with dome CCTV camera & black PA speaker box (IMG_0383, IMG_0377)
     const smartPoles=[

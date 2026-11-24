@@ -1,5 +1,46 @@
-import {Grid,clamp,segmentDistance} from './city-geometry.js';
+import {Grid,bounds,clamp,inRing,segmentDistance} from './city-geometry.js';
 import {footRoad,roadProfiles,atStation} from './road-profiles.js';
+
+// Four short, alternating carriageway links enclose the middle of a divided
+// crossroads. Follow the mapped links so slip-road islands stay intact.
+function dividedCrossings(streets,nodes,heightAt){
+  const links=new Map(),patches=[],done=new Set();
+  function link(a,b,edge){
+    if(!links.has(a))links.set(a,new Map());
+    links.get(a).set(b,edge);
+  }
+  for(const [road,data] of streets){
+    if(!road.oneway||!road.name)continue;
+    let prev=-1;
+    for(let i=0;i<road.p.length;i++){
+      const b=road.p[i].join(',');
+      if(!nodes.get(b)?.some(arm=>arm.road.oneway&&arm.road.name&&arm.road.name!==road.name))continue;
+      if(prev>=0){
+        const lo=data.distances[prev],hi=data.distances[i];
+        if(hi-lo<35&&hi-lo>2&&[lo,(lo+hi)/2,hi].every(s=>Math.abs(heightAt(road,s)-.28)<.004)){
+          const a=road.p[prev].join(','),p=road.p.slice(prev,i+1);
+          link(a,b,{road,data,lo,hi,p,forward:true});link(b,a,{road,data,lo,hi,p:p.slice().reverse(),forward:false});
+        }
+      }
+      prev=i;
+    }
+  }
+  for(const [a,fromA] of links)for(const [b,ab] of fromA)for(const [c,bc] of links.get(b)){
+    if(ab.road.name===bc.road.name||a===c)continue;
+    for(const [d,cd] of links.get(c)){
+      const da=fromA.get(d);
+      if(d===b||!da||cd.road.name!==ab.road.name||da.road.name!==bc.road.name)continue;
+      const key=[a,b,c,d].sort().join('|');if(done.has(key))continue;
+      const edges=[ab,bc,cd,links.get(d).get(a)];
+      // A divided road has opposite traffic directions on its two sides.
+      if(ab.forward!==cd.forward||bc.forward!==edges[3].forward)continue;
+      done.add(key);
+      patches.push({ring:edges.flatMap(e=>e.p.slice(0,-1)),corners:edges.map(e=>e.p[0])});
+      for(const {data,lo,hi} of edges)for(const spans of [data.intervals,data.left,data.right])spans.push([lo,hi]);
+    }
+  }
+  return patches;
+}
 
 export function wenxinDivider(map){
   const road=map.roads?.find(r=>r.id===235113766);if(!road)return null;
@@ -49,15 +90,14 @@ export function streetJunctions(map){
             [Math.min(prev[0],p[0])-pad,Math.min(prev[1],p[1])-pad,Math.max(prev[0],p[0])+pad,Math.max(prev[1],p[1])+pad]);
         }
       }
-      if(heightAt(road,distances[i])>=.95)continue;
       const key=p.join(','),arms=nodes.get(key)??[];
       arms.push({road,s:distances[i],prev,next,p});nodes.set(key,arms);
     }
   }
   for(const arms of nodes.values()){
     if(arms.length<2)continue;
-    const dirs=arms.flatMap(({prev,p,next,road})=>[prev,next].filter(Boolean).map(q=>{
-      const dx=q[0]-p[0],dz=q[1]-p[1],len=Math.hypot(dx,dz)||1;return {dx:dx/len,dz:dz/len,road};
+    const dirs=arms.flatMap(({prev,p,next,road,s})=>[prev,next].filter(Boolean).map(q=>{
+      const dx=q[0]-p[0],dz=q[1]-p[1],len=Math.hypot(dx,dz)||1;return {dx:dx/len,dz:dz/len,road,y:heightAt(road,s)};
     }));
     if(dirs.length<3)continue;
     for(const {road,s,prev,p,next} of arms){
@@ -67,24 +107,26 @@ export function streetJunctions(map){
       if(prev){const dx=p[0]-prev[0],dz=p[1]-prev[1],l=Math.hypot(dx,dz)||1;tx+=dx/l;tz+=dz/l;}
       if(next){const dx=next[0]-p[0],dz=next[1]-p[1],l=Math.hypot(dx,dz)||1;tx+=dx/l;tz+=dz/l;}
       const tl=Math.hypot(tx,tz)||1;tx/=tl;tz/=tl;
-      const own=dirs.filter(v=>v.road===road);
-      let clearAll=0,clearL=0,clearR=0;
+      const own=dirs.filter(v=>v.road===road),width=road.width||6,y=heightAt(road,s);
       for(const d of dirs){
         if(d.road===road||d.road.kind==='service'&&(d.road.width||0)<2.2)continue;
         if(!own.some(v=>Math.abs(v.dx*d.dz-v.dz*d.dx)>.25))continue;
-        const sinAng=Math.max(.45,Math.abs(-tz*d.dx+tx*d.dz));
-        const gap=(d.road.width||5)*.5/sinAng+1.15;
-        clearAll=Math.max(clearAll,gap);
         const sideDot=-tz*d.dx+tx*d.dz;
-        if(sideDot>.22)clearL=Math.max(clearL,gap);
-        else if(sideDot<-.22)clearR=Math.max(clearR,gap);
-        else{clearL=Math.max(clearL,gap);clearR=Math.max(clearR,gap);}
+        if(Math.abs(sideDot)<.25)continue;
+        if(Math.abs(y-d.y)>.25)continue;
+        // At a skew junction the mouth meets the kerb upstream or downstream
+        // of the centreline node. Intersect the other road with this edge.
+        const cosine=tx*d.dx+tz*d.dz,reach=(d.road.width||5)*.5/Math.abs(sideDot);
+        const shift=(width*.5+.65)*cosine/Math.abs(sideDot);
+        const gap=reach+1.15+Math.abs(cosine/sideDot)*.7;
+        (sideDot>0?data.left:data.right).push([s+shift-gap,s+shift+gap]);
+        data.intervals.push([s-Math.max(reach,reach-shift)-1.15,s+Math.max(reach,reach+shift)+1.15]);
       }
-      if(clearAll)data.intervals.push([s-clearAll,s+clearAll]);
-      if(clearL)data.left.push([s-clearL,s+clearL]);
-      if(clearR)data.right.push([s-clearR,s+clearR]);
     }
   }
+  const patches=dividedCrossings(streets,nodes,heightAt);
+  const centers=new Grid(40);
+  for(const patch of patches)centers.add(patch,bounds(patch.ring));
   // Catch unsplit T-junctions where a side street endpoint lands near a main road edge without sharing a node.
   for(const [road,data] of streets){
     if(road.kind==='service'&&(road.width||0)<2.2)continue;
@@ -124,12 +166,14 @@ export function streetJunctions(map){
       crossings.add({a,b},[Math.min(a[0],b[0])-2,Math.min(a[1],b[1])-2,Math.max(a[0],b[0])+2,Math.max(a[1],b[1])+2]);
     }
     for(const p of c.p)for(const {road,s} of nodes.get(p.join(','))??[]){
+      if(heightAt(road,s)>=.95)continue;
       const d=streets.get(road);
       d.intervals.push([s-2.1,s+2.1]);d.left.push([s-2.1,s+2.1]);d.right.push([s-2.1,s+2.1]);
     }
   }
   for(const stop of map.pois??[])if(stop.kind==='crossing')
     for(const {road,s} of nodes.get(stop.p.join(','))??[]){
+      if(heightAt(road,s)>=.95)continue;
       const d=streets.get(road);
       d.intervals.push([s-2.1,s+2.1]);d.left.push([s-2.1,s+2.1]);d.right.push([s-2.1,s+2.1]);
     }
@@ -178,6 +222,7 @@ export function streetJunctions(map){
     return true;
   }
 
-  return {clearRuns,isClear,hasCrossing:(x,z)=>crossings.query(x,z).some(c=>segmentDistance(x,z,c.a,c.b)<1.9)};
+  return {patches,junctionAt:(x,z)=>centers.query(x,z).find(p=>inRing(x,z,p.ring)),
+    blockedSpans:getMerged,clearRuns,isClear,hasCrossing:(x,z)=>crossings.query(x,z).some(c=>segmentDistance(x,z,c.a,c.b)<1.9)};
 }
 

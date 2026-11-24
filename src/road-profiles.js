@@ -111,6 +111,29 @@ export function roadProfiles(map){
     }
   }
   const trueViaducts=classifyViaducts(motor,families);
+  const ends=new Map(),entries=new Map(),widthJoins=[];
+  for(const rd of motor)for(const end of [0,rd.p.length-1]){
+    const p=rd.p[end],q=rd.p[end?end-1:1],len=Math.hypot(q[0]-p[0],q[1]-p[1]);
+    if(!len)continue;
+    const k=key(p),arms=ends.get(k)??[];
+    arms.push({rd,end,dx:(q[0]-p[0])/len,dz:(q[1]-p[1])/len,len});ends.set(k,arms);
+  }
+  for(const arms of ends.values()){
+    for(const a of arms){
+      if(a.rd.kind!=='service')continue;
+      const main=arms.filter(b=>b.rd.width>a.rd.width*1.5&&Math.abs(a.dx*b.dz-a.dz*b.dx)>.6)
+        .sort((b,c)=>c.rd.width-b.rd.width)[0];
+      if(main){
+        if(!entries.has(a.rd))entries.set(a.rd,new Map());
+        entries.get(a.rd).set(a.end,{main,run:Math.min(a.len*.45,main.rd.width*.5+2.5)});
+      }
+    }
+    for(let i=0;i<arms.length;i++)for(const b of arms.slice(i+1)){
+      const a=arms[i];
+      if(a.rd.name&&a.rd.name===b.rd.name&&a.rd.width!==b.rd.width&&!a.rd.bridge&&!b.rd.bridge&&
+          a.dx*b.dx+a.dz*b.dz<-.94)widthJoins.push([a,b]);
+    }
+  }
   const upperNodes=new Set(map.roads.filter(r=>footRoad(r)&&coastalUpper(r)&&r.kind!=='steps').flatMap(r=>r.p.map(key)));
   for(const rd of map.roads){
     if(rd.p.length<2||rd.tunnel||rd.layer<0)continue;
@@ -121,31 +144,36 @@ export function roadProfiles(map){
     const isElevatedMotor=!foot&&(rd.bridge||rd.layer>0);
     const flatBridge=isElevatedMotor&&!trueViaducts.has(rd);
     const level=urban&&rd.kind!=='steps'?skywalkHeight-.246:side?rise+.174:isElevatedMotor?(flatBridge?flatBridgeRise:rise*Math.max(1,rd.layer??0)):0;
-    let grade=rd.kind==='steps'?.32:.054;
+    // Leave grade headroom for the crossfall where a service ramp meets a
+    // sloping main road. The surrounding road graph shares its end heights.
+    let grade=rd.kind==='steps'?.32:entries.has(rd)?.044:.054;
     if(staircase){
       const run=rd.p.slice(1).reduce((s,p,i)=>s+Math.hypot(p[0]-rd.p[i][0],p[1]-rd.p[i][1]),0);
       grade=Math.max(grade,(skywalkHeight-.246)/Math.max(1,run));
     }
     const chain=[];
-    for(const p of rd.p){
+    const entriesAt=entries.get(rd),aprons=[];
+    for(const [i,p] of rd.p.entries()){
       const id=(foot?(urban&&upperNodes.has(key(p))?'u':'p'):'m')+key(p);
       let node=nodes.get(id);if(!node){node={x:p[0],z:p[1],h:0,edges:[]};nodes.set(id,node);}
       node.h=Math.max(node.h,level);
       if(chain.at(-1)===node)continue;
       const prev=chain.at(-1);
       if(prev){
-        const cost=Math.hypot(node.x-prev.x,node.z-prev.z)*grade;
+        const start=chain.length===1?entriesAt?.get(0)?.run??0:0,end=entriesAt?.get(i)?.run??0;
+        aprons.push([start,end]);
+        const cost=(Math.hypot(node.x-prev.x,node.z-prev.z)-start-end)*grade;
         prev.edges.push([node,cost]);node.edges.push([prev,cost]);
       }
       chain.push(node);
     }
-    if(chain.length>1)ways.push({rd,chain,level,foot,side,urban,flatBridge,grade});
+    if(chain.length>1)ways.push({rd,chain,level,foot,side,urban,flatBridge,grade,aprons});
   }
   const queue=[...nodes.values()].filter(n=>n.h>0);
   for(let i=0;i<queue.length;i++)for(const [n,cost] of queue[i].edges){
     const h=queue[i].h-cost;if(h>n.h+.00001){n.h=h;queue.push(n);}
   }
-  for(const {rd,chain,level,foot,side,urban,flatBridge,grade} of ways){
+  for(const {rd,chain,level,foot,side,urban,flatBridge,grade,aprons} of ways){
     if(!chain.some(n=>n.h>0))continue;
     const base=foot?.246:ground,points=[],distances=[0];
     const family=families.get(rd);
@@ -160,24 +188,27 @@ export function roadProfiles(map){
     }
     for(let i=1;i<chain.length;i++){
       const a=chain[i-1],b=chain[i],length=Math.hypot(b.x-a.x,b.z-a.z);
+      const [startPad,endPad]=aprons[i-1],run=length-startPad-endPad;
       if(i===1)add(a.x,a.z,a.h,0);
       const knots=[length];
       if(northernBayWays.has(rd.id))for(let v=5;v<length;v+=5)knots.push(v);
       if(a.h!==b.h||level<Math.min(a.h,b.h)){
-        const limit=Math.min(length,Math.max(0,a.h-level)/grade);
-        for(let v=5;v<limit;v+=5)knots.push(v);
+        const limit=startPad+Math.min(run,Math.max(0,a.h-level)/grade);
+        if(startPad)knots.push(startPad);
+        for(let v=startPad+5;v<limit;v+=5)knots.push(v);
         if(limit>0&&limit<length)knots.push(limit);
-        const start=Math.max(0,length-Math.max(0,b.h-level)/grade);
-        for(let v=length-5;v>start;v-=5)knots.push(v);
+        const start=length-endPad-Math.min(run,Math.max(0,b.h-level)/grade);
+        if(endPad)knots.push(length-endPad);
+        for(let v=length-endPad-5;v>start;v-=5)knots.push(v);
         if(start>0&&start<length)knots.push(start);
-        const meet=(a.h-b.h+grade*length)/(2*grade);
-        if(meet>0&&meet<length&&a.h-grade*meet>level)knots.push(meet);
+        const meet=(a.h-b.h+grade*run)/(2*grade);
+        if(meet>0&&meet<run&&a.h-grade*meet>level)knots.push(startPad+meet);
       }
       let previous=0;
       for(const d of knots.sort((x,z)=>x-z)){
         if(d<length&&d-previous<.015||length-d<.015&&d!==length)continue;
         previous=d;const t=d/length;
-        add(lerp(a.x,b.x,t),lerp(a.z,b.z,t),Math.max(level,a.h-grade*d,b.h-grade*(length-d)),distance+d);
+        add(lerp(a.x,b.x,t),lerp(a.z,b.z,t),Math.max(level,a.h-grade*Math.max(0,d-startPad),b.h-grade*Math.max(0,length-d-endPad)),distance+d);
       }
       distance+=length;distances.push(distance);
     }
@@ -201,6 +232,35 @@ export function roadProfiles(map){
     }
     profiles.set(rd,{points,distances,base,level,foot,side,family,urban,flatBridge,length:distance});
   }
+  // Blend the two measured widths over the adjoining approach, sharing both
+  // edge vertices at the way boundary. Keep bridge deck cross sections fixed.
+  for(const pair of widthJoins){
+    const sides=pair.map(({rd,end})=>{const prof=profiles.get(rd);return prof&&{prof,s:end?prof.length:0};});
+    if(sides.some(side=>!side))continue;
+    const width=sides.reduce((sum,{prof,s})=>sum+atStation(prof,s).width,0)/2;
+    for(const {prof,s} of sides){
+      const delta=width-atStation(prof,s).width,run=Math.min(18,prof.length*.45);
+      const boundary=atStation(prof,s===0?run:s-run);
+      if(!prof.points.some(p=>Math.abs(p.s-boundary.s)<.02)){
+        prof.points.push(boundary);prof.points.sort((a,b)=>a.s-b.s);
+      }
+      for(const p of prof.points)p.width+=delta*Math.max(0,1-Math.abs(p.s-s)/run);
+    }
+  }
+  for(const [road,byEnd] of entries){
+    const prof=profiles.get(road);if(!prof)continue;
+    for(const [end,{main,run}] of byEnd){
+      const major=profiles.get(main.rd);if(!major)continue;
+      const m=atStation(major,main.end?major.length:0),sign=main.end?-1:1;
+      const base=end?prof.length:0,origin=end?prof.points.at(-1):prof.points[0];
+      for(const p of prof.points){
+        const weight=1-clamp((Math.abs(p.s-base)-run)/Math.max(run,1));
+        const slope=m.slope*sign*weight;
+        p.y+=slope*((p.x-origin.x)*main.dx+(p.z-origin.z)*main.dz);
+        p.crossSlope=(p.crossSlope??0)+slope*(p.nx*main.dx+p.nz*main.dz);
+      }
+    }
+  }
   cache.set(map,profiles);return profiles;
 }
 
@@ -210,6 +270,7 @@ export function atStation(profile,s){
   while(hi-lo>1){const mid=(lo+hi)>>1;if(pts[mid].s<=s)lo=mid;else hi=mid;}
   const a=pts[lo],b=pts[hi],t=clamp((s-a.s)/(b.s-a.s));
   return {s,x:lerp(a.x,b.x,t),z:lerp(a.z,b.z,t),y:lerp(a.y,b.y,t),width:lerp(a.width,b.width,t),
-    nx:lerp(a.nx,b.nx,t),nz:lerp(a.nz,b.nz,t),blend:lerp(a.blend,b.blend,t),slope:(b.y-a.y)/(b.s-a.s)};
+    nx:lerp(a.nx,b.nx,t),nz:lerp(a.nz,b.nz,t),blend:lerp(a.blend,b.blend,t),
+    crossSlope:lerp(a.crossSlope??0,b.crossSlope??0,t),slope:(b.y-a.y)/(b.s-a.s)};
 }
 

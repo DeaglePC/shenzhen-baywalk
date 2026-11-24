@@ -1,7 +1,8 @@
 import * as T from 'three';
 import {Instances,along,random} from './city-geometry.js';
+import {parkShrubs} from './park-shrubs.js';
 
-export function shorePlanting(root,ground,hedgeMap,shootMap,runs){
+export function shorePlanting(root,ground,shootMap,runs){
   const rng=random(21964),tau=Math.PI*2;
   const timber=new Instances(new T.CylinderGeometry(.73,1,1,8),
     new T.MeshStandardMaterial({color:0x584e38,roughness:1}),'花坛水岸 · 真实树干与分叉');
@@ -14,8 +15,7 @@ export function shorePlanting(root,ground,hedgeMap,shootMap,runs){
   spray.computeVertexNormals();
   const leaves=new Instances(spray,new T.MeshStandardMaterial({map:shootMap,side:T.DoubleSide,
     alphaTest:.30,alphaToCoverage:true,color:0xd9dfc5,envMapIntensity:.6,roughness:1}),'花坛水岸 · 悬垂细枝叶');
-  const shrub=new Instances(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({
-    map:hedgeMap,roughness:.96}),'花坛水岸 · 沿岸灌木');
+  const shrub=parkShrubs(root,'花坛水岸 · 沿岸灌木',ground);
   function tree(x,z,height,width){
     const floor=ground(x,z),scale=height/7.15;
     function pt(angle,r,h){return [x+Math.cos(angle)*r*width,floor+h*scale,z+Math.sin(angle)*r*width];}
@@ -41,15 +41,10 @@ export function shorePlanting(root,ground,hedgeMap,shootMap,runs){
   }
   // In the reverse view the shorter tuft is to the right of the multi-stem crown.
   tree(159.7,-196.1,6.25,1.02);tree(157.2,-198.6,3.85,.61);
-  const low=new T.Color(0x53693c),light=new T.Color(0x92a45b);
   for(const line of runs)along(line,.44,.1,(x,z,dx,dz)=>{
     const side=(rng()-.5)*1.0,px=x-dz*side,pz=z+dx*side,y=ground(px,pz);
     const r=.37+rng()*.56,h=.3+rng()*.49;
-    shrub.at(px,y+.18,pz,r,h,r*(.8+.25*rng()),rng()*tau,low.clone().lerp(light,rng()));
-    for(let j=0;j<5;j++){
-      const a=rng()*tau;
-      leaves.at(px+.55*r*Math.cos(a),y+h+.25,pz+.55*r*Math.sin(a),.39,.43,.35,a,new T.Color(0xd3d8b9));
-    }
+    shrub.at(px,y+.18,pz,r,h,r*(.8+.25*rng()),rng()*tau);
   });
-  shrub.flush(root,true,175);timber.flush(root,true,190);leaves.flush(root,true,190);
+  shrub.flush(root,true);timber.flush(root,true,190);leaves.flush(root,true,190);
 }
