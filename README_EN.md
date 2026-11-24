@@ -42,12 +42,13 @@
 
 ---
 
-## 🌟 Why BAYWALK Is Different
+## 🌟 Highlights: Where Real Shenzhen Meets Surreal Beauty
 
-Instead of procedurally generated gray boxes, **BAYWALK** is an authentic **1 : 1 browser-native digital twin** of Shenzhen's iconic waterfront (`22.51366° N, 113.94417° E`):
+**BAYWALK** focuses on **cinematic atmosphere, visual beauty, and impossible wonders set in a 1 : 1 real-world Shenzhen Bay** (`22.51366° N, 113.94417° E`):
 
-- **🌍 Scientific Multi-Source GIS Fusion**: Built from real **OpenStreetMap** road networks & building footprints, **CMAB (*Nature Scientific Data 2025*)** building height predictions, **Copernicus Sentinel-2C** true-color satellite orthophotos, **Meta & WRI CHMv2 (2026)** canopy height maps, and **AWS Terrain Tiles** out to a 22 km mountain horizon.
-- **📷 On-Site Field Photography & EXIF Calibration**: All **124 double-sided Starlight Bridge & South Shore talent pillars** were photographed on-site and aligned via GPS EXIF telemetry — alongside photo-calibrated recreations of Tidal Square, bronze monuments, BYD e6 Pengcheng Shenzhen taxis, and a 2024 Tesla Model 3 Highland (`粤B·D03726`).
+- **❄️ Snowfall & Aurora Over Subtropical Shenzhen**: Watch real-time snow blanket Starlight Bridge, Pi Bridge, and Shenzhen's iconic blue-and-white BYD e6 taxis — **freezing the inland Talent Lake while Shenzhen Bay keeps rolling ocean waves** — or gaze up at emerald **Aurora Borealis** dancing above China Resources Tower ("Chunsun"), two phenomena virtually impossible in real-life 22°N Shenzhen.
+- **🎆 Synchronized City-Wide Light Show & 4-Period Lighting**: Seamless Afternoon, Sunset, Blue Hour, and Night transitions, with every Houhai skyscraper sharing a unified light-show clock reflected live across Talent Lake.
+- **🌍 Scientific GIS Foundation + On-Site Field Calibration**: Fuses real **OpenStreetMap**, **CMAB (*Nature Scientific Data 2025*)**, **Copernicus Sentinel-2C**, **Meta & WRI CHMv2 (2026)** canopy maps, **AWS Terrain Tiles**, and **124 on-site EXIF-aligned Starlight Pillars** so every surreal spectacle feels unmistakably grounded.
 - **⚡ Ultra-Lean Pure WebGL Architecture**: Zero 200 MB engine WASM runtimes. **`package.json` has literally ONE runtime dependency: `three@0.182.0`**. 100 vanilla ES modules (20,781 LOC) compile with Vite in 1.85s into a ~510 KB gzipped JS core — playable immediately on desktop and touch devices.
 
 <div align="center">
@@ -100,7 +101,17 @@ Inspect pixel-matched field photographs against real-time 2560 × 1440 WebGL cap
     </td>
     <td width="50%" align="center">
       <img src="docs/images/aurora-night.jpg" alt="Aurora Borealis over Shenzhen Bay" width="100%" />
-      <sub><strong>Aurora Night</strong> — Custom GLSL atmospheric & aurora shaders over Shenzhen Bay</sub>
+      <sub><strong>Aurora Night</strong> — Impossible emerald auroras dancing over 22°N Shenzhen Bay</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/snow-bridge.jpg" alt="Snowy Starlight Bridge in Shenzhen" width="100%" />
+      <sub><strong>Snowy Shenzhen · Starlight Bridge</strong> — Falling snow & misty Chunsun skyline</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/snow-showcase.jpg" alt="Snow-covered Shenzhen taxi, frozen Pi Bridge & aurora" width="100%" />
+      <sub><strong>Winter Wonders</strong> — Snow-dusted BYD e6 taxi, frozen Talent Lake & Pi Bridge</sub>
     </td>
   </tr>
   <tr>

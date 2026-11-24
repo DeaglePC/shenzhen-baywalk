@@ -42,14 +42,14 @@
 
 ---
 
-## 🌟 为什么与众不同？
+## 🌟 核心亮点：在真实深圳湾，遇见物理世界看不到的浪漫
 
-不同于常见的「AI 提示词随机生成方块城市」，**深圳漫游 · BAYWALK** 是一次面向真实世界的 **1 : 1 浏览器端城市数字重建实验**：
+**深圳漫游 · BAYWALK** 是一次面向**极致光影美学与超现实城市奇观**的浏览器端 3D 漫游作品——以北纬 22.51° 真实的深圳人才公园与后海天际线为底座，让你在浏览器里看见现实中几乎不可能遇见的**深圳冬雪、湾区极光**，以及璀璨流动的**全城联动灯光秀**：
 
-- **🌍 真地理，而非随机程序化积木**：以人才公园内湖（`22.51366° N, 113.94417° E`）为原点，按 WGS84 局部米制投影完整还原 **半径 3.0 公里（28.27 km²）** 的真实深圳湾、后海总部基地、海岸城与南山科技轴。
-- **🛰️ 科研级多源空间数据融合**：融合 **OpenStreetMap** 路网与建筑轮廓、*Nature Scientific Data (2025)* **CMAB 中国建筑高度数据集**、**Copernicus Sentinel-2C** 真彩色卫星正射底图、**Meta & WRI CHMv2 (2026)** 高分辨率树冠高度栅格，以及 **AWS Terrain Tiles** 22 公里外延群山高程。
-- **📷 实地走街采集 + 逐像素视觉对齐**：实地走遍人才公园采集 **124 根双面星光柱**（桥面 65 根 + 南岸 59 根）并按照片 EXIF 经纬度逐根校准；潮汐广场、花草字、青铜群像、深圳鹏程第二代比亚迪 e6 出租车与 2024 款特斯拉 Model 3 焕新版均提供**同机位实拍 vs 实机分屏对比器**。
-- **⚡ 极致轻量的纯前端架构**：没有 200MB 的游戏引擎 WASM 运行时，**`package.json` 生产依赖仅有 `three@0.182.0` 一个包**。100 个原生 ES 模块（20,781 行代码），Vite 构建仅需 1.85 秒，JS 核心包 Gzip 后仅 ~510 KB，桌面端与移动端触屏开箱即玩。
+- **❄️ 现实中看不到的「下雪深圳」与「深圳湾极光」**：漫天飞雪落满星光桥、π 桥与登良路蓝白出租车，**内湖水面静静结冰而外海深圳湾依然保留翻涌波浪**；切至极光夜，翡翠色极光在金色春笋与后海摩天楼顶缓缓流动。
+- **🎆 电影级全城联动灯光秀与四时光影**：午后、日落、蓝调、夜晚四重氛围自由切换；夜幕降临时全城摩天楼共享同一节目时钟流光，经 Three.js `Reflector` 实时倒映于人才湖面。
+- **🌍 1 : 1 真实地理底座 × 实地采集细节**：以人才公园内湖（`22.51366° N, 113.94417° E`）为原点，融合 OpenStreetMap、*Nature Scientific Data (2025)* CMAB、Copernicus Sentinel-2C 卫星、Meta & WRI CHMv2 树冠数据与 AWS 22km 山体高程，还原 **半径 3.0 公里（28.27 km²）** 真实湾区，并实地采集校准 **124 根双面星光柱** 与多组实拍分屏对照。
+- **⚡ 极致轻量的纯前端架构**：零重型游戏引擎 WASM 运行时，**`package.json` 生产依赖仅有 `three@0.182.0` 一个包**。100 个原生 ES 模块（20,781 行代码），Vite 构建仅需 1.85 秒，JS 核心包 Gzip 后仅 ~510 KB，桌面端与移动端触屏开箱即玩。
 
 <div align="center">
 
@@ -101,17 +101,27 @@
     </td>
     <td width="50%" align="center">
       <img src="docs/images/aurora-night.jpg" alt="人才湖极光冬雪夜景" width="100%" />
-      <sub><strong>深圳湾极光夜</strong> — GLSL 实时大气与极光着色器叠加城市夜景</sub>
+      <sub><strong>深圳湾极光夜（全景）</strong> — 现实中看不到的翡翠极光跃上春笋天际线</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/images/onebay-bluehour.jpg" alt="深圳湾一号蓝调时刻" width="100%" />
-      <sub><strong>深圳湾一号 · 蓝调时刻</strong> — T7 临湖真实立面透视校正 + 潮汐广场</sub>
+      <img src="docs/images/snow-bridge.jpg" alt="星光桥冬雪与冰封湖面" width="100%" />
+      <sub><strong>下雪后的深圳 · 星光桥</strong> — 飘雪漫天、银装春笋与静谧冬日湖面</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/images/four-seasons.jpg" alt="人才公园四季变化" width="100%" />
-      <sub><strong>人才公园四季演化</strong> — 春夏秋冬植被色相、地被与光影实时过渡</sub>
+      <img src="docs/images/aurora-bridge.jpg" alt="星光桥步行视角仰望极光夜" width="100%" />
+      <sub><strong>星光桥步行视角 · 极光夜</strong> — 置身桥面近观穿孔星光柱与满天极光</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/snow-showcase.jpg" alt="积雪深圳出租车、冰封π桥与夜景极光六景" width="100%" />
+      <sub><strong>雪落深圳湾细部</strong> — 积雪鹏程出租车、冰封 π 桥圆周率栏杆与穿孔灯柱</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/onebay-bluehour.jpg" alt="深圳湾一号蓝调时刻" width="100%" />
+      <sub><strong>深圳湾一号 · 蓝调时刻</strong> — T7 临湖立面透视校正 + 潮汐广场柔美暮色</sub>
     </td>
   </tr>
 </table>
