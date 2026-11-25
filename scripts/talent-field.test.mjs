@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
+import {Group,Texture,TextureLoader} from 'three';
 import {columnsOnBridge,personView} from '../src/talent-bridge.js';
+import {engravedFaces} from '../src/talent-faces.js';
 import {deckPlates,shorePlates,filmedPlates} from '../src/talent-field.js';
 
 const publicDir=new URL('../public/',import.meta.url);
@@ -42,4 +44,30 @@ test('front and reverse views target the same inscription on the same column',()
     assert.ok(Math.hypot((a.x+b.x)/2-c.x,(a.z+b.z)/2-c.z)<1e-8);
   }
   assert.equal(personView(map,'ma-huateng'),null);
+});
+
+test('all 124 close-ups keep the common two-sided footer clear of the individual photograph',async t=>{
+  t.mock.method(TextureLoader.prototype,'loadAsync',async url=>{
+    assert.ok(existsSync(new URL(url.slice(1),publicDir)),url);
+    const texture=new Texture();texture.name=url;return texture;
+  });
+  const root=new Group();
+  await engravedFaces(root,columns,{parkLights:{finish(){}}});
+  const footer=root.children.find(o=>o.isInstancedMesh);
+  assert.equal(footer.count,columns.length);
+  assert.equal(footer.material.map.name,'/talent/field/common-footer.webp');
+  assert.equal(footer.receiveShadow,false);
+  const uv=footer.geometry.attributes.uv.array;
+  assert.deepEqual(uv.slice(0,uv.length/2),uv.slice(uv.length/2));
+  const detail=root.getObjectByName('现场铭文近读');
+  footer.geometry.computeBoundingBox();
+  for(const c of columns){
+    root.userData.updateTalentPlate({x:c.x,y:c.base+1.85,z:c.z});
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.ok(detail.visible,c.record.id);
+    assert.match(detail.material.map.name,/\/close\/plates-\d+\.webp$/);
+    detail.geometry.computeBoundingBox();
+    assert.ok(Math.abs(detail.geometry.boundingBox.min.y-c.base-footer.geometry.boundingBox.max.y)<1e-6);
+  }
+  root.userData.disposeTalentPlates();
 });

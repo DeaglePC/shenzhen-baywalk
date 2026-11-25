@@ -29,6 +29,8 @@ export async function takeSkyFile(key,priority){
   return file;
 }
 
+const isMobileDevice=typeof navigator!=='undefined'&&(/iPad|iPhone|iPod|Android|Mobile|Mobi/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1));
+
 export function homeSkyPreloader(firstPeriod){
   const order=new Set([skyFileFor(firstPeriod),...Object.values(periodFiles)]);
   const idle=()=>new Promise(resolve=>{
@@ -40,7 +42,7 @@ export function homeSkyPreloader(firstPeriod){
     const token=++generation;
     if(transfer&&transfer.key!==keepFile)transfer.controller.abort();
     transfer=null;
-    if(!enabled||document.readyState!=='complete'||document.hidden||navigator.connection?.saveData)return;
+    if(isMobileDevice||!enabled||document.readyState!=='complete'||document.hidden||navigator.connection?.saveData)return;
     await new Promise(requestAnimationFrame);
     for(const key of order){
       if(token!==generation)return;

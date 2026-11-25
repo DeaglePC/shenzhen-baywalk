@@ -7,13 +7,21 @@
   <title>深圳漫游 · BAYWALK</title>
   <meta name="description" content="在深圳人才公园与后海街区之间自由漫步，探索深圳湾的道路、车辆与城市天际线。">
   <link rel="icon" href="/media/mark.svg" type="image/svg+xml">
-  <link rel="preload" as="image" href="/media/baywalk.webp">
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body data-mode="home">
   <div id="world"></div>
   <main id="home">
-    <div class="cover" role="img" aria-label="深圳人才公园星光桥与后海天际线夜景灯光秀实机画面"></div>
+    <picture class="cover">
+      <source media="(max-aspect-ratio: 2/3)"
+              srcset="/media/baywalk-portrait-small.webp 900w, /media/baywalk-portrait.webp 1800w"
+              sizes="calc(100vh * 2 / 3)" width="1800" height="2700">
+      <img src="/media/baywalk.webp"
+           srcset="/media/baywalk.webp 1920w, /media/baywalk-1440p.webp 2560w, /media/baywalk-4k.webp 3840w"
+           sizes="(min-aspect-ratio: 16/9) 100vw, calc(100vh * 16 / 9)"
+           width="1920" height="1080" fetchpriority="high"
+           alt="深圳人才公园星光桥与后海天际线夜景灯光秀实机画面">
+    </picture>
     <div class="cover-shade"></div>
     <section class="intro" aria-labelledby="headline">
       <div class="eyebrow"><span class="orange-line"></span>开放世界 <i>/</i> 城市探索</div>
@@ -38,13 +46,12 @@
         <a href="https://x.com/DeaglePc" target="_blank" rel="noopener noreferrer" aria-label="X @DeaglePc"><span data-icon="xSocial"></span>@DeaglePc</a>
         <button type="button" data-action="wechat" aria-haspopup="dialog" aria-controls="panel"><span data-icon="qr"></span><span id="wechatLabel">微信公众号</span></button>
       </nav>
+      <button class="garage-link" data-action="garage" aria-label="车辆图鉴"><span data-icon="car"></span><span class="garage-name">车辆图鉴</span></button>
     </footer>
   </main>
   <header id="topbar">
     <button class="brand" id="brand" aria-label="漫游首页"><img src="/media/mark.svg" alt=""><span><b>BAYWALK</b><small>城市漫游计划</small></span></button>
     <nav aria-label="工具栏">
-      <button class="garage-link" data-action="garage"><span data-icon="car"></span><span>车辆图鉴</span></button>
-      <span class="nav-divider"></span>
       <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch to English" title="Switch to English">EN</button>
       <button class="icon-button" id="sound" aria-label="开启环境音" title="开启环境音" aria-pressed="false"><span data-icon="mute"></span></button>
       <button class="icon-button" data-action="help" aria-label="操作指南" title="操作指南"><span data-icon="help"></span></button>
@@ -53,7 +60,11 @@
   </header>
   <div id="hud" hidden>
     <div class="compass" aria-label="朝向"><b id="heading">NW</b><span></span><small id="bearing">315°</small></div>
-    <button class="mini-panel" data-action="map" aria-label="打开区域地图"><canvas id="mini"></canvas><span class="map-north">N</span><span class="minilabel"><span data-icon="pin"></span><b id="locality">人才公园</b><kbd>M</kbd></span></button>
+    <button class="mini-panel" data-action="map" aria-label="打开区域地图">
+      <canvas id="mini" aria-hidden="true"></canvas>
+      <svg class="map-heading" viewBox="-10 -12 20 24" aria-hidden="true"><path d="M0 -10L7 8L0 5L-7 8Z"/></svg>
+      <span class="map-north">N</span><span class="minilabel"><span data-icon="pin"></span><b id="locality">人才公园</b><kbd>M</kbd></span>
+    </button>
     <div class="world-tools">
       <button class="glass" id="headlights" aria-pressed="false" aria-label="切换汽车车灯" title="汽车车灯 (L)"><span data-icon="headlight"></span><span id="headlightsName">车灯</span></button>
       <button class="glass" id="period" aria-controls="periodPanel" aria-expanded="false" aria-label="日照与时段"><span data-icon="sun"></span><span id="periodName">日落</span></button>
@@ -62,6 +73,7 @@
       <button class="glass" id="autoTour" aria-pressed="false" title="自动无人机巡航 (G)"><span data-icon="tour"></span><span id="autoTourName">自动巡航</span></button>
       <button class="glass" id="aerial"><span data-icon="bird"></span><span id="cameraName">鸟瞰</span></button>
       <button class="glass" id="pause"><span data-icon="pause"></span><span>菜单</span></button>
+      <button class="glass" data-action="garage" aria-label="车辆图鉴"><span data-icon="car"></span><span class="garage-name">车辆图鉴</span></button>
     </div>
     <div id="skyLoader" hidden role="status" aria-live="polite"><span class="sky-spinner" aria-hidden="true"></span><span id="skyLoaderText">正在切换场景光线…</span></div>
     <section id="periodPanel" hidden aria-label="日照与时段">

@@ -124,19 +124,26 @@ export function streetSurface(root,materials,options,roads){
   rt.texture.minFilter=T.LinearMipmapLinearFilter;rt.texture.generateMipmaps=true;
   let last=-100;
   const hidden=[];
+  const smallInRoadReflection=/灌木|三角梅|绿篱|根际阴影|雨水|井盖|井圈|导向砖|盲道|垃圾桶|消防栓|石球|沿阶草|枯叶裙|卵石|接触阴影|环境阴影/;
   root.traverse(o=>{if(ignoreInGroundReflection.has(o.name)||o.isReflector)hidden.push(o);});
   function capture(renderer,scene,camera,seconds){
+    if(scene.userData.perfTier>=2){active.value=0;return;}
     const distance=Math.hypot(camera.position.x-taxi.x,camera.position.z-taxi.y);
     if(distance>124||camera.position.y>26||camera.position.y<proxy.position.y){active.value=0;return;}
+    const throttled=low||scene.userData.perfTier>=1;
     renderer.getDrawingBufferSize(size);
-    const scale=Math.min(low?.33:.56,(low?512:1280)/size.x);
+    const scale=Math.min(throttled?.30:.42,(throttled?480:840)/size.x);
     const w=Math.max(160,Math.round(size.x*scale)),h=Math.max(96,Math.round(size.y*scale)),resize=w!==rt.width||h!==rt.height;
-    if(!resize && active.value && seconds-last<(low?.15:.065)&&eye.distanceToSquared(camera.position)<.018&&quat.angleTo(camera.quaternion)<.005)return;
+    if(!resize && active.value && seconds-last<(throttled?.08:.035))return;
+    if(!resize && active.value && seconds-last<(throttled?.18:.09)&&eye.distanceToSquared(camera.position)<.018&&quat.angleTo(camera.quaternion)<.005)return;
     if(resize)rt.setSize(w,h);
     active.value=0;sampler.value=null;scene.userData.reflectingRoad=true;
+    const extra=[];
+    const details=root.userData.localDetails;
+    if(details){for(let i=0;i<details.length;i++){const it=details[i].item;if(it.visible&&smallInRoadReflection.test(it.name)){extra.push(it);it.visible=false;}}}
     const state=hidden.map(o=>o.visible);hidden.forEach(o=>o.visible=false);
     try{proxy.onBeforeRender(renderer,scene,camera);}
-    finally{hidden.forEach((o,i)=>o.visible=state[i]);scene.userData.reflectingRoad=false;}
+    finally{hidden.forEach((o,i)=>o.visible=state[i]);extra.forEach(o=>o.visible=true);scene.userData.reflectingRoad=false;}
     matrix.value.copy(proxy.material.uniforms.textureMatrix.value).multiply(inverse);
     sampler.value=rt.texture;active.value=1;last=seconds;eye.copy(camera.position);quat.copy(camera.quaternion);
   }

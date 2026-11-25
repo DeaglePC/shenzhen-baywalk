@@ -15,6 +15,7 @@ import {materials,asset} from './city-materials.js';
 import {calibrateTencent,tencentLinks} from './tencent-towers.js';
 import {landmarks} from './city-landmarks.js';
 import {streets,cityBlocks} from './city-blocks.js';
+import {addRoadsidePaving} from './roadside-paving.js';
 import {furnishing} from './city-nature.js';
 import {buildWeatherCover} from './precipitation-cover.js';
 import {tidalSquare} from './tidal-square.js';
@@ -32,6 +33,9 @@ import {buildCoastalCity} from './coastal-city.js';
 
 const canopyData=fetch(import.meta.env.BASE_URL+'data/houhai-canopy.json')
   .then(response=>response.ok?response.json():null).then(data=>data?.trees||[]).catch(()=>[]);
+const roadsidePaving=fetch(import.meta.env.BASE_URL+'data/roadside-paving.bin')
+  .then(r=>{if(!r.ok)throw Error(r.statusText);return r.arrayBuffer();})
+  .catch(e=>{console.warn('Roadside paving unavailable',e);return null;});
 function terrain(root,map,m,grid){
   const satellite=new T.TextureLoader().load(import.meta.env.BASE_URL+'data/houhai-sentinel.webp');
   satellite.colorSpace=T.SRGBColorSpace;satellite.anisotropy=8;
@@ -192,10 +196,11 @@ export function createCity(scene,map,options={}){
   let foliage=[],night=0,sampleHabitat;
   const far=farTerrain(root),water=makeLake(root,map,options);
   const ground=streetSurface(root,m,options,map.roads);
-  const ready=canopyData.then(async trees=>{
+  const ready=Promise.all([canopyData,roadsidePaving]).then(async ([trees,paving])=>{
     if(!far.active)return;
     sampleHabitat=soundHabitat(map,trees);
-    foliage=furnishing(root,map,m,grid,trees,options.quality==='low');
+    const onPaving=addRoadsidePaving(root,m.sidewalkSlabs,paving);
+    foliage=furnishing(root,map,m,grid,trees,options.quality==='low',onPaving);
     await Promise.all([root.userData.foliageReady,root.userData.shrubReady,root.userData.talentReady,monumentsReady,artworkReady,details.ready]);
   });
   function segmentHeight(seg,x,z){

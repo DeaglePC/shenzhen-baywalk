@@ -79,7 +79,11 @@ export function streetFurniture(root,m){
       plate.at(x,2.774,z,2.105,.604,.071,yaw);panels.push({name,x,z,dx,dz});
     },
     finish(){
-      for(const part of [shaft,park,fittings,hatch,shade,lens,arm,plate])part.flush(root,part===shaft||part===park,part===hatch?90:750);
+      for(const part of [shaft,park,fittings,hatch,shade,lens,arm,plate]){
+        const isPole=part===shaft||part===park;
+        const range=part===hatch?90:isPole?520:260;
+        part.flush(root,isPole,range,null,isPole?280:220);
+      }
       signFaces(root,panels);
     }
   };

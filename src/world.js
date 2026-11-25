@@ -13,10 +13,11 @@ import {localReflections} from './local-reflections.js';
 import {referenceFov} from './taxi-framing.js';
 import {createWeather,weatherLighting} from './weather.js';
 import {createDroneTour,TOUR_ROUTES} from './drone-tour.js';
+import {installMobileTextureGuard,compactMobileScene} from './mobile-compact.js';
 import {t} from './i18n.js';
 
 const standardSkies=[
-  {key:'sunset',name:'日落',fog:0xd6b09f,density:.00020,rotation:3.32,dir:[-.884,.086,-.458],light:0xffba80,power:2.58,env:.78,bg:.66,exposure:1.04,night:.19},
+  {key:'sunset',name:'日落',fog:0xb6807e,density:.00020,rotation:3.32,dir:[-.884,.045,-.458],light:0xff805e,power:1.15,env:.62,bg:.43,exposure:.90,night:.19},
   {key:'day',name:'午后',fog:0xcbdce0,density:.00012,rotation:2.1,dir:[.10,.75,-.66],light:0xfff1dc,power:2.95,env:1.08,bg:1.02,exposure:1.10,night:0},
   {key:'dusk',name:'蓝调',fog:0x6a7f98,density:.00017,rotation:3.42,dir:[-.9,.13,-.41],light:0xffb59b,power:.68,env:.50,bg:.76,exposure:1.06,night:.74},
   {key:'night',name:'夜晚',fog:0x2b3c50,density:.00020,rotation:3.42,dir:[-.24,.44,-.86],light:0xc2d8ff,power:.58,env:.46,bg:.18,exposure:1.14,night:1}
@@ -24,30 +25,41 @@ const standardSkies=[
 const parkOvercast={key:'overcast',name:'湖岸阴天',fog:0xb8c0c4,density:.00026,
   rotation:0,dir:[-.36,.83,.4],light:0xf4f4f0,power:.82,env:.96,bg:.98,exposure:1.04,night:0};
 const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
-export async function buildWorld(container,map,{progress,report,step,onCamera,onTransition,mouseLook,daylight=false,period,initialClimate={}}){
+export async function buildWorld(container,map,{progress,report,step,onCamera,onFrame,onTransition,mouseLook,daylight=false,period,initialClimate={}}){
   const skies=period==='overcast'?[...standardSkies.slice(0,2),parkOvercast,...standardSkies.slice(2)]:standardSkies;
   progress(15,t('loadingWebGL'));await frame();
-  const renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance',alpha:false,logarithmicDepthBuffer:true});
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const isMobile=isIOS||/Android|Mobile|Mobi/i.test(navigator.userAgent)||(matchMedia('(pointer:coarse)').matches&&Math.min(screen.width,screen.height)<=900);
+  if(isMobile)installMobileTextureGuard(T);
+  const renderer=new T.WebGLRenderer({antialias:!isMobile,powerPreference:'high-performance',alpha:false,logarithmicDepthBuffer:true});
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
-  const software=debug && /swiftshader|llvmpipe|software rasterizer/i.test(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
+  const rendererName=debug?String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)||''):'';
+  const software=/swiftshader|llvmpipe|software rasterizer/i.test(rendererName);
+  const isMac=!isIOS&&(/Macintosh|MacIntel/i.test(navigator.userAgent+' '+navigator.platform)||/Apple/i.test(rendererName));
+  const isIntegrated=isMac||/intel|uhd|iris|mali|adreno|radeon\(tm\)\s+graphics/i.test(rendererName);
+  const lite=software||isMobile;
   renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled=!software;renderer.shadowMap.type=T.PCFShadowMap;
-  const baseRatio=software?Math.min(1,1000/innerWidth):Math.min(devicePixelRatio,1.45);
+  renderer.shadowMap.enabled=!lite;renderer.shadowMap.type=T.PCFShadowMap;
+  const baseRatio=software?Math.min(1,1000/innerWidth):isMobile?Math.min(devicePixelRatio,1):isIntegrated?Math.min(devicePixelRatio,1.15):Math.min(devicePixelRatio,1.45);
   let ratio=baseRatio;renderer.setPixelRatio(ratio);container.append(renderer.domElement);
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(67,1,.16,32000),canvas=renderer.domElement;
+  const basePerfTier=lite?2:isIntegrated?1:0;
+  scene.userData.perfTier=basePerfTier;
   let contextLost=false;
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;resetMotion();report?.(t('toastContextLost'));});
   canvas.addEventListener('webglcontextrestored',()=>{
     contextLost=false;anchorX=1e8;fade.cancel();probes?.clearSkySeeds();
     probes?.refresh(elapsed,camera.position,true);report?.(t('toastContextRestored'));
   });
-  const film=software?{render:(s,c)=>renderer.render(s,c)}:createFilm(renderer,camera);
+  const film=lite?{render:(s,c)=>renderer.render(s,c)}:createFilm(renderer,camera,{samples:isIntegrated?2:4});
   camera.rotation.order='YXZ';canvas.tabIndex=0;canvas.setAttribute('aria-label',t('canvasAria'));
   const hemi=new T.HemisphereLight(0xd2dff0,0xa59886,.64);scene.add(hemi);
-  const sun=new T.DirectionalLight();scene.add(sun,sun.target);sun.castShadow=true;sun.shadow.mapSize.set(3072,3072);
+  const sun=new T.DirectionalLight();scene.add(sun,sun.target);sun.castShadow=true;
+  const shadowSize=isMobile?1024:isIntegrated?1536:2048;
+  sun.shadow.mapSize.set(shadowSize,shadowSize);
   Object.assign(sun.shadow.camera,{left:-82,right:82,top:82,bottom:-82,near:.5,far:860});sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.radius=1.45;sun.shadow.bias=-.00012;sun.shadow.normalBias=.019;sun.shadow.autoUpdate=false;sun.shadow.needsUpdate=true;
-  const sunDirection=new T.Vector3(),textures=skyTextures(renderer),fade=skyFade(renderer);
+  const sunDirection=new T.Vector3(),textures=skyTextures(renderer,{maxWidth:isMobile?1024:0,singleCache:isMobile}),fade=skyFade(renderer);
   const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
   let city,vehicles,people,probes,skyIndex=0,skyRequest=0,anchorX=1e8,anchorZ=1e8,lastShadow=-1e8;
   let playing=false,orbiting=false,flying=false,pitch=0,yaw=0,elapsed=0,gait=0,stepDist=0,joyX=0,joyZ=0,lift=0;
@@ -92,7 +104,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
       scene.fog=new T.FogExp2(fog,light.density??sky.density);
       const hemiPalette={
         day:[0xdeecff,0xb8ae9c,.86],
-        sunset:[0xffe1c8,0xa89784,.72],
+        sunset:[0xe8c2bf,0x997f79,.62],
         overcast:[0xe0e6ec,0xb2aa9d,.84],
         dusk:[0x9fb8dc,0x6b6764,.56],
         night:[0x88a8d8,0x5c574f,.62]
@@ -139,24 +151,26 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
       }catch{/* A selection retries any failed background load. */}
     }
   }
-  initialSky.then(()=>idle(warmRemainingSkies),()=>{});
+  if(!isMobile&&!isIntegrated)initialSky.then(()=>idle(warmRemainingSkies),()=>{});
   progress(30,t('loadingCity'));await frame();await frame();
-  city=createCity(scene,map,{renderer,camera,quality:software?'low':'balanced'});progress(62,t('loadingVehicles'));await frame();
+  city=createCity(scene,map,{renderer,camera,quality:lite?'low':'balanced'});progress(62,t('loadingVehicles'));await frame();
   const compileMaterials=objects=>film.compile?.(objects,camera,scene)??renderer.compileAsync(objects,camera,scene);
   city.root.userData.prepareTreeMaterials=compileMaterials;
-  [vehicles]=await Promise.all([createVehicles(scene,map,{low:software,signals:city.signals,stadiumAreas:city.stadiumAreas,walkers(){
+  [vehicles]=await Promise.all([createVehicles(scene,map,{low:lite,signals:city.signals,stadiumAreas:city.stadiumAreas,walkers(){
     const walkers=people?.positions()??[];
     if(playing&&!blocked&&!orbiting&&!flying&&!tour?.active)walkers.push({x:foot.x,z:foot.z,y:foot.y});
     return walkers;
   }}),initialSky,city.ready]);
   progress(84,t('loadingProbes'));await frame();
-  atmosphere=createWeather(scene,city,{low:software,vehicles});
+  atmosphere=createWeather(scene,city,{low:lite,vehicles});
   atmoGlsl=createAtmosphereSystem(scene,city);
-  bayLife=createBayLife(scene,{low:software});
+  bayLife=createBayLife(scene,{low:lite});
   tour=createDroneTour(city);
-  probes=localReflections(renderer,scene,city,sun,sunDirection,software,vehicles);await setSky({deferProbes:true});
+  probes=isMobile?{refresh(){},step(){},clearSkySeeds(){},busy:false,dispose(){}}:localReflections(renderer,scene,city,sun,sunDirection,lite||isIntegrated,vehicles);
+  if(isMobile)compactMobileScene(scene);
+  await setSky({deferProbes:true});
   progress(94,t('loadingWater'));await frame();
-  const pedestriansReady=createPedestrians(scene,map,city,vehicles.isBlocked).then(p=>people=p).catch(err=>console.warn('行人资源',err));
+  const pedestriansReady=createPedestrians(scene,map,city,vehicles.isBlocked).then(p=>{people=p;if(isMobile)compactMobileScene(scene);}).catch(err=>console.warn('行人资源',err));
   idle(()=>city.getWeatherCover());
   function safePoint(x,z,ceiling=Infinity){
     const available=(a,b)=>city.isWalkable(a,b,ceiling)&&!vehicles.isBlocked(a,b,.23,city.groundHeight(a,b,ceiling));
@@ -326,31 +340,50 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
     }else walking(dt);
     probes.step(elapsed,camera.position,raw*1000);
     const focus=orbiting?orbit.target:camera.position;
-    if(Math.hypot(focus.x-anchorX,focus.z-anchorZ)>8||elapsed-lastShadow>.35){
+    if(Math.hypot(focus.x-anchorX,focus.z-anchorZ)>6){
       anchorX=focus.x;anchorZ=focus.z;lastShadow=elapsed;sun.target.position.set(anchorX,1,anchorZ);sun.position.copy(sun.target.position).addScaledVector(sunDirection,540);sun.shadow.needsUpdate=true;
     }
     city.update(elapsed,camera,showTime);vehicles.update(dt,camera.position);people?.update(dt,camera);atmosphere.update(elapsed,dt,camera);atmoGlsl?.update(elapsed);bayLife?.update(elapsed);
-    // Subtle refractive sea-spray droplets when skimming low over open Shenzhen Bay sea, or gentle lens raindrops during rain.
-    const lowOverSea=camera.position.z>620&&camera.position.y<4.5?(1-T.MathUtils.smoothstep(camera.position.y,1.4,4.5))*.85:0;
-    const inRain=climate.weather==='rain'&&!(city.getWeatherCover().roofAt(camera.position.x,camera.position.z)>camera.position.y+.5)?.55:0;
-    sprayLevel=T.MathUtils.lerp(sprayLevel,Math.max(lowOverSea,inRain),1-Math.exp(-3.5*dt));
+    if(flying||tour?.active){
+      const {x,y,z}=camera.position;
+      const seaSpray=z>620?(1-T.MathUtils.smoothstep(y,1.4,4.5))*.32:0;
+      const rain=climate.weather==='rain'&&!(city.getWeatherCover().roofAt(x,z)>y+.5);
+      const exposure=Math.max(seaSpray,rain?.55:0);
+      sprayLevel=T.MathUtils.damp(sprayLevel,exposure,1.6,dt);
+    }else{
+      sprayLevel=0;
+    }
     camera.updateMatrixWorld();city.captureStreet(renderer,scene,camera,elapsed);film.render(scene,camera,elapsed,sprayLevel);
     fade.render();
     if(captureSkyRequest){fade.capture();captureSkyRequest=0;}
+    onFrame?.(performance.now());
   }
   function render(now){
     requestAnimationFrame(render);if(manualClock)return;let raw=(now-previous)/1000;previous=now;if(!playing||blocked||document.hidden||contextLost)return;
     const dt=Math.min(raw,.075);
     tickScene(dt,raw);
     lastFrameMs=raw*1000;
-    if(++firstFrames>24&&raw<1){perfTime+=raw;frames++;if(raw>.042)slow++;}
-    if(frames>65){
+    if(!probes?.busy&&++firstFrames>16&&raw<1){perfTime+=raw;frames++;if(raw>.034)slow++;}
+    if(frames>28){
       const avgMs=(perfTime/frames)*1000;
-      if(slow/frames>.55 && ratio>.72){
-        ratio=Math.max(.72,+(ratio-.12).toFixed(2));renderer.setPixelRatio(ratio);resize();smoothWindows=0;
-      }else if(avgMs<20 && slow===0 && ratio<baseRatio){
+      if((avgMs>28||slow/frames>.45)){
+        if(ratio>.75){
+          ratio=Math.max(.75,+(ratio-.15).toFixed(2));renderer.setPixelRatio(ratio);resize();
+        }
+        if(scene.userData.perfTier<2){
+          scene.userData.perfTier++;
+          if(scene.userData.perfTier>=2)film.setFast?.(true);
+        }
+        smoothWindows=0;
+      }else if(avgMs<17 && slow===0){
         if(++smoothWindows>=2){
-          ratio=Math.min(baseRatio,+(ratio+.08).toFixed(2));renderer.setPixelRatio(ratio);resize();smoothWindows=0;
+          if(ratio<baseRatio){
+            ratio=Math.min(baseRatio,+(ratio+.1).toFixed(2));renderer.setPixelRatio(ratio);resize();
+          }else if(scene.userData.perfTier>basePerfTier){
+            scene.userData.perfTier--;
+            if(scene.userData.perfTier<2)film.setFast?.(false);
+          }
+          smoothWindows=0;
         }
       }else smoothWindows=0;
       frames=slow=perfTime=0;

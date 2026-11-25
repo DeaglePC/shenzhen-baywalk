@@ -179,7 +179,7 @@ export function createAtmosphereSystem(scene, city) {
         uniforms.uAtmoHeight.value = weather === 'rain' ? 0.011 : 0.009;
       } else if (period === 'sunset') {
         uniforms.uAtmoCloud.value = 0.14;
-        uniforms.uAtmoMie.value = 0.58;
+        uniforms.uAtmoMie.value = 0.30;
         uniforms.uAtmoHeight.value = 0.0110;
       } else if (period === 'dusk') {
         uniforms.uAtmoCloud.value = 0.08;

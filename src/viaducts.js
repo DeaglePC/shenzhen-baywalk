@@ -5,6 +5,7 @@ import {photo} from './city-materials.js';
 import {districtDecks} from './district-decks.js';
 import {navigationSpan,northernBayWays} from './bay-alignment.js';
 import {skywalkHeight} from './walk-deck-data.js';
+import {streetHedges} from './park-shrubs.js';
 
 const point=(p,off,dy)=>[p.x+p.nx*off,p.y+dy+off*(p.crossSlope??0),p.z+p.nz*off];
 function strip(surface,a,b,ao,ai,bo,bi,ah=0,al=ah,bh=ah,bl=al,scale=4){
@@ -54,7 +55,7 @@ function limits(p,profile){
 
 // The paired ways have different vertices and different ramp lengths. Cut both
 // inside kerbs at common longitudinal stations before spanning the reservation.
-function fillMedian(ways,median,underside,grid){
+function fillMedian(ways,median,underside,grid,grass){
   if(ways.size!==2)return;
   const [[road,left],[,right]]=[...ways];
   const [a,b]=[road.p[0],road.p.at(-1)],len=Math.hypot(b[0]-a[0],b[1]-a[1]),dx=(b[0]-a[0])/len,dz=(b[1]-a[1])/len;
@@ -83,6 +84,28 @@ function fillMedian(ways,median,underside,grid){
         [Math.min(A[0],B[0])-pad,Math.min(A[1],B[1])-pad,Math.max(A[0],B[0])+pad,Math.max(A[1],B[1])+pad]);
     }
     prev=row;
+  }
+  // Fit low grass to the actual reservation between the two carriageways.
+  // The wings stay behind the kerbs, and roots meet even the low end of a slope.
+  for(let s=Math.max(0,lo)+1.2;s<Math.min(len,hi)-1.2;s+=2.22){
+    const l=at(L,s),r=at(R,s),width=Math.hypot(l[0]-r[0],l[2]-r[2]);
+    const ends=[s-1.16,s+1.16].map(t=>[at(L,t),at(R,t)]);
+    const widths=[width,...ends.map(([a,b])=>Math.hypot(a[0]-b[0],a[2]-b[2]))],narrow=Math.min(...widths);
+    if(narrow<1.45||Math.max(...widths)>=16)continue;
+    const rows=Math.ceil((narrow-.32)/.86),spacing=(width-.32)/rows;
+    const yaw=Math.atan2(ends[1][0][0]-ends[0][0][0],ends[1][0][2]-ends[0][0][2]);
+    for(let j=0;j<rows;j++){
+      const outer=j===0||j===rows-1,sway=(outer?.045:.12)*Math.sin(s*.69+j*2.1);
+      const t=(.16+spacing*(j+.5+sway))/width;
+      // The billowing tips extend past their roots. Scale edge tufts to the
+      // free space on the narrower cross-section, including their yaw.
+      const sx=Math.min(spacing/.90,(Math.min(t,1-t)*narrow-.16)/.80);
+      const floor=Math.min(...ends.flatMap(([a,b])=>[t-.44/width,t+.44/width].map(u=>a[1]+(b[1]-a[1])*u)));
+      const stagger=.29*Math.sin(s*.31+j*2.4);
+      const turn=(j+Math.floor(s/2.22))%2*Math.PI+.043*Math.sin(s*.81+j);
+      grass.at(l[0]+(r[0]-l[0])*t+Math.sin(yaw)*stagger,floor+.167,l[2]+(r[2]-l[2])*t+Math.cos(yaw)*stagger,
+        sx,.82+.17*Math.sin(s*.62+j),1.06,yaw+turn);
+    }
   }
 }
 
@@ -403,7 +426,9 @@ export function viaducts(root,m,grid,map,layout=null){
     for(const {rd,profile,s0,s1,side,inset} of pendingUrbanGuards){
       guard(profile,s0,s1,p=>side*(p.width/2-inset),(a,b)=>urbanGuardBlocked(rd,profile,a,b,side));
     }
-    for(const ways of corridors.values())fillMedian(ways,median,underside,grid);
+    const medianGrass=streetHedges(root,'桥面中央分隔带 · 沿阶草','grass');
+    for(const ways of corridors.values())fillMedian(ways,median,underside,grid,medianGrass);
+    medianGrass.flush(root,380);
     const road=asphalt.mesh(root,m.asphalt,'高架沥青车道与引道');
     road?.geometry.setAttribute('snowLane',new T.Float32BufferAttribute(lanes,2));
     pavement.mesh(root,m.paving,'桥上人行道与引道铺装');

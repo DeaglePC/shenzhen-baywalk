@@ -108,11 +108,11 @@ export class Instances {
   between(x1,y1,z1,x2,y2,z2,r,col=null){
     mid.set((x1+x2)*.5,(y1+y2)*.5,(z1+z2)*.5);dir.set(x2-x1,y2-y1,z2-z1);const len=dir.length();if(len<.01)return;quat.setFromUnitVectors(up,dir.multiplyScalar(1/len));scale.set(r,len,r);matrix.compose(mid,quat,scale);this.matrices.push(matrix.clone());if(col)this.colors.push(col);
   }
-  flush(group,cast=false,detailRange=0,lod=null){
+  flush(group,cast=false,detailRange=0,lod=null,customTileSize=0){
     if(!this.matrices.length)return;
-    if(detailRange&&(lod||this.matrices.length>60)){
+    if(detailRange&&(lod||customTileSize||this.matrices.length>60)){
       const tiles=new Map(),hasColors=this.colors.length===this.matrices.length;
-      const tileSize=lod?.tileSize??520;
+      const tileSize=customTileSize||lod?.tileSize||520;
       this.matrices.forEach((m,i)=>{
         const x=m.elements[12],z=m.elements[14],key=Math.floor(x/tileSize)+','+Math.floor(z/tileSize);
         let sub=tiles.get(key);if(!sub)tiles.set(key,sub=new Instances(this.geo,this.mat,this.label));

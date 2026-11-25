@@ -64,9 +64,9 @@ function palmGeo(){
   return surf.geometry();
 }
 // Tall Washingtonia fan palm (华盛顿棕榈 / 老人葵) crown matching Shenzhen Talent Park groves.
-function fanPalmCrownGeo(){
+function fanPalmCrownGeo(total=30,fingers=9){
   const surf=new Surface(),R=random(3831),col=new T.Color();
-  const total=30;
+  const fingerScale=9/fingers;
   for(let k=0;k<total;k++){
     const layer=k/total;
     const a=k*2.399963+R()*.22;
@@ -86,7 +86,6 @@ function fanPalmCrownGeo(){
     // Palmate fan segments radiating from the petiole tip with natural drooping fingers
     const dry=layer>.85&&R()<.46;
     const fanR=.86+R()*.32-(layer>.82?.12:0);
-    const fingers=9;
     for(let f=0;f<fingers;f++){
       const u=(f/(fingers-1))*2-1; // -1..1 across the fan
       const fanAng=u*1.08;
@@ -96,7 +95,7 @@ function fanPalmCrownGeo(){
       const pitch=.32-layer*.60-.18*Math.abs(u);
       const p1=[tipX+dirX*segLen*.54,tipY+pitch*segLen*.48-.09*segLen,tipZ+dirZ*segLen*.54];
       const p2=[tipX+dirX*segLen,tipY+pitch*segLen*.40-.50*segLen*(.68+layer*.62),tipZ+dirZ*segLen];
-      const w=.125+(.045*(1-Math.abs(u)));
+      const w=(.125+(.045*(1-Math.abs(u))))*Math.min(1.55,Math.sqrt(fingerScale));
       const sideX=-dirZ*w,sideZ=dirX*w;
       const pleat=(f%2===0?.04:-.035);
       const shade=.74+.32*R();
@@ -170,7 +169,20 @@ function underplanting(){
   }
   return s.geometry();
 }
-export function furnishing(root,map,m,grid,canopy=[],lowQuality=false){
+function pavedTreeWell(){
+  const s=new Surface(),soil=new T.Color(0x524535),edge=new T.Color(0x9b978c);
+  const corners=[[-1,-1],[-1,1],[1,1],[1,-1]];
+  const loop=(scale,y)=>corners.map(([x,z])=>[x*scale,y,z*scale]);
+  const rim=loop(1,.015),inner=loop(.94,.015);
+  s.quad(...loop(.94,0),undefined,soil);
+  for(let i=0;i<4;i++){
+    const j=(i+1)%4;
+    s.quad(rim[i],rim[j],inner[j],inner[i],undefined,edge);
+  }
+  return new Instances(s.geometry(),new T.MeshStandardMaterial({vertexColors:true,roughness:.97}),'沿街地砖 · 树池边缘');
+}
+
+export function furnishing(root,map,m,grid,canopy=[],lowQuality=false,onPaving=()=>false){
   const rand=random(70717), species=[[],[],[],[],[]], affected=[];
   const cube=new T.BoxGeometry(1,1,1),furniture=streetFurniture(root,m);
   const frames=new Instances(cube,m.dark,'城市家具底座'),wood=new Instances(cube,m.wood,'座椅木条');
@@ -178,8 +190,9 @@ export function furnishing(root,map,m,grid,canopy=[],lowQuality=false){
   const trunks=new Instances(new T.CylinderGeometry(.72,1,1,8,3),m.trunk,'棕榈树干');
   const fanTrunks=new Instances(new T.CylinderGeometry(.66,1,1,10,2),greyPalmTrunkMat(),'棕榈树干 · 华盛顿扇棕');
   const fanSkirts=new Instances(fanPalmSkirtGeo(),new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.98}),'棕榈叶鞘 · 枯叶裙');
-  const fanCrowns=new Instances(fanPalmCrownGeo(),new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.84}),'棕榈叶冠 · 华盛顿扇棕');
-  const shadows=[],spots=new Set();let palmCount=0,fanPalmCount=0;
+  const fanCrownNear=fanPalmCrownGeo(30,9),fanCrownFar=fanPalmCrownGeo(14,5);
+  const fanCrowns=new Instances(fanCrownNear,new T.MeshStandardMaterial({vertexColors:true,side:T.DoubleSide,roughness:.84}),'棕榈叶冠 · 华盛顿扇棕');
+  const shadows=[],spots=new Set(),pavementPalms=[];let palmCount=0,fanPalmCount=0;
   const park=map.land.find(f=>f.kind==='park'&&f.name?.includes('人才公园'));
   const nonLeafyKinds=new Set(['plaza','playground','parking','pitch','track','shingle','sand','beach','construction']);
   const parkNoTree=park?map.land.filter(f=>nonLeafyKinds.has(f.kind)&&f.bbox&&f.bbox[2]>park.bbox[0]&&f.bbox[0]<park.bbox[2]&&f.bbox[3]>park.bbox[1]&&f.bbox[1]<park.bbox[3]):[];
@@ -225,6 +238,7 @@ export function furnishing(root,map,m,grid,canopy=[],lowQuality=false){
     if(allowPalm&&palmCount<720&&Math.hypot(x,z)<1750){
       const floor=grid.southGround?.heightAt(x,z)??0;
       const h=height*.87,r=.19+.07*rand();trunks.at(x,floor+h*.5,z,r,h,r,rand()*TAU);const sz=.83+rand()*.41;palms.at(x,floor+h-.15,z,sz,sz,sz,rand()*TAU);palmCount++;
+      pavementPalms.push([x,z,h]);
     }else{
       const tree=[x,z,height,rand()];tree.street=street;
       const floor=localGround??grid.southGround?.heightAt(x,z);
@@ -444,6 +458,17 @@ export function furnishing(root,map,m,grid,canopy=[],lowQuality=false){
   for(const [x,z,h,type] of grid.southWalk?.trees??[])plant(x,z,h,type,false,false,true);
   for(const [x,z,h,type] of grid.vergeTrees??[])plant(x,z,h,type,false,false,true);
   const trees=species.slice(0,3).flat();
+  const wells=pavedTreeWell();
+  for(const p of [...trees,...pavementPalms]){
+    const [x,z,h]=p;
+    if(p.street||!onPaving(x,z))continue;
+    let radius=Math.min(1.38,.55+h*.056);
+    while(radius>=.58&&[[-1,-1],[-1,1],[1,1],[1,-1]].some(([u,v])=>!onPaving(x+u*radius,z+v*radius)))radius-=.16;
+    if(radius<.58)continue;
+    wells.at(x,.124,z,radius,1,radius);
+    p.floorY=.125;p.floorRadius=radius*.92;
+  }
+  wells.flush(root,false,320);
   if(park){
     for(const p of trees){
       const [x,z,h]=p;
@@ -467,10 +492,13 @@ export function furnishing(root,map,m,grid,canopy=[],lowQuality=false){
   }
   furniture.finish();
   m.parkLights.buildPools?.();
-  for(const obj of [frames,wood,palms,trunks,fanTrunks,fanSkirts,fanCrowns]){
-    const cast=obj===trunks||obj===frames||obj===fanTrunks||obj===fanCrowns;
-    const range=(obj===palms||obj===trunks||obj===fanTrunks||obj===fanSkirts||obj===fanCrowns)?1450:440;
-    obj.flush(root,cast,range);
+  fanCrowns.flush(root,true,1200,{distance:110,near:fanCrownNear,far:fanCrownFar,tileSize:180});
+  fanSkirts.flush(root,false,160,null,180);
+  fanTrunks.flush(root,true,1200,null,220);
+  for(const obj of [frames,wood,palms,trunks]){
+    const cast=obj===trunks||obj===frames;
+    const range=(obj===palms||obj===trunks)?1200:320;
+    obj.flush(root,cast,range,null,260);
   }
   return affected;
 }

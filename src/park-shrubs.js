@@ -38,7 +38,7 @@ function spray(near,far,tile,base,angle,run,height,radius,yaw,color){
   const middle=offset(base,angle,run*.38,height*.54);
   strip(near,tile,[[base,across,zero,0,.58],[middle,across,bow,.5,.88],[tip,across,zero,1,1.07]],color);
   const u=(tile%4+.008)/4,v=1-(Math.floor(tile/4)+.992)/4,span=.246;
-  far.quad(base.clone().sub(across).toArray(),base.clone().add(across).toArray(),
+  far?.quad(base.clone().sub(across).toArray(),base.clone().add(across).toArray(),
     tip.clone().add(across).toArray(),tip.clone().sub(across).toArray(),[[u,v],[u+span,v],[u+span,v+span],[u,v+span]],color);
   return tip;
 }
@@ -50,7 +50,7 @@ function cane(surface,a,b,radius){
     b.clone().addScaledVector(side,.55).toArray(),b.clone().addScaledVector(side,-.55).toArray(),uv,c);
 }
 
-function grassBlade(s,p,a,h,run,w,color,arc=2.48){
+function grassBlade(s,p,a,h,run,w,color,arc=2.48,midU=.81,halfU=.052){
   const side=point(-Math.sin(a)*w,0,Math.cos(a)*w);
   const k=s.p.length/3;
   for(const t of [0,.34,.67,1]){
@@ -58,7 +58,7 @@ function grassBlade(s,p,a,h,run,w,color,arc=2.48){
     for(const u of [-1,0,1]){
       const q=c.clone().addScaledVector(side,width*u);
       if(!u)q.y+=w*width*.62;
-      s.vertex(q.toArray(),[.81+.052*u,.003+.242*t],color.clone().multiplyScalar((.56+.73*t)*(u===0?1.14:1)));
+      s.vertex(q.toArray(),[midU+halfU*u,.003+.242*t],color.clone().multiplyScalar((.56+.73*t)*(u===0?1.14:1)));
     }
   }
   for(let i=0;i<3;i++)for(let j=0;j<2;j++){
@@ -136,17 +136,113 @@ function shrubShape(seed,style){
       grassBlade(near,root,turn,h,.16+.19*rand(),.007+rand()*.008,new T.Color(0x80844d),2.91);
     }
   }
-  function finish(s){
-    const g=s.geometry(),pos=g.attributes.position,norm=g.attributes.normal,n=point(0,0,0);
-    // Small leaves receive diffuse skylight on both sides. Keep a radial component
-    // so backlit edges and shadows still give the clump depth.
-    for(let i=0;i<pos.count;i++){
-      n.set(pos.getX(i)*.52+norm.getX(i)*.15,.64+pos.getY(i)*.23,pos.getZ(i)*.52+norm.getZ(i)*.15).normalize();
-      norm.setXYZ(i,n.x,n.y,n.z);
-    }
-    return g;
+  return {near:finishFoliage(near),far:finishFoliage(far)};
+}
+
+function finishFoliage(s,radial=.52){
+  const g=s.geometry(),pos=g.attributes.position,norm=g.attributes.normal,n=point(0,0,0);
+  // Keep a radial component so backlit edges and shadows still give the clump depth.
+  for(let i=0;i<pos.count;i++){
+    n.set(pos.getX(i)*radial+norm.getX(i)*.15,.64+pos.getY(i)*.23,pos.getZ(i)*radial+norm.getZ(i)*.15).normalize();
+    norm.setXYZ(i,n.x,n.y,n.z);
   }
-  return {near:finish(near),far:finish(far)};
+  return g;
+}
+
+// Tuft roots follow the two bed margins, with a quieter row in the shade
+// below the shrubs. Each photographed fan has transparent gaps between blades.
+function streetGrass(near,far,seed,meadow){
+  const rand=random(seed),rows=meadow?4:3;
+  for(let row=0;row<rows;row++)for(let i=0;i<11;i++){
+    const x=meadow?((row+rand())/rows-.5)*.94:(row-1)*.287+(rand()-.5)*.10;
+    const root=point(x,-.009,(i-5+(rand()-.5)*.96)*.205);
+    const h=.17+rand()*.16+(row===1?.035:0),w=.15+rand()*.064,angle=rand()*tau;
+    const tint=new T.Color().setRGB(.50+rand()*.19,.54+rand()*.15,.32+rand()*.16);
+    const tile=3+Math.floor(rand()*3),u=(tile%4+.012)/4,v=1-(Math.floor(tile/4)+.988)/4;
+    const uv=[[u,v],[u+.244,v],[u+.244,v+.244],[u,v+.244]];
+    for(let k=0;k<2;k++){
+      const a=angle+k*1.46,side=point(Math.cos(a)*w,0,Math.sin(a)*w);
+      const tip=offset(root,a+1.5,.036+rand()*.069,h*(1-.19*k));
+      const corners=[root.clone().sub(side),root.clone().add(side),tip.clone().add(side),tip.clone().sub(side)].map(p=>p.toArray());
+      near.quad(...corners,uv,tint);
+      if(k===0&&(i+row+1)%3===0)far.quad(...corners,uv,tint);
+    }
+    if(i%3===1){
+      for(let j=0;j<2;j++)grassBlade(near,root,angle+j*2.1,h*.9,.09+.07*rand(),.005+.004*rand(),
+        new T.Color(j?0x7e8949:0x72834c),2.64,.983,.012);
+    }
+  }
+}
+
+// A 2.3 m run of closely planted shrubs. Each fork starts on the same woody
+// shoot as its leader. The lower, outward forks soften the clipped outline.
+function hedgeShape(style){
+  const rand=random(1583),near=new Surface(),far=new Surface();
+  const grassSeeds={green:5104,gold:3819,burgundy:6417,flower:7425,grass:1630};
+  streetGrass(near,far,grassSeeds[style],style==='grass');
+  if(style==='grass')return {near:finishFoliage(near,.10),far:finishFoliage(far,.10)};
+  const shootTiles=[0,1,2,6,7,8];
+  const leaf=style==='gold'?new T.Color(.92,.78,.26):
+    style==='burgundy'?new T.Color(.72,.12,.18):new T.Color(.35,.54,.24);
+  const newGrowth=style==='gold'?0xb4ad53:style==='burgundy'?0xa34e66:0x82965b;
+  const soilUV=[[.754,.004],[.754,.246],[.943,.246],[.943,.004]];
+  for(const surface of [near,far]){
+    const panels=surface===near?3:1,step=2.31/panels;
+    for(let k=0;k<panels;k++){
+      const z=(k-panels*.5)*step,next=z+step;
+      surface.quad([-.397,.003,z],[-.397,.003,next],[.397,.003,next],[.397,.003,z],
+        soilUV,new T.Color(.49,.45,.39));
+    }
+  }
+  for(let row=0;row<2;row++)for(let i=0;i<8;i++){
+    const dir=rand()*tau,root=point((row-.5)*.36+(rand()-.5)*.09,0,
+      (i-3.5+(row-.5)*.35+(rand()-.5)*.32)*.267);
+    const joint=offset(root,dir,.04+.045*rand(),.045+.06*rand());
+    cane(near,root,joint,.0065);
+    const vigor=.34+.15*rand();
+    const tint=leaf.clone().multiplyScalar(.70+.34*rand());
+    // The lower layer fans over the soil. Lean even the far sprays outward
+    // so their leaves stay visible from a bridge or upper-storey walkway.
+    const outward=(row?0:Math.PI)+(rand()-.5)*1.4;
+    spray(near,(i+row)%4===1?null:far,9+i%3,root,outward,.15+.045*rand(),vigor*.85,.20+.06*rand(),
+      outward+1.38+(rand()-.5)*.9,tint.clone().multiplyScalar(.86));
+    for(let k=0;k<2;k++){
+      const a=dir+k*tau/3,leader=k===0;
+      const tip=spray(near,null,shootTiles[Math.floor(rand()*shootTiles.length)],joint,a,
+        leader?.05+.06*rand():.12+.075*rand(),vigor*(leader?1:.56+.30*rand()),
+        .14+.08*rand(),a+1.57,tint);
+      if(!leader)continue;
+      // Pairs of sunlit leaves and the occasional three papery bracts sit at
+      // the shoot tips, so the crown also has texture when seen from above.
+      const flowering=style==='flower'&&rand()<.51;
+      for(let n=0;n<(flowering?3:2);n++){
+        const turn=a+n*(flowering?tau/3:2.7),base=tip.clone().lerp(joint,.06+n*.08);
+        const wide=flowering?.029:.023,side=point(-Math.sin(turn)*wide,0,Math.cos(turn)*wide);
+        const end=offset(base,turn,.060+.031*rand(),.010+.034*rand());
+        const color=new T.Color(flowering?(i%3?0xc34b72:0xcf758d):newGrowth);
+        const rows=[[base,side,zero,0,.76],[end,side,point(0,.009,0),1,1]];
+        strip(near,14,rows,color);
+        if(flowering&&n===0)strip(far,14,rows,color);
+      }
+    }
+  }
+  return {near:finishFoliage(near,.22),far:finishFoliage(far,.22)};
+}
+
+export function streetHedges(root,label,style='green'){
+  const kit=shrubAssets(root),key='street-'+style;
+  if(!kit.forms.has(key))kit.forms.set(key,hedgeShape(style));
+  const form=kit.forms.get(key),batch=new Instances(form.near,kit.streetLeaves,label+' · 枝叶');
+  return {
+    at(x,y,z,sx,sy,sz,yaw){batch.at(x,y,z,sx,sy,sz,yaw);},
+    flush(group,range){
+      const details=group.userData.localDetails??=[],start=details.length;
+      batch.flush(group,false,range,{...form,distance:24,tileSize:160});
+      for(let i=start;i<details.length;i++){
+        const mesh=details[i].item;mesh.customDepthMaterial=kit.streetDepth;kit.meshes.push(mesh);
+      }
+    }
+  };
 }
 
 function shrubAssets(root){
@@ -159,7 +255,7 @@ function shrubAssets(root){
     }));
     texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;return texture;
   }
-  const map=load('understory.webp'),soil=load('root-soil.webp');
+  const map=load('understory.webp'),streetMap=load('street-understory.webp'),soil=load('root-soil.webp');
   root.userData.shrubReady=Promise.all(pending);
   const time=root.userData.shrubWindTime={value:0};
   function bendTips(shader){
@@ -188,6 +284,11 @@ function shrubAssets(root){
   };
   const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map,alphaTest:leaves.alphaTest,side:T.DoubleSide});
   depth.onBeforeCompile=bendTips;
+  const streetLeaves=leaves.clone(),streetDepth=depth.clone();
+  streetLeaves.specularIntensity=.14;
+  streetLeaves.map=streetDepth.map=streetMap;
+  streetLeaves.onBeforeCompile=leaves.onBeforeCompile;
+  streetDepth.onBeforeCompile=bendTips;
   const size=64,rgba=new Uint8Array(size*size*4),rand=random(399);
   for(let z=0;z<size;z++)for(let x=0;x<size;x++){
     const u=(x+.5)/size*2-1,v=(z+.5)/size*2-1;
@@ -199,12 +300,12 @@ function shrubAssets(root){
   const contact=new T.DataTexture(rgba,size,size);contact.magFilter=contact.minFilter=T.LinearFilter;contact.needsUpdate=true;
   const shade=new T.MeshStandardMaterial({map:soil,alphaMap:contact,color:0x958c74,roughness:1,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1});
   const forms=new Map(),meshes=[];
-  const kit={leaves,depth,shade,forms,meshes};
+  const kit={leaves,depth,streetLeaves,streetDepth,shade,forms,meshes};
   assets.set(root,kit);
   root.addEventListener('removed',()=>{
     for(const {near,far} of forms.values()){near.dispose();far.dispose();}
     for(const mesh of meshes)mesh.dispose();
-    map.dispose();soil.dispose();contact.dispose();depth.dispose();
+    map.dispose();streetMap.dispose();soil.dispose();contact.dispose();depth.dispose();streetDepth.dispose();
   });
   return kit;
 }
@@ -214,7 +315,7 @@ export function parkShrubs(root,label,floorAt,style='mixed'){
   const kit=shrubAssets(root),tiles=new Map();
   return {
     at(x,y,z,sx,sy,sz,yaw){
-      const tileX=Math.floor(x/30),tileZ=Math.floor(z/30);
+      const tileX=Math.floor(x/64),tileZ=Math.floor(z/64);
       const variant=((tileX*31+tileZ*67)>>>0)%3,formKey=style+variant;
       if(!kit.forms.has(formKey))kit.forms.set(formKey,shrubShape(3761+variant*5789,style));
       const key=tileX+','+tileZ;
@@ -233,13 +334,13 @@ export function parkShrubs(root,label,floorAt,style='mixed'){
         shade.quad(...uv.map(([a,b])=>point(a,b)),uv.map(([a,b])=>[(a+1)/2,(b+1)/2]));
       }
     },
-    flush(group,cast=true){
+    flush(group,cast=false){
       const details=root.userData.localDetails??=[];
       for(const {batch,shade,form} of tiles.values()){
-        const item=batch.flush(group,cast);item.customDepthMaterial=kit.depth;kit.meshes.push(item);
+        const item=batch.flush(group,false);item.customDepthMaterial=kit.depth;kit.meshes.push(item);
         // Include the taller individual blades in the bounds at both detail levels.
         item.geometry=form.near;item.computeBoundingSphere();item.geometry=form.far;
-        details.push({item,range:550,lod:{distance:14,near:form.near,far:form.far}});
+        details.push({item,range:240,lod:{distance:16,near:form.near,far:form.far}});
         const shadow=shade.mesh(group,kit.shade,label+' · 根际阴影');details.push({item:shadow,range:46});
       }
       tiles.clear();

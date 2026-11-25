@@ -9,3 +9,5 @@
 公园边界内另补入 56 个树冠峰点和 633 个连续林冠内的候选树位。后者依据连续的预测冠高与株距布置。可通过 `python scripts/geocanopy.py --park-infill` 从相同数据重建，近景网格和纹理可通过 `python scripts/foliage_build.py --close-only` 重建。
 
 人才公园的灌木与草丛共用 `understory.webp`。枝梢和草簇从 Poly Haven 的 CC0 模型沿多个方向烘焙，近处的独立叶片保留叶脉，弯折草叶使用单根草叶的纹理。运行 `python scripts/shrub_sprays.py` 可重建图集。[Shrub 04](https://polyhaven.com/a/shrub_04) · [Grass Medium 01](https://polyhaven.com/a/grass_medium_01) · [Grass Medium 02](https://polyhaven.com/a/grass_medium_02) · [CC0 许可](https://polyhaven.com/license)
+
+路侧绿篱、花箱和桥面分隔带使用 `street-understory.webp`。草簇由扫描草株、弯曲的草叶和近景叶脊组成。运行 `python scripts/street_sprays.py` 可用上述灌木、草株和项目内的 Grass Ground 照片重建图集。

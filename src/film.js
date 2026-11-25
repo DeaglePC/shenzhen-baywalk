@@ -14,7 +14,7 @@ function makeQuadGeometry() {
 }
 
 const gradePresets = {
-  sunset:   { bloom: 0.24, threshold: 1.05, contrast: 1.045, sat: 1.05, shadowTint: [0.95, 0.97, 1.04], highlightTint: [1.05, 0.99, 0.92] },
+  sunset:   { bloom: 0.12, threshold: 1.25, contrast: 1.025, sat: 1.03, shadowTint: [0.96, 0.98, 1.03], highlightTint: [1.02, 0.96, 0.93] },
   day:      { bloom: 0.16, threshold: 1.25, contrast: 1.03,  sat: 1.03, shadowTint: [0.98, 0.99, 1.02], highlightTint: [1.02, 1.01, 0.98] },
   dusk:     { bloom: 0.30, threshold: 0.92, contrast: 1.05,  sat: 1.06, shadowTint: [0.92, 0.96, 1.06], highlightTint: [1.06, 0.98, 0.94] },
   night:    { bloom: 0.38, threshold: 0.85, contrast: 1.06,  sat: 1.07, shadowTint: [0.93, 0.97, 1.06], highlightTint: [1.04, 1.01, 0.96] },
@@ -22,11 +22,12 @@ const gradePresets = {
   overcast: { bloom: 0.12, threshold: 1.35, contrast: 1.02,  sat: 0.98, shadowTint: [0.98, 0.99, 1.01], highlightTint: [1.00, 1.00, 0.99] }
 };
 
-export function createFilm(renderer, camera) {
+export function createFilm(renderer, camera, options = {}) {
   if (!renderer.extensions.has('EXT_color_buffer_float')) {
     return {
       render: (scene, view) => renderer.render(scene, view),
       setGrade() {},
+      setFast() {},
       dispose() {}
     };
   }
@@ -34,11 +35,12 @@ export function createFilm(renderer, camera) {
   const target = new T.WebGLRenderTarget(1, 1, {
     type: T.HalfFloatType,
     depthBuffer: true,
-    samples: Math.min(4, renderer.capabilities.maxSamples)
+    samples: Math.min(options.samples ?? 4, renderer.capabilities.maxSamples)
   });
   target.depthTexture = new T.DepthTexture(1, 1, T.UnsignedIntType);
 
   const levels = 4;
+  let activeLevels = levels;
   const mipOpts = {
     type: T.HalfFloatType,
     depthBuffer: false,
@@ -163,6 +165,7 @@ export function createFilm(renderer, camera) {
       logFar: { value: Math.log2(camera.far + 1) },
       uTime: { value: 0 },
       uSpray: { value: 0 },
+      uAoStrength: { value: 0.24 },
       uBloomStrength: { value: 0.22 },
       uContrast: { value: 1.04 },
       uSaturation: { value: 1.04 },
@@ -173,7 +176,7 @@ export function createFilm(renderer, camera) {
     fragmentShader: `
       uniform sampler2D colorBuffer, depthBuffer, bloomBuffer;
       uniform vec2 size;
-      uniform float logFar, uTime, uSpray, uBloomStrength, uContrast, uSaturation;
+      uniform float logFar, uTime, uSpray, uAoStrength, uBloomStrength, uContrast, uSaturation;
       uniform vec3 uShadowTint, uHighlightTint;
       varying vec2 coord;
 
@@ -196,39 +199,41 @@ export function createFilm(renderer, camera) {
         a += dot(a, a.yzx + 33.33);
         return fract((a.xx + a.yz) * a.zy);
       }
-      vec3 lensDroplets(vec2 uv, float aspect, float t){
-        vec2 offset = vec2(0.); float mask = 0.;
-        for(int layer = 0; layer < 2; layer++){
-          float scale = layer == 0 ? 11.5 : 19.0;
-          vec2 g = vec2(uv.x * aspect, uv.y) * scale;
-          g.y += t * (layer == 0 ? .18 : .11);
-          vec2 id = floor(g), f = fract(g) - .5;
-          vec2 rnd = dropHash(id + float(layer) * 41.7);
-          float life = fract(rnd.x + t * (.06 + rnd.y * .05));
-          float appear = smoothstep(0., .15, life) * (1. - smoothstep(.78, 1., life));
-          if(rnd.x < .42) continue;
-          vec2 center = (rnd - .5) * .48;
-          vec2 d = f - center;
-          float rad = (.12 + .14 * rnd.y) * appear;
-          float dist = length(d);
-          if(dist < rad){
-            float r = dist / max(rad, .0001);
-            float dome = sqrt(max(0., 1. - r * r));
-            float edge = smoothstep(1., .74, r);
-            offset -= d / max(rad, .0001) * (dome * .032) * edge;
-            mask = max(mask, edge * appear);
-          }
-        }
-        return vec3(offset, mask);
+      vec3 lensDroplets(vec2 uv, float t){
+        // At most three beads across the lens, each with its own arrival and dry interval.
+        bool landscape = size.x >= size.y;
+        float band = min(2., floor((landscape ? uv.x : uv.y) * 3.));
+        vec2 timing = dropHash(vec2(band + 1., 9.));
+        float cycle = t / mix(6., 10., timing.x) + timing.y;
+        float age = fract(cycle);
+        if(age >= .60) return vec3(0.);
+
+        vec2 seed = vec2(band, floor(cycle));
+        vec2 rnd = dropHash(seed + 17.);
+        vec2 center = vec2((band + mix(.15, .85, rnd.x)) / 3., mix(.07, .95, rnd.y));
+        if(!landscape) center = center.yx;
+        float slide = smoothstep(.25, .60, age);
+        center.y -= .024 * slide;
+        vec2 scale = size / min(size.x, size.y);
+        float radius = mix(.0026, .0052, dropHash(seed + 41.).x);
+        vec2 p = (uv - center) * scale / radius;
+        p.y *= mix(1., .80, slide);
+        float r2 = dot(p, p);
+        if(r2 >= 1.) return vec3(0.);
+
+        float fade = smoothstep(0., .07, age) * (1. - smoothstep(.43, .60, age));
+        vec2 bend = -p * (1. - r2) * radius / scale;
+        vec2 highlight = p - vec2(-.30, .42);
+        float glint = 1. - smoothstep(.01, .20, dot(highlight, highlight));
+        return vec3(bend, glint) * fade;
       }
 
       void main(){
         vec2 sampleUV = coord;
         float dropSpec = 0.;
         if(uSpray > .005){
-          float aspect = size.x / max(size.y, 1.);
-          vec3 dr = lensDroplets(coord, aspect, uTime);
-          sampleUV = clamp(coord + dr.xy * uSpray, vec2(.002), vec2(.998));
+          vec3 dr = lensDroplets(coord, uTime);
+          sampleUV += dr.xy * uSpray;
           dropSpec = dr.z * uSpray;
         }
 
@@ -243,27 +248,29 @@ export function createFilm(renderer, camera) {
         rgb = sanitizeHDR(rgb);
 
         if(dropSpec > .01){
-          rgb += vec3(.18, .22, .25) * dropSpec * .38;
+          rgb += vec3(.055) * dropSpec;
         }
 
-        // Jittered dual-radius screen-space contact AO (reduces banding, grounds cars/trees/buildings).
-        float z = distanceAt(coord);
-        if(z < 260.){
-          float rot = ign(gl_FragCoord.xy) * 6.2831853;
-          float rNear = clamp(size.y * .34 / max(z, .5), 1.8, 12.);
-          float rWide = clamp(size.y * .86 / max(z, .5), 4.5, 26.);
-          float occNear = 0., occWide = 0.;
-          for(int i = 0; i < 8; i++){
-            float a = rot + float(i) * .78539816;
-            vec2 dir = vec2(cos(a), sin(a));
-            float d1 = z - distanceAt(coord + dir * rNear / size);
-            occNear += smoothstep(.045, .20, d1) * (1. - smoothstep(.42, 1.55, d1));
-            float d2 = z - distanceAt(coord + dir * rWide / size);
-            occWide += smoothstep(.18, .85, d2) * (1. - smoothstep(1.8, 5.2, d2));
+        // Jittered dual-radius screen-space contact AO (IGN-rotated 4-direction dual tap).
+        if(uAoStrength > .001){
+          float z = distanceAt(coord);
+          if(z < 240.){
+            float rot = ign(gl_FragCoord.xy) * 6.2831853;
+            float rNear = clamp(size.y * .34 / max(z, .5), 1.8, 12.);
+            float rWide = clamp(size.y * .86 / max(z, .5), 4.5, 26.);
+            float occNear = 0., occWide = 0.;
+            for(int i = 0; i < 4; i++){
+              float a = rot + float(i) * 1.5707963;
+              vec2 dir = vec2(cos(a), sin(a));
+              float d1 = z - distanceAt(coord + dir * rNear / size);
+              occNear += smoothstep(.045, .20, d1) * (1. - smoothstep(.42, 1.55, d1));
+              float d2 = z - distanceAt(coord + dir * rWide / size);
+              occWide += smoothstep(.18, .85, d2) * (1. - smoothstep(1.8, 5.2, d2));
+            }
+            float ao = (occNear * .62 + occWide * .38) * .25;
+            float fade = 1. - smoothstep(75., 230., z);
+            rgb *= 1. - clamp(ao * uAoStrength * fade, 0., uAoStrength);
           }
-          float ao = (occNear * .62 + occWide * .38) * .125;
-          float fade = 1. - smoothstep(80., 250., z);
-          rgb *= 1. - clamp(ao * .24 * fade, 0., .24);
         }
 
         // Add multi-scale HDR bloom before ACES tone mapping.
@@ -321,6 +328,10 @@ export function createFilm(renderer, camera) {
   return {
     lastStats,
     setGrade,
+    setFast(fast) {
+      compositeMat.uniforms.uAoStrength.value = fast ? 0 : 0.24;
+      activeLevels = fast ? 3 : levels;
+    },
     compile(objects,cam,scene){
       const previous=renderer.getRenderTarget();
       renderer.setRenderTarget(target);
@@ -346,8 +357,8 @@ export function createFilm(renderer, camera) {
       renderer.setRenderTarget(downTargets[0]);
       renderer.render(prefilterScene, view);
 
-      // 3. Downsample pyramid 1/2 -> 1/4 -> 1/8 -> 1/16
-      for (let i = 1; i < levels; i++) {
+      // 3. Downsample pyramid 1/2 -> 1/4 -> 1/8 (-> 1/16)
+      for (let i = 1; i < activeLevels; i++) {
         const prev = downTargets[i - 1];
         downMat.uniforms.tSrc.value = prev.texture;
         downMat.uniforms.uTexel.value.set(1 / prev.width, 1 / prev.height);
@@ -355,9 +366,9 @@ export function createFilm(renderer, camera) {
         renderer.render(downScene, view);
       }
 
-      // 4. Tent upsample pyramid 1/16 -> 1/8 -> 1/4 -> 1/2
-      for (let i = levels - 2; i >= 0; i--) {
-        const lowTex = i === levels - 2 ? downTargets[i + 1] : upTargets[i + 1];
+      // 4. Tent upsample pyramid back to 1/2
+      for (let i = activeLevels - 2; i >= 0; i--) {
+        const lowTex = i === activeLevels - 2 ? downTargets[i + 1] : upTargets[i + 1];
         const highTex = downTargets[i];
         upMat.uniforms.tLow.value = lowTex.texture;
         upMat.uniforms.tHigh.value = highTex.texture;

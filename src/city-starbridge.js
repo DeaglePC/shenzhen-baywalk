@@ -237,7 +237,8 @@ export function starBridge(root,rd,m,grid){
     sign.name='星光桥 · 实拍蓝色护栏提示牌';sign.position.set(q.x,h+.71,q.z);sign.rotation.y=Math.atan2(q.dz,-q.dx);root.add(sign);
   }
   timberCap.finish(root);
-  [post,cap,screws,seams,pins,handrail,wire,bevel,kick,plate,expansion].forEach(obj=>obj.flush(root,obj===post||obj===bevel));
+  post.flush(root,true).receiveShadow=false;
+  [cap,screws,seams,pins,handrail,wire,bevel,kick,plate,expansion].forEach(obj=>obj.flush(root,obj===bevel));
   return columns;
 }
 

@@ -312,20 +312,36 @@ export function makeLake(root,map,options){
   uniforms.seaBanks.value=seaBankTexture(regional.sea);
   const rt=water.getRenderTarget();rt.texture.minFilter=T.LinearMipmapLinearFilter;rt.texture.generateMipmaps=true;
   const excluded=root.children.filter(o=>['后海 · Sentinel-2 真彩色地表','园林草地','硬质铺装广场','停车场','潮间带','运动场'].includes(o.name));
+  const smallInReflection=/灌木|三角梅|绿篱|根际阴影|隔离护栏|雨水|井盖|井圈|导向砖|盲道|垃圾桶|消防栓|共享单车|环网柜|石球|树池|沿阶草|枯叶裙|卵石|座椅|底座|接头|透镜|检修盖|花箱|镶边|框线|接触阴影|环境阴影/;
   const reflect=water.onBeforeRender,eye=new T.Vector3(1e6,0,0),rot=new T.Quaternion(),size=new T.Vector2();
   let last=-1e6;
   water.onBeforeRender=function(renderer,scene,camera,...args){
     if(scene.userData.capturingProbe || scene.userData.reflectingRoad || camera.isArrayCamera)return;
-    const now=performance.now(),low=options.quality==='low';
+    const now=performance.now(),low=options.quality==='low'||scene.userData.perfTier>=1;
     renderer.getDrawingBufferSize(size);
-    const scale=Math.min(low?.46:.70,(low?640:1536)/size.x);
+    const scale=Math.min(low?.36:.48,(low?640:960)/size.x);
     const width=Math.max(160,Math.round(size.x*scale)),height=Math.max(128,Math.round(size.y*scale));
     const resizing=rt.width!==width||rt.height!==height;
     if(resizing)rt.setSize(width,height);
-    if(!resizing && now-last<(low?135:80) && eye.distanceToSquared(camera.position)<.0225 && rot.angleTo(camera.quaternion)<.006)return;
-    const visible=excluded.map(o=>o.visible);excluded.forEach(o=>o.visible=false);
+    const minInterval=low?50:28;
+    const idleInterval=low?160:95;
+    if(!resizing && now-last<minInterval)return;
+    if(!resizing && now-last<idleInterval && eye.distanceToSquared(camera.position)<.0225 && rot.angleTo(camera.quaternion)<.006)return;
+    const hidden=[];
+    for(const o of excluded){if(o.visible){hidden.push(o);o.visible=false;}}
+    const details=root.userData.localDetails;
+    if(details){
+      for(let i=0;i<details.length;i++){
+        const item=details[i].item;
+        if(item.visible && smallInReflection.test(item.name)){hidden.push(item);item.visible=false;}
+      }
+    }
+    scene.userData.reflectingWater=true;
     try{reflect.call(this,renderer,scene,camera,...args);}
-    finally{excluded.forEach((o,i)=>o.visible=visible[i]);}
+    finally{
+      for(let i=0;i<hidden.length;i++)hidden[i].visible=true;
+      scene.userData.reflectingWater=false;
+    }
     last=now;eye.copy(camera.position);rot.copy(camera.quaternion);
   };
   root.add(water);return water;

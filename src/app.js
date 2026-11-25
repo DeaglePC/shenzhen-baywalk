@@ -2,7 +2,7 @@ import {mouseLook} from './mouse-look.js';
 import {columnsOnBridge,personView} from './talent-bridge.js';
 import {columnReader} from './talent-reading.js';
 import {applyIcons,icon} from './icons.js';
-import {showAtlas,drawMini} from './atlas.js';
+import {showAtlas,createMiniMap} from './atlas.js';
 import {createAmbience} from './ambience.js';
 import {photoStreet,model3Street,model3RearStreet} from './taxi-framing.js';
 import {climateControls,climateFromQuery} from './climate-controls.js';
@@ -11,6 +11,8 @@ import {TOUR_ROUTES,DEFAULT_TOUR_ID,getTourRoute} from './drone-tour.js';
 import {t,toggleLang,onLangChange,placeLabel,periodLabel,isEnglish} from './i18n.js';
 applyIcons();
 const $=s=>document.querySelector(s),panel=$('#panel'),body=$('#panelBody'),load=$('#loading'),home=$('#home'),hud=$('#hud');
+const miniPanel=$('.mini-panel'),updateMiniMap=createMiniMap(miniPanel);
+let nextHudUpdate=0;
 const lookInput=mouseLook($('#world'),updateLookPrompt);
 const speedSlider=$('#lookSpeed');
 function showSensitivity(){
@@ -205,9 +207,9 @@ async function launch(v=place,fly=false,tourId=null){
     try{
       const [data,module]=await Promise.all([geo(),import('./world.js')]);
       if(v===fallback){v=data.views.find(view=>view.id==='bridge')||v;place=v;$('#spawnName').textContent=placeLabel(v);}
-      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,onTransition:setSkyTransition,mouseLook:lookInput,period:autoPeriod,daylight,initialClimate});
+      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,onFrame:updateHud,onTransition:setSkyTransition,mouseLook:lookInput,period:autoPeriod,daylight,initialClimate});
       climate.sync();
-    }catch(e){lookInput.release();console.error(e);progress(0,t('loadingFail'));$('#loadBack').hidden=false;loading=false;return;}
+    }catch(e){lookInput.release();console.error(e);const detail=e?.message?` (${String(e.message).slice(0,90)})`:'';progress(0,t('loadingFail')+detail);$('#loadBack').hidden=false;loading=false;return;}
   }else if(v.id==='skyline'){await world.nightView();climate.sync();}
   if(v.personId){v=personView(map,v.personId,v.personDetail,world.city.talentColumns)||v;place=v;}
   try{
@@ -258,6 +260,23 @@ async function openPanel(key,entryId){
   }catch(err){if(version===panelId){body.innerHTML='<div class="panel-pad note">'+t('panelLoadFail')+'</div>';console.error(err);}}
 }
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>openPanel(b.dataset.action));$('#pause').onclick=()=>openPanel('pause');
+// A touch-look drag can suppress the browser's next synthesized click.
+// Recognize a single tap on the map and cancel its compatibility click.
+let mapTouch=null;
+miniPanel.ontouchstart=e=>{mapTouch=e.touches.length===1?e.touches[0]:null;};
+miniPanel.ontouchmove=e=>{
+  const finger=e.touches[0];
+  if(mapTouch&&Math.hypot(finger.clientX-mapTouch.clientX,finger.clientY-mapTouch.clientY)>8)mapTouch=null;
+};
+miniPanel.ontouchcancel=()=>{mapTouch=null;};
+miniPanel.addEventListener('touchend',e=>{
+  const finger=e.changedTouches[0];
+  if(mapTouch&&finger.identifier===mapTouch.identifier&&Math.hypot(finger.clientX-mapTouch.clientX,finger.clientY-mapTouch.clientY)<=8){
+    e.preventDefault();
+    miniPanel.click();
+  }
+  mapTouch=null;
+},{passive:false});
 function toggleHeadlights(){
   if(!world)return;
   const on=world.toggleHeadlights();
@@ -312,8 +331,13 @@ const pad=$('.touchpad'),puck=pad.querySelector('span');let finger=null;
 function steer(e){const r=pad.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/29,z=(e.clientY-r.top-r.height/2)/29,l=Math.max(1,Math.hypot(x,z));puck.style.transform='translate('+x/l*23+'px,'+z/l*23+'px)';world?.joystick(x/l,z/l);}
 pad.onpointerdown=e=>{finger=e.pointerId;pad.setPointerCapture(finger);steer(e);};pad.onpointermove=e=>{if(e.pointerId===finger)steer(e);};
 pad.onlostpointercapture=pad.onpointercancel=pad.onpointerup=()=>{finger=null;puck.style.transform='';world?.joystick(0,0);};
-function updateHud(){
-  if(mode!=='world'||panel.open||!world)return;const pos=world.position(),deg=(pos.heading*180/Math.PI+360)%360;
+function updateHud(now){
+  if(mode!=='world'||panel.open||!world)return;
+  const pos=world.position();
+  if(!cleanHud)updateMiniMap(map,pos);
+  if(now!==undefined&&now<nextHudUpdate)return;
+  nextHudUpdate=(now??performance.now())+250;
+  const deg=(pos.heading*180/Math.PI+360)%360;
   updateReader?.(world.flying||world.aerial||world.touring?{x:Infinity,z:Infinity}:pos);
   if(audio.enabled){
     audio.setSheltered(world.sheltered);
@@ -321,7 +345,7 @@ function updateHud(){
   }
   if(world.flying)$('#altitude').textContent=Math.round(pos.height)+' m';
   if(world.touring)syncTourUi();
-  $('#heading').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];$('#bearing').textContent=Math.round(deg)+'°';drawMini($('#mini'),map,pos);
+  $('#heading').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];$('#bearing').textContent=Math.round(deg)+'°';
   const near=map.views.find(v=>Math.hypot(v.x-pos.x,v.z-pos.z)<110);
   if((place.id==='model3'||place.id==='talent')&&Math.hypot(place.x-pos.x,place.z-pos.z)<(place.id==='talent'?3:30))$('#locality').textContent=placeLabel(place);
   else if(pos.x>-235&&pos.x<385&&pos.z>-1000&&pos.z< -595)$('#locality').textContent=t('localitySports');
@@ -331,7 +355,7 @@ function updateHud(){
 function applyLanguage(){
   document.title=t('pageTitle');
   document.querySelector('meta[name="description"]')?.setAttribute('content',t('pageDesc'));
-  $('.cover')?.setAttribute('aria-label',t('coverAria'));
+  $('.cover img').alt=t('coverAria');
   const eyebrow=$('.intro .eyebrow');
   if(eyebrow)eyebrow.innerHTML='<span class="orange-line"></span>'+t('eyebrowLeft')+' <i>/</i> '+t('eyebrowRight');
   const headline=$('#headline');
@@ -356,7 +380,10 @@ function applyLanguage(){
   $('#brand').setAttribute('aria-label',t('brandAria'));
   $('#brand small').textContent=t('brandSub');
   $('#topbar nav').setAttribute('aria-label',t('navAria'));
-  $('.garage-link span:nth-child(2)').textContent=t('vehicles');
+  for(const button of document.querySelectorAll('button[data-action="garage"]')){
+    button.setAttribute('aria-label',t('vehicles'));
+    button.querySelector('.garage-name').textContent=t('vehicles');
+  }
   const langBtn=$('#langToggle');
   if(langBtn){langBtn.textContent=t('langSwitchText');langBtn.title=t('langSwitchLabel');langBtn.setAttribute('aria-label',t('langSwitchLabel'));}
   const soundBtn=$('#sound'),soundOn=audio.enabled;
@@ -435,7 +462,6 @@ function applyLanguage(){
 $('#langToggle').onclick=()=>{toggleLang();};
 onLangChange(applyLanguage);
 applyLanguage();
-setInterval(updateHud,250);
 const requestedView=route.get('walk'),vehicleView=route.get('inspect'),requestedTour=route.get('tour');
 if(vehicleView==='talent')openPanel('talent',route.get('person'));
 else if(['taxi','model3'].includes(vehicleView))openPanel('garage',vehicleView==='model3'?'model3':'e6');

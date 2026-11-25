@@ -1,0 +1,6 @@
+{
+  "upperFraction": 0.73,
+  "gutter": 4,
+  "overview": { "columns": 8, "rows": 4, "width": 148, "height": 350 },
+  "detail": { "columns": 4, "rows": 1, "width": 384, "height": 1283 }
+}

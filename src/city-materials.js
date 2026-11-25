@@ -64,6 +64,7 @@ export function materials(){
       totalEmissiveRadiance*=max(.28,windowGlow+fasciaGlow);
     `);
   };
+  const pavingScan=photo('pavers.webp');
   return {
     walls,bambooGlass,atriumGlass,roof,shop, grass:standard({map:photo('grass.webp'),roughness:1,vertexColors:true}),
     gutter:standard({map:photo('asphalt.webp'),color:0x646963,roughness:.87}),
@@ -72,7 +73,8 @@ export function materials(){
       for(let i=0;i<1700;i++){const v=Math.floor(125+r()*62);g.fillStyle='rgb('+v+','+(v+1)+','+(v-2)+')';g.fillRect(r()*w,r()*h,1+r()*1.5,1+r());}
       g.fillStyle='#747873';g.fillRect(0,0,w,2.5);
     }),roughness:.9}),
-    asphalt:standard({map:photo('asphalt.webp'),color:0x7f8690,roughness:.9}),paving:standard({map:photo('pavers.webp'),color:0xe2d8c7,roughness:.87}),
+    asphalt:standard({map:photo('asphalt.webp'),color:0x7f8690,roughness:.9}),paving:standard({map:pavingScan,color:0xe2d8c7,roughness:.87}),
+    sidewalkSlabs:standard({map:pavingScan,bumpMap:pavingScan,bumpScale:.024,color:0xd7d4c9,roughness:.91}),
     path:standard({map:photo('pavers.webp'),color:0xf7e9d6,roughness:.94}), running:standard({map:photo('asphalt.webp'),color:0xb57766,roughness:1}),
     curb:applyDetailMaps(standard({color:0xb5aba0,roughness:.87}),'granite',{normalScale:.42}),
     rail:applyDetailMaps(standard({color:0xb6b3a9,metalness:.58,roughness:.35}),'brushedMetal',{normalScale:.34}),

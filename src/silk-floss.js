@@ -223,7 +223,7 @@ export function silkFlossGrove(root,sites,wind,windMaterial,lowQuality){
       const near=new T.InstancedMesh(shape,petal,0);
       near.instanceMatrix=flowers.instanceMatrix;near.instanceColor=flowers.instanceColor;near.count=flowers.count;
       near.boundingSphere=flowers.boundingSphere.clone();near.boundingSphere.radius+=.05;near.name='美丽异木棉 · 五瓣花与花蕊';
-      near.matrixAutoUpdate=false;near.matrix.copy(matrix);near.castShadow=near.receiveShadow=true;near.customDepthMaterial=petalDepth;near.visible=false;
+      near.matrixAutoUpdate=false;near.matrix.copy(matrix);near.castShadow=false;near.receiveShadow=true;near.visible=false;
       resources.add(near);root.add(near);return {x,z,h,base,near,matrix};
     });
     for(const mesh of [trunk,leaves,clusters]){mesh.computeBoundingSphere();mesh.boundingSphere.radius+=.6;}

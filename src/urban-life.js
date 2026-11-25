@@ -1,10 +1,9 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {streetHedges} from './park-shrubs.js';
 import {Instances,Surface,along,random,inArea,segmentDistance} from './city-geometry.js';
 import {footRoad,atStation} from './road-profiles.js';
 import {applyDetailMaps} from './procedural-textures.js';
-import {photo} from './city-materials.js';
 
 // Real-world Shenzhen Houhai / Chun Sun (China Resources Tower) urban micro-layer:
 // 1. Chun Sun forecourt plaza: granite tree-planter benches, mirror water features, stone bollards, wayfinding totems
@@ -56,19 +55,7 @@ function buildUrbanKits() {
   const boxParts = [];
   addPart(boxParts, new T.BoxGeometry(0.68, 0.56, 2.20), 0x8e8c84, 0, 0.28, 0);
   addPart(boxParts, new T.BoxGeometry(0.74, 0.07, 2.26), 0xb8b5ac, 0, 0.57, 0);
-  addPart(boxParts, new T.BoxGeometry(0.60, 0.06, 2.10), 0x3b332b, 0, 0.54, 0);
-  const rng = random(7721);
-  for (let i = 0; i < 24; i++) {
-    const z = -0.95 + (i / 23) * 1.90 + (rng() - 0.5) * 0.08;
-    const x = (rng() - 0.5) * 0.44;
-    const y = 0.66 + rng() * 0.28;
-    const r = 0.16 + rng() * 0.10;
-    const isFlower = rng() < 0.44;
-    const col = isFlower
-      ? (rng() < 0.65 ? 0xc2226e : 0xe03d85) // iconic Shenzhen crimson-magenta bougainvillea
-      : (rng() < 0.5 ? 0x2f5a2d : 0x3d6e35);
-    addPart(boxParts, new T.IcosahedronGeometry(r, 1), col, x, y, z);
-  }
+  addPart(boxParts, new T.BoxGeometry(0.64, 0.02, 2.16), 0x44372a, 0, 0.601, 0);
   const planterGeo = mergeColored(boxParts);
 
   // 3. Outdoor municipal fire hydrant (red cast iron)
@@ -128,44 +115,12 @@ function buildUrbanKits() {
   for (const s of [-1, 1]) {
     addPart(pbParts, new T.BoxGeometry(3.6, 0.065, 0.44), 0x8e6140, 0, 0.57, s * 0.88);
   }
-  addPart(pbParts, new T.BoxGeometry(3.4, 0.06, 1.32), 0x3b332a, 0, 0.51, 0);
-  const prng = random(9901);
-  for (let i = 0; i < 64; i++) {
-    const x = (prng() - 0.5) * 3.1;
-    const z = (prng() - 0.5) * 1.08;
-    const y = 0.56 + prng() * 0.42;
-    const sx = 0.10 + prng() * 0.14, sy = 0.14 + prng() * 0.16, sz = 0.04 + prng() * 0.06;
-    const col = prng() < 0.14 ? 0x9c2c52 : (prng() < 0.55 ? 0x264824 : 0x385e2c);
-    addPart(pbParts, new T.DodecahedronGeometry(0.14, 0), col, x, y, z, prng() * 3, prng() * 3, prng() * 3);
-    void sx; void sy; void sz;
-  }
+  addPart(pbParts, new T.BoxGeometry(3.52, 0.02, 1.22), 0x44372a, 0, 0.543, 0);
   const plazaBenchGeo = mergeColored(pbParts);
 
-  // A clipped crown still has individual shoots projecting from its top and sides.
-  // Keep these in the same mesh and draw as the interior of each near hedge.
-  const core = new RoundedBoxGeometry(.80,.52,2.30,1,.13).translate(0,.35,0);
-  const tips=new Surface(),leafRand=random(21644),shade=new T.Color();
-  for(let i=0;i<96;i++){
-    const z=(leafRand()-.5)*2.24,side=i%2?1:-1,top=i%3!==0;
-    const x=top?(leafRand()-.5)*.72:side*(.378+leafRand()*.018);
-    const y=top?.59-.060*Math.pow(Math.abs(x)/.36,3):.26+leafRand()*.28;
-    const dx=top?(leafRand()-.5)*.09:side*(.026+.038*leafRand()),dz=(leafRand()-.5)*.13;
-    const height=.035+.048*leafRand(),u=leafRand()*.9,v=leafRand()*.9;
-    shade.setScalar(.79+leafRand()*.42);
-    tips.quad([x,y,z],[x+dx*.5+.019,y+height*.5,z+dz*.5-.012],[x+dx,y+height,z+dz],
-      [x+dx*.5-.018,y+height*.62,z+dz*.5+.015],[[u,v],[u+.03,v+.04],[u+.06,v+.08],[u,v+.05]],shade);
-  }
-  const baseColors=new Float32Array(core.attributes.position.count*3);
-  for(let i=0;i<core.attributes.position.count;i++){
-    const y=core.attributes.position.getY(i),tone=.64+.32*y/.62;
-    baseColors.set([tone,tone,tone],i*3);
-  }
-  core.setAttribute('color',new T.BufferAttribute(baseColors,3));
-  const hedgeBlockGeo=mergeColored([core,tips.geometry().toNonIndexed()]);
-  const hedgeKerbGeo = new T.BoxGeometry(0.94, 0.14, 2.32);
-  hedgeKerbGeo.translate(0, 0.07, 0);
+  const hedgeKerbGeo = new T.BoxGeometry(.94, .14, 2.32).translate(0, .07, 0);
 
-  return { guardrailGeo, planterGeo, hydrantGeo, binGeo, utilBoxGeo, blueBikeGeo, yellowBikeGeo, plazaBenchGeo, hedgeBlockGeo, hedgeKerbGeo };
+  return { guardrailGeo, planterGeo, hydrantGeo, binGeo, utilBoxGeo, blueBikeGeo, yellowBikeGeo, plazaBenchGeo, hedgeKerbGeo };
 }
 
 function makeTotemTexture(title, subtitle) {
@@ -269,14 +224,11 @@ export function buildUrbanLife(root, map, m, grid) {
   const blueBikes = new Instances(kits.blueBikeGeo, kitMat, '共享单车 · 蓝');
   const yellowBikes = new Instances(kits.yellowBikeGeo, kitMat, '共享单车 · 黄');
   const plazaBenches = new Instances(kits.plazaBenchGeo, kitMat, '春笋广场花岗岩树池坐凳');
-  const makeRealHedgeMat = (file) => {
-    const tex = photo(file);
-    tex.repeat.set(2.2, 1.0);
-    return new T.MeshStandardMaterial({map:tex,roughness:.96,vertexColors:true,color:0xc9ceac,side:T.DoubleSide});
-  };
-  const hedgesGreen = new Instances(kits.hedgeBlockGeo, makeRealHedgeMat('flowerbed-hedge.webp'), '绿道与路侧实拍常绿绿篱带');
-  const hedgesGold = new Instances(kits.hedgeBlockGeo, makeRealHedgeMat('flowerbed-gold.webp'), '绿道与路侧实拍金叶绿篱带');
-  const hedgesBurgundy = new Instances(kits.hedgeBlockGeo, makeRealHedgeMat('flowerbed-burgundy.webp'), '绿道与路侧实拍红继木绿篱带');
+  const hedgesGreen = streetHedges(root, '绿道与路侧常绿绿篱带');
+  const hedgesGold = streetHedges(root, '绿道与路侧金叶绿篱带', 'gold');
+  const hedgesBurgundy = streetHedges(root, '绿道与路侧红花檵木绿篱带', 'burgundy');
+  const planterFlowers = streetHedges(root, '主干道花箱三角梅', 'flower');
+  const benchFlowers = streetHedges(root, '春笋广场坐凳花境', 'flower');
   const hedgeKerbs = new Instances(kits.hedgeKerbGeo, stoneMat, '路侧绿篱花岗岩镶边');
   const stoneSpheres = new Instances(new T.SphereGeometry(0.28, 14, 10), stoneMat, '春笋广场花岗岩防撞石球');
   const plazaPosts = new Instances(new T.CylinderGeometry(0.065, 0.08, 1, 10), darkMetal, '春笋广场低矮景观灯柱');
@@ -319,15 +271,11 @@ export function buildUrbanLife(root, map, m, grid) {
       const p10 = [cx + Math.cos(a1) * r0, 0.225, cz + Math.sin(a1) * r0];
       const p11 = [cx + Math.cos(a1) * r1, 0.225, cz + Math.sin(a1) * r1];
       const p01 = [cx + Math.cos(a0) * r1, 0.225, cz + Math.sin(a0) * r1];
-      plazaTiles.quad(p00, p10, p11, p01, [[0, 0], [4, 0], [4, 4], [0, 4]]);
+      const corners = [p00, p10, p11, p01];
+      plazaTiles.quad(...corners, corners.map(([x,,z])=>[x/3.2,z/3.2]));
     }
   }
-  const plazaMat = applyDetailMaps(
-    new T.MeshStandardMaterial({ color: 0xc9c4b9, roughness: 0.82, metalness: 0.04 }),
-    'granite',
-    { normalScale: 0.36, repeat: 4 }
-  );
-  plazaTiles.mesh(group, plazaMat, '春笋前广场花岗岩地坪');
+  plazaTiles.mesh(group, m.sidewalkSlabs, '春笋前广场花岗岩地砖铺装');
 
   const waterPools = new Surface();
   const poolRims = new Instances(new T.BoxGeometry(1, 1, 1), stoneMat, '春笋镜面水池石沿');
@@ -341,6 +289,7 @@ export function buildUrbanLife(root, map, m, grid) {
       if (onRoad(x, z, 2.8) || inBuilding(x, z) || inWater(x, z)) continue;
       const yaw = Math.atan2(-Math.sin(ang), Math.cos(ang));
       plazaBenches.at(x, 0.225, z, 1, 1, 1, yaw);
+      benchFlowers.at(x, 0.225 + .553, z, 1.46, 1.14, 1.47, yaw + Math.PI / 2);
       // Pair each planter bench with warm low architectural bollard lamps
       for (const s of [-2.85, 2.85]) {
         const lx = x - Math.sin(ang) * s;
@@ -432,6 +381,7 @@ export function buildUrbanLife(root, map, m, grid) {
         const idx = Math.floor(s / 2.4);
         if (idx % 3 === 1) {
           planters.at(x, yBase + 0.04, z, 1, 1, 1, yaw);
+          planterFlowers.at(x, yBase + .04 + .611, z, .74, 1.04, .93, yaw);
         } else {
           guardrails.at(x, yBase + 0.04, z, 1, 1, 1, yaw);
         }
@@ -552,7 +502,7 @@ export function buildUrbanLife(root, map, m, grid) {
 
         const band=Math.sin(hx*.041+hz*.052)+.62*Math.cos(hx*.079-hz*.023);
         const batch=band>1.12?hedgesGold:band<-1.16?hedgesBurgundy:hedgesGreen;
-        batch.at(hx,.12,hz,1,.88+rng()*.24,1,yaw+(idx%2)*Math.PI);
+        batch.at(hx,.26,hz,1,.88+rng()*.24,1,yaw+(idx%2)*Math.PI);
         hedgeKerbs.at(hx, 0.12, hz, 1, 1, 1, yaw);
 
         // Feed native volumetric / real-photo trees & shrubs into city-nature.js (zero low-poly look!)
@@ -574,15 +524,13 @@ export function buildUrbanLife(root, map, m, grid) {
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
   });
   bikeBayPaint.mesh(group, bayMat, '共享单车停放框线');
-  // The distant segments meet end to end along the surveyed road. Reuse their
-  // instance transforms and leaf materials when swapping the rounded profile.
-  const distantHedge = new T.BoxGeometry(.82,.56,2.31).translate(0,.36,0);
-  distantHedge.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(distantHedge.attributes.position.count*3).fill(.86),3));
-  const hedgeLod = {near:kits.hedgeBlockGeo, far:distantHedge, distance:95, tileSize:128};
-  for (const hedge of [hedgesGreen, hedgesGold, hedgesBurgundy]) hedge.flush(group,true,780,hedgeLod);
+  for (const hedge of [hedgesGreen, hedgesGold, hedgesBurgundy]) hedge.flush(group,280);
+  benchFlowers.flush(group,240);
+  planterFlowers.flush(group,240);
   for (const part of [guardrails, planters, hydrants, bins, utilBoxes, blueBikes, yellowBikes, plazaBenches, hedgeKerbs, stoneSpheres, plazaPosts, lampHeads, poolRims]) {
     const cast = part === plazaBenches || part === planters || part === utilBoxes || part === stoneSpheres;
-    const range = (part === guardrails || part === planters || part === plazaBenches) ? 520 : 280;
-    part.flush(group, cast, range);
+    const range = (part === planters || part === plazaBenches) ? 320 : part === guardrails ? 240 : 180;
+    const tile = part === guardrails ? 180 : 260;
+    part.flush(group, cast, range, null, tile);
   }
 }

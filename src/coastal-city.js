@@ -1,10 +1,9 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {streetHedges} from './park-shrubs.js';
 import {Instances,bounds,inArea,random} from './city-geometry.js';
 import {skywalkFootprints,skywalkHeight} from './walk-deck-data.js';
 import {applyDetailMaps} from './procedural-textures.js';
-import {photo} from './city-materials.js';
 
 // Coastal City (海岸城) & Poly Cultural Plaza commercial district enrichment:
 // 1. 2F skywalk promenade life: warm commercial streetlamps, outdoor cafe umbrella seating,
@@ -66,16 +65,14 @@ function buildCoastalKits() {
   addPart(gParts, new T.CylinderGeometry(0.16, 0.16, 0.16, 12), 0xfff2d6,  0.52, 4.18, 0);
   const lampGlowGeo = mergeParts(gParts);
 
-  // 3. Promenade stone planter bench base (top hedge is real photo-textured RoundedBox)
+  // 3. Promenade stone planter bench base
   const pParts = [];
   addPart(pParts, new T.BoxGeometry(3.4, 0.50, 1.85), 0xb9b4aa, 0, 0.25, 0);
   addPart(pParts, new T.BoxGeometry(3.5, 0.06, 1.95), 0xd2cdc3, 0, 0.51, 0);
   addPart(pParts, new T.BoxGeometry(2.9, 0.06, 0.42), 0x936744, 0, 0.56,  0.72);
   addPart(pParts, new T.BoxGeometry(2.9, 0.06, 0.42), 0x936744, 0, 0.56, -0.72);
+  addPart(pParts, new T.BoxGeometry(2.92, .02, .96), 0x44372a, 0, .538, 0);
   const deckPlanterGeo = mergeParts(pParts);
-
-  const deckHedgeGeo = new RoundedBoxGeometry(2.85, 0.58, 0.96, 3, 0.16);
-  deckHedgeGeo.translate(0, 0.78, 0);
 
   // 4. Illuminated commercial directory / poster lightbox frame (1.25m wide x 2.35m tall)
   const fParts = [];
@@ -94,7 +91,7 @@ function buildCoastalKits() {
   addPart(hParts, new T.BoxGeometry(4.2, 0.85, 0.08), 0x5c666b, 0, 1.1, -1.62);
   const hvacGeo = mergeParts(hParts);
 
-  return { cafeSetGeo, lampPoleGeo, lampGlowGeo, deckPlanterGeo, deckHedgeGeo, lightboxFrameGeo, hvacGeo };
+  return { cafeSetGeo, lampPoleGeo, lampGlowGeo, deckPlanterGeo, lightboxFrameGeo, hvacGeo };
 }
 
 function makeLightboxTexture() {
@@ -217,13 +214,6 @@ export function buildCoastalCity(root, map, m, grid) {
     3.4,
     0.35
   );
-  const hedgeTex = photo('flowerbed-hedge.webp');
-  hedgeTex.repeat.set(2.5, 1.0);
-  const hedgeMat = applyDetailMaps(
-    new T.MeshStandardMaterial({ map: hedgeTex, roughness: 0.90 }),
-    'granite',
-    { normalScale: 0.45 }
-  );
   const lightboxTex = makeLightboxTexture();
   const lightboxPosterMat = m.parkLights.finish(
     new T.MeshStandardMaterial({
@@ -241,7 +231,7 @@ export function buildCoastalCity(root, map, m, grid) {
   const lampPoles = new Instances(kits.lampPoleGeo, kitMat, '海岸城二层 · 商业街灯柱');
   const lampGlows = new Instances(kits.lampGlowGeo, glowMat, '海岸城二层 · 暖光灯罩');
   const deckPlanters = new Instances(kits.deckPlanterGeo, kitMat, '海岸城二层 · 花岗岩树箱坐凳');
-  const deckHedges = new Instances(kits.deckHedgeGeo, hedgeMat, '海岸城二层 · 树箱修剪绿篱');
+  const deckHedges = streetHedges(root, '海岸城二层 · 树箱修剪绿篱');
   const lightboxFrames = new Instances(kits.lightboxFrameGeo, kitMat, '海岸城二层 · 商业灯箱框架');
   const lightboxFaces = new Instances(new T.PlaneGeometry(1.16, 2.08), lightboxPosterMat, '海岸城二层 · 发光导视海报');
   const hvacUnits = new Instances(kits.hvacGeo, kitMat, '海岸城商场 · 屋顶冷却塔与空调机组');
@@ -293,7 +283,7 @@ export function buildCoastalCity(root, map, m, grid) {
             const bx = x + Math.cos(yaw) * 2.4, bz = z + Math.sin(yaw) * 2.4;
             if (insideDeckSafe(deck, bx, bz, 2.2)) {
               deckPlanters.at(bx, skywalkHeight, bz, 1, 1, 1, yaw);
-              deckHedges.at(bx, skywalkHeight, bz, 1, 1, 1, yaw);
+              deckHedges.at(bx, skywalkHeight + .548, bz, 1.16, 1.07, 1.22, yaw + Math.PI / 2);
             }
           }
           placedItems.push([x, z]);
@@ -316,7 +306,7 @@ export function buildCoastalCity(root, map, m, grid) {
         } else {
           // Standalone stone planter bench
           deckPlanters.at(x, skywalkHeight, z, 1, 1, 1, yaw);
-          deckHedges.at(x, skywalkHeight, z, 1, 1, 1, yaw);
+          deckHedges.at(x, skywalkHeight + .548, z, 1.16, 1.07, 1.22, yaw + Math.PI / 2);
           placedItems.push([x, z]);
         }
       }
@@ -442,7 +432,8 @@ export function buildCoastalCity(root, map, m, grid) {
     group.add(sm);
   }
 
-  for (const batch of [cafeSets, lampPoles, lampGlows, deckPlanters, deckHedges, lightboxFrames, lightboxFaces, hvacUnits]) {
+  deckHedges.flush(root,420);
+  for (const batch of [cafeSets, lampPoles, lampGlows, deckPlanters, lightboxFrames, lightboxFaces, hvacUnits]) {
     const cast = batch === cafeSets || batch === lampPoles || batch === deckPlanters || batch === hvacUnits;
     batch.flush(root, cast, 420);
   }

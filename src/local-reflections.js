@@ -149,7 +149,7 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
     skySeeds.clear();
     skyTargets.splice(0).forEach(target=>target.dispose());
   }
-  return {refresh,step,clearSkySeeds,dispose(){
+  return {refresh,step,clearSkySeeds,get busy(){return !!pending;},dispose(){
     pending=null;
     clearSkySeeds();
     if(paintCube!==cube){paintCube.dispose();paintFilter.dispose();}
