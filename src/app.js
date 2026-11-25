@@ -6,6 +6,7 @@ import {showAtlas,drawMini} from './atlas.js';
 import {createAmbience} from './ambience.js';
 import {photoStreet,model3Street,model3RearStreet} from './taxi-framing.js';
 import {climateControls,climateFromQuery} from './climate-controls.js';
+import {homeSkyPreloader,skyFileFor} from './sky-assets.js';
 import {TOUR_ROUTES,DEFAULT_TOUR_ID,getTourRoute} from './drone-tour.js';
 import {t,toggleLang,onLangChange,placeLabel,periodLabel,isEnglish} from './i18n.js';
 applyIcons();
@@ -25,6 +26,7 @@ const audio=createAmbience();let map,geoRequest,world,place,loading=false,panelI
 let mode='home',locationName='人才星光桥',currentPanel='';
 const fallback={id:'bridge',name:'人才星光桥',x:213.6,z:143.5,lookX:-263.3,lookZ:-456.8};
 const route=new URLSearchParams(location.search);
+const homeSkies=homeSkyPreloader(route.get('weather')==='aurora'?'night':route.get('period'));
 let updateReader;
 const climate=climateControls(()=>world,notify,setting=>audio.setWeather(setting.weather));
 const stadiumFlight={eye:[486,210,-535],target:[82,20,-790],fov:49};
@@ -82,11 +84,10 @@ function geo(){
   return geoRequest;
 }
 function notify(text){clearTimeout(toastTimer);$('#toast').textContent=text;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,2800);}
-function setSkyTransition({active,label='',progress:pct=0}){
+function setSkyTransition({active,label=''}){
   const el=$('#skyLoader');if(!el)return;
   if(!active){el.hidden=true;return;}
   $('#skyLoaderText').textContent=t('switchingSky',periodLabel(label));
-  $('#skyLoaderBar').style.width=Math.max(12,Math.min(100,pct))+'%';
   el.hidden=false;
 }
 function progress(percent,text){$('#loadFill').style.width=percent+'%';$('#loadText').textContent=text;}
@@ -162,7 +163,10 @@ function cameraLabel(cameraMode){
   if(mode==='world'){showHint();updateHud();}
 }
 function closePanel(){if(panel.open)panel.close();finishPanel();}
-function finishPanel(){panelId++;cleanup?.();cleanup=null;currentPanel='';world?.setBlocked(false);}
+function finishPanel(){
+  panelId++;cleanup?.();cleanup=null;currentPanel='';world?.setBlocked(false);
+  if(!loading&&!world)homeSkies.setActive(true);
+}
 panel.addEventListener('close',()=>{if(!panel.open&&currentPanel)finishPanel();});
 panel.addEventListener('click',e=>{if(e.target===panel){const b=panel.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)closePanel();}});
 $('#closePanel').onclick=closePanel;
@@ -191,13 +195,17 @@ $('#lockMouse').onclick=()=>{
   lookInput.engage();
 };
 async function launch(v=place,fly=false,tourId=null){
-  if(loading)return;loading=true;closePanel();if(!tourId)lookInput.engage();place=v;$('#spawnName').textContent=placeLabel(v);locationName=placeLabel(v);
+  if(loading)return;loading=true;
   const autoPeriod=route.get('period')??v.period??(tourId==='lake-lightshow'?'night':v.id==='skyline'?'night':undefined);
+  const daylight=!!(v.photo||v.portrait||v.flight)||fly||tourId==='tech-skyline'||['garden','palm-grove','sw-blossoms','north-ramp'].includes(v.id);
+  const initialClimate=climateFromQuery(route);
+  if(!world)homeSkies.enterWorld(skyFileFor(initialClimate.weather==='aurora'?'night':autoPeriod,daylight));
+  closePanel();if(!tourId)lookInput.engage();place=v;$('#spawnName').textContent=placeLabel(v);locationName=placeLabel(v);
   if(!world){load.hidden=false;$('#loadBack').hidden=true;progress(7,t('loadingMap'));
     try{
       const [data,module]=await Promise.all([geo(),import('./world.js')]);
       if(v===fallback){v=data.views.find(view=>view.id==='bridge')||v;place=v;$('#spawnName').textContent=placeLabel(v);}
-      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,onTransition:setSkyTransition,mouseLook:lookInput,period:autoPeriod,daylight:!!(v.photo||v.portrait||v.flight)||fly||tourId==='tech-skyline'||['garden','palm-grove','sw-blossoms','north-ramp'].includes(v.id),initialClimate:climateFromQuery(route)});
+      world=await module.buildWorld($('#world'),data,{progress,report:notify,step:f=>audio.step(f),onCamera:cameraLabel,onTransition:setSkyTransition,mouseLook:lookInput,period:autoPeriod,daylight,initialClimate});
       climate.sync();
     }catch(e){lookInput.release();console.error(e);progress(0,t('loadingFail'));$('#loadBack').hidden=false;loading=false;return;}
   }else if(v.id==='skyline'){await world.nightView();climate.sync();}
@@ -221,6 +229,7 @@ $('#loadBack').onclick=()=>{goHome();location.reload();};$('#start').onclick=res
 const titles={map:['FIELD MAP','panelMapTitle'],garage:['VEHICLE COLLECTION','panelGarageTitle'],talent:['STARLIGHT BRIDGE','panelTalentTitle'],help:['FIELD GUIDE','panelHelpTitle'],pause:['FREE ROAM','panelPauseTitle']};
 async function openPanel(key,entryId){
   if(loading)return;setCleanHud(false);climate.close();cleanup?.();cleanup=null;const version=++panelId;currentPanel=key;world?.setBlocked(true);
+  if(!world)homeSkies.setActive(key==='help');
   panel.dataset.panel=key;$('#panelKicker').textContent=titles[key][0];$('#panelTitle').textContent=t(titles[key][1]);
   body.innerHTML='<div class="panel-pad note">'+t('panelReading')+'</div>';if(!panel.open)panel.showModal();
   try{
@@ -437,6 +446,9 @@ else if(requestedTour){
     return launch(place,route.get('camera')==='drone');
   })
     .catch(()=>notify(t('toastMapErr')));
-}else if('requestIdleCallback' in window)requestIdleCallback(()=>geo().catch(()=>{}),{timeout:3000});
-else setTimeout(()=>geo().catch(()=>{}),1400);
+}else{
+  homeSkies.setActive(true);
+  if('requestIdleCallback' in window)requestIdleCallback(()=>geo().catch(()=>{}),{timeout:3000});
+  else setTimeout(()=>geo().catch(()=>{}),1400);
+}
 

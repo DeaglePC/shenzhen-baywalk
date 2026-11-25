@@ -1,5 +1,7 @@
 import * as T from 'three';
-import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
+import {skyTextures} from './sky-textures.js';
+import {skyFileFor} from './sky-assets.js';
+import {skyFade} from './sky-fade.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {createCity} from './city.js';
 import {createVehicles} from './vehicles.js';
@@ -17,9 +19,9 @@ const standardSkies=[
   {key:'sunset',name:'日落',fog:0xd6b09f,density:.00020,rotation:3.32,dir:[-.884,.086,-.458],light:0xffba80,power:2.58,env:.78,bg:.66,exposure:1.04,night:.19},
   {key:'day',name:'午后',fog:0xcbdce0,density:.00012,rotation:2.1,dir:[.10,.75,-.66],light:0xfff1dc,power:2.95,env:1.08,bg:1.02,exposure:1.10,night:0},
   {key:'dusk',name:'蓝调',fog:0x6a7f98,density:.00017,rotation:3.42,dir:[-.9,.13,-.41],light:0xffb59b,power:.68,env:.50,bg:.76,exposure:1.06,night:.74},
-  {key:'night',hdr:'dusk',name:'夜晚',fog:0x2b3c50,density:.00020,rotation:3.42,dir:[-.24,.44,-.86],light:0xc2d8ff,power:.58,env:.46,bg:.18,exposure:1.14,night:1}
+  {key:'night',name:'夜晚',fog:0x2b3c50,density:.00020,rotation:3.42,dir:[-.24,.44,-.86],light:0xc2d8ff,power:.58,env:.46,bg:.18,exposure:1.14,night:1}
 ];
-const parkOvercast={key:'overcast',hdr:'flowerbed-overcast',name:'湖岸阴天',fog:0xb8c0c4,density:.00026,
+const parkOvercast={key:'overcast',name:'湖岸阴天',fog:0xb8c0c4,density:.00026,
   rotation:0,dir:[-.36,.83,.4],light:0xf4f4f0,power:.82,env:.96,bg:.98,exposure:1.04,night:0};
 const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
 export async function buildWorld(container,map,{progress,report,step,onCamera,onTransition,mouseLook,daylight=false,period,initialClimate={}}){
@@ -35,47 +37,53 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(67,1,.16,32000),canvas=renderer.domElement;
   let contextLost=false;
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;resetMotion();report?.(t('toastContextLost'));});
-  canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;anchorX=1e8;report?.(t('toastContextRestored'));});
+  canvas.addEventListener('webglcontextrestored',()=>{
+    contextLost=false;anchorX=1e8;fade.cancel();probes?.clearSkySeeds();
+    probes?.refresh(elapsed,camera.position,true);report?.(t('toastContextRestored'));
+  });
   const film=software?{render:(s,c)=>renderer.render(s,c)}:createFilm(renderer,camera);
   camera.rotation.order='YXZ';canvas.tabIndex=0;canvas.setAttribute('aria-label',t('canvasAria'));
   const hemi=new T.HemisphereLight(0xd2dff0,0xa59886,.64);scene.add(hemi);
   const sun=new T.DirectionalLight();scene.add(sun,sun.target);sun.castShadow=true;sun.shadow.mapSize.set(3072,3072);
   Object.assign(sun.shadow.camera,{left:-82,right:82,top:82,bottom:-82,near:.5,far:860});sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.radius=1.45;sun.shadow.bias=-.00012;sun.shadow.normalBias=.019;sun.shadow.autoUpdate=false;sun.shadow.needsUpdate=true;
-  const sunDirection=new T.Vector3(),skiesLoaded=new Map(),loader=new HDRLoader();
+  const sunDirection=new T.Vector3(),textures=skyTextures(renderer),fade=skyFade(renderer);
+  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
   let city,vehicles,people,probes,skyIndex=0,skyRequest=0,anchorX=1e8,anchorZ=1e8,lastShadow=-1e8;
   let playing=false,orbiting=false,flying=false,pitch=0,yaw=0,elapsed=0,gait=0,stepDist=0,joyX=0,joyZ=0,lift=0;
   const flightVelocity=new T.Vector3(),flightInput=new T.Vector3();
   let atmosphere,atmoGlsl,bayLife,tour,climate={weather:'clear',season:'summer'},requestedClimate={...climate,...initialClimate};
   const selectedSky=skies.findIndex(s=>s.key===period);
   let preferredSky=selectedSky>=0?selectedSky:daylight?1:0;
+  let committedSky=preferredSky,captureSkyRequest=0;
   let pictureLens=false,framingFov=0,eyeHeight=1.67;
   const keys=new Set(),foot=new T.Vector3(),dir=new T.Vector3(),ground=new T.Vector3();
   const orbit=new OrbitControls(camera,canvas);orbit.enabled=false;orbit.enableDamping=true;
   canvas.addEventListener('pointerdown',e=>{if(orbit.enabled)orbit.rotateSpeed=e.pointerType==='mouse'?mouseLook.sensitivity:1;},{capture:true});
   orbit.minDistance=28;orbit.maxDistance=3100;orbit.maxPolarAngle=Math.PI*.478;orbit.minPolarAngle=.09;orbit.screenSpacePanning=false;orbit.dampingFactor=.095;
   let drag=null,blocked=false,lastProbeKey='';
-  function loadHdr(hdr){
-    if(!skiesLoaded.has(hdr)){
-      const p=loader.loadAsync('/media/'+hdr+'.hdr').then(tex=>{tex.mapping=T.EquirectangularReflectionMapping;return tex;});
-      skiesLoaded.set(hdr,p);p.catch(()=>skiesLoaded.delete(hdr));
-    }
-    return skiesLoaded.get(hdr);
-  }
   async function setSky({interactive=false,label='',deferProbes=false}={}){
     const token=++skyRequest,next={...requestedClimate};
     const index=next.weather==='aurora'?skies.length-1:preferredSky,sky=skies[index],light=weatherLighting(next.weather);
-    const hdr=sky.hdr??sky.key;
+    const hdr=skyFileFor(sky.key);
     const probeKey=sky.key+':'+next.weather;
     const needsProbe=!!probes&&probeKey!==lastProbeKey;
-    const needsHdr=!skiesLoaded.has(hdr);
-    if(interactive&&(needsProbe||needsHdr)){
-      onTransition?.({active:true,label,progress:needsHdr?14:26});
-      await frame();
-      if(token!==skyRequest)return;
-    }
+    captureSkyRequest=0;
+    onTransition?.({active:false});
+    if(interactive&&index===skyIndex&&next.weather===climate.weather&&next.season===climate.season)return;
+    const notice=interactive?setTimeout(()=>{
+      if(token===skyRequest)onTransition?.({active:true,label});
+    },200):null;
     try{
-      const texture=await loadHdr(hdr);if(token!==skyRequest)return;
+      const texture=await textures.load(hdr);if(token!==skyRequest)return;
+      clearTimeout(notice);
+      if(interactive&&playing&&!blocked&&!manualClock&&!document.hidden&&!contextLost&&!reducedMotion.matches){
+        captureSkyRequest=token;
+        await frame();
+        if(token!==skyRequest)return;
+        captureSkyRequest=0;
+      }else fade.cancel();
+      committedSky=preferredSky;
       climate=next;skyIndex=index;scene.background=texture;scene.environment=texture;scene.backgroundRotation.y=sky.rotation;scene.environmentRotation.y=sky.rotation;
       scene.backgroundIntensity=sky.bg*light.background;scene.environmentIntensity=sky.env*light.environment;renderer.toneMappingExposure=sky.exposure;
       const afterDark=sky.key==='night',aurora=next.weather==='aurora';
@@ -103,8 +111,13 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
         probes.refresh(elapsed,camera.position,interactive||deferProbes);
         lastProbeKey=probeKey;
       }
+    }catch(error){
+      if(token!==skyRequest)return;
+      requestedClimate={...climate};preferredSky=committedSky;
+      throw error;
     }finally{
-      if(interactive&&token===skyRequest)onTransition?.({active:false,label:'',progress:100});
+      clearTimeout(notice);
+      if(interactive&&token===skyRequest)onTransition?.({active:false});
     }
   }
   function lens(){
@@ -113,6 +126,20 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   }
   function resize(){const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;lens();}
   new ResizeObserver(resize).observe(container);resize();const initialSky=setSky();
+  const idle=fn=>'requestIdleCallback' in window?requestIdleCallback(fn,{timeout:5000}):setTimeout(fn,1800);
+  async function warmRemainingSkies(){
+    const initialHdr=skyFileFor(skies[skyIndex].key);
+    for(const hdr of new Set(skies.map(s=>skyFileFor(s.key)))){
+      if(navigator.connection?.saveData)return;
+      if(hdr===initialHdr)continue;
+      try{
+        const texture=await textures.load(hdr,'low');
+        await new Promise(idle);
+        if(!contextLost&&texture!==scene.environment)textures.warm(texture);
+      }catch{/* A selection retries any failed background load. */}
+    }
+  }
+  initialSky.then(()=>idle(warmRemainingSkies),()=>{});
   progress(30,t('loadingCity'));await frame();await frame();
   city=createCity(scene,map,{renderer,camera,quality:software?'low':'balanced'});progress(62,t('loadingVehicles'));await frame();
   const compileMaterials=objects=>film.compile?.(objects,camera,scene)??renderer.compileAsync(objects,camera,scene);
@@ -130,12 +157,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
   probes=localReflections(renderer,scene,city,sun,sunDirection,software,vehicles);await setSky({deferProbes:true});
   progress(94,t('loadingWater'));await frame();
   const pedestriansReady=createPedestrians(scene,map,city,vehicles.isBlocked).then(p=>people=p).catch(err=>console.warn('行人资源',err));
-  // Pre-warm remaining sky HDRs and precipitation cover during idle time for instant switching.
-  const idle=fn=>'requestIdleCallback' in window?requestIdleCallback(fn,{timeout:5000}):setTimeout(fn,1800);
-  idle(()=>{
-    for(const s of standardSkies)loadHdr(s.hdr??s.key).catch(()=>{});
-    idle(()=>{try{city.getWeatherCover();}catch{}});
-  });
+  idle(()=>city.getWeatherCover());
   function safePoint(x,z,ceiling=Infinity){
     const available=(a,b)=>city.isWalkable(a,b,ceiling)&&!vehicles.isBlocked(a,b,.23,city.groundHeight(a,b,ceiling));
     if(available(x,z))return [x,z];
@@ -302,7 +324,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
       const flightTime=Math.min(raw,.25),steps=Math.max(1,Math.ceil(flightTime/.05));
       for(let i=0;i<steps;i++)flight(flightTime/steps);
     }else walking(dt);
-    probes.step(elapsed,camera.position);
+    probes.step(elapsed,camera.position,raw*1000);
     const focus=orbiting?orbit.target:camera.position;
     if(Math.hypot(focus.x-anchorX,focus.z-anchorZ)>8||elapsed-lastShadow>.35){
       anchorX=focus.x;anchorZ=focus.z;lastShadow=elapsed;sun.target.position.set(anchorX,1,anchorZ);sun.position.copy(sun.target.position).addScaledVector(sunDirection,540);sun.shadow.needsUpdate=true;
@@ -313,6 +335,8 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
     const inRain=climate.weather==='rain'&&!(city.getWeatherCover().roofAt(camera.position.x,camera.position.z)>camera.position.y+.5)?.55:0;
     sprayLevel=T.MathUtils.lerp(sprayLevel,Math.max(lowOverSea,inRain),1-Math.exp(-3.5*dt));
     camera.updateMatrixWorld();city.captureStreet(renderer,scene,camera,elapsed);film.render(scene,camera,elapsed,sprayLevel);
+    fade.render();
+    if(captureSkyRequest){fade.capture();captureSkyRequest=0;}
   }
   function render(now){
     requestAnimationFrame(render);if(manualClock)return;let raw=(now-previous)/1000;previous=now;if(!playing||blocked||document.hidden||contextLost)return;

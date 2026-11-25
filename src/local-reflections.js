@@ -17,8 +17,8 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
     {key:'street',at:new T.Vector3(-126.8,1.44,-420.7),target:null}
   ];
   const waterProxy=new T.MeshStandardMaterial({color:0x2b7e86,roughness:.22,metalness:.26});
-  const skyIntensities=new Map(),skyTargets=[];
-  let pending=null,nextCaptureTime=0;
+  const skyIntensities=new Map(),skySeeds=new Map(),skyTargets=[];
+  let pending=null,nextCaptureTime=0,knownMaterials=null;
   function collectTargets(){
     const materials=new Set(),omit=[],tower=[];
     scene.traverse(o=>{
@@ -26,6 +26,7 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       if(o.userData.excludeFromProbe||o.name==='Shenzhen road traffic')omit.push(o);
       if(o.userData.excludeFromDistrictProbe)tower.push(o);
     });
+    knownMaterials=materials;
     return {materials,omit,tower};
   }
   function bindMaterials(materials,capture){
@@ -37,12 +38,13 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
         m.envMapIntensity=skyIntensities.get(m);skyIntensities.delete(m);
       }
     }
-    if(!skyIntensities.size)skyTargets.splice(0).forEach(target=>target.dispose());
   }
   function seedFromSky(materials){
     // Three includes the PMREM height in its shader key. Start with sky light
     // in the same layout as each final probe so publishing it only swaps a sampler.
-    const sky=scene.environment,textures=new Map(),oldTargets=skyTargets.splice(0);
+    const sky=scene.environment;
+    if(!skySeeds.has(sky))skySeeds.set(sky,new Map());
+    const textures=skySeeds.get(sky);
     for(const capture of captures)delete scene.userData[capture.key+'Probe'];
     for(const m of materials){
       const buffer=m.userData.cityProbe==='street'?paintCube:cube;
@@ -59,7 +61,6 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       m.envMapIntensity=scene.environmentIntensity;
       m.envMap=textures.get(buffer);m.envMapRotation?.copy(scene.environmentRotation);
     }
-    oldTargets.forEach(target=>target.dispose());
   }
   function renderFace(capture,face,time,targets){
     const street=capture.key==='street',eye=street?paintCamera:camera,buffer=street?paintCube:cube;
@@ -107,11 +108,15 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
     pending={remaining:captures.slice(),capture:null,face:0,targets};
     nextCaptureTime=0;
   }
-  function step(time,position){
+  function step(time,position,frameMs){
     if(!pending)return;
-    if(!nextCaptureTime)nextCaptureTime=performance.now()+240;
+    if(!nextCaptureTime)nextCaptureTime=performance.now()+350;
     if(performance.now()<nextCaptureTime)return;
     const job=pending;
+    if(!job.targets){
+      job.targets=collectTargets();
+      seedFromSky(job.targets.materials);
+    }
     if(!job.capture){
       job.remaining.sort((a,b)=>a.at.distanceToSquared(position)-b.at.distanceToSquared(position));
       job.capture=job.remaining.shift();job.face=0;
@@ -121,11 +126,15 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       job.capture=null;
       if(!job.remaining.length)pending=null;
     }
-    nextCaptureTime=performance.now()+60;
+    nextCaptureTime=performance.now()+T.MathUtils.clamp(frameMs*4,60,300);
   }
   function refresh(time,position,deferred){
     // Replace the previous capture only after the requested sky has loaded.
     pending=null;
+    if(deferred&&knownMaterials){
+      if(skySeeds.has(scene.environment))seedFromSky(knownMaterials);
+      enqueue(captures,null);return;
+    }
     const targets=collectTargets();
     seedFromSky(targets.materials);
     if(deferred){enqueue(captures,targets);return;}
@@ -135,9 +144,14 @@ export function localReflections(renderer,scene,city,sun,direction,low,vehicles)
       for(let face=0;face<6;face++)renderFace(capture,face,time,targets);
     }
   }
-  return {refresh,step,dispose(){
+  function clearSkySeeds(){
+    knownMaterials=null;
+    skySeeds.clear();
+    skyTargets.splice(0).forEach(target=>target.dispose());
+  }
+  return {refresh,step,clearSkySeeds,dispose(){
     pending=null;
-    skyTargets.forEach(t=>t.dispose());
+    clearSkySeeds();
     if(paintCube!==cube){paintCube.dispose();paintFilter.dispose();}
     cube.dispose();filter.dispose();waterProxy.dispose();
     captures.forEach(p=>p.target?.dispose());

@@ -57,17 +57,23 @@ export function climateControls(getWorld,report,onChange){
     if(!panel.hidden&&!panel.contains(e.target)&&!toggle.contains(e.target))openClimate(false);
     if(!periodPanel.hidden&&!periodPanel.contains(e.target)&&!periodToggle.contains(e.target))openPeriod(false);
   });
-  panel.addEventListener('click',async e=>{
-    const b=e.target.closest('button[data-season],button[data-weather]');if(!b)return;
-    const world=getWorld(),patch=b.dataset.season?{season:b.dataset.season}:{weather:b.dataset.weather};
+  async function select(button,buttons,activePanel,apply,errorKey){
     const token=++request;
-    panel.setAttribute('aria-busy','true');
-    toggle.classList.add('is-loading');
-    try{await world.setClimate(patch,b.textContent?.trim()||'');}
-    catch{report(t('toastWeatherErr'));}
-    finally{if(token===request){toggle.classList.remove('is-loading');sync();panel.setAttribute('aria-busy','false');}}
+    for(const p of [panel,periodPanel])p.setAttribute('aria-busy',String(p===activePanel));
+    for(const b of buttons)b.setAttribute('aria-pressed',String(b===button));
+    try{await apply();}
+    catch{if(token===request)report(t(errorKey));}
+    finally{
+      if(token===request){activePanel.setAttribute('aria-busy','false');sync();}
+    }
+  }
+  panel.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-season],button[data-weather]');if(!b)return;
+    const world=getWorld();if(!world)return;
+    const patch=b.dataset.season?{season:b.dataset.season}:{weather:b.dataset.weather};
+    select(b,b.dataset.season?seasonButtons:weatherButtons,panel,()=>world.setClimate(patch,b.textContent.trim()),'toastWeatherErr');
   });
-  periodPanel.addEventListener('click',async e=>{
+  periodPanel.addEventListener('click',e=>{
     if(e.target.closest('#moonToggle')){
       const world=getWorld();if(!world)return;
       const shown=world.toggleMoon();
@@ -77,12 +83,7 @@ export function climateControls(getWorld,report,onChange){
     }
     const b=e.target.closest('button[data-period]');if(!b)return;
     const world=getWorld();if(!world)return;
-    const token=++request;
-    periodPanel.setAttribute('aria-busy','true');
-    periodToggle.classList.add('is-loading');
-    try{await world.setPeriod(b.dataset.period,b.textContent?.trim()||'');}
-    catch{report(t('toastSkyErr'));}
-    finally{if(token===request){periodToggle.classList.remove('is-loading');sync();periodPanel.setAttribute('aria-busy','false');}}
+    select(b,periodButtons,periodPanel,()=>world.setPeriod(b.dataset.period,b.textContent.trim()),'toastSkyErr');
   });
   return {
     sync,
