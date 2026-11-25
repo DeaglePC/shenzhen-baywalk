@@ -28,7 +28,7 @@ const fallback={id:'bridge',name:'人才星光桥',x:213.6,z:143.5,lookX:-263.3,
 const route=new URLSearchParams(location.search);
 const homeSkies=homeSkyPreloader(route.get('weather')==='aurora'?'night':route.get('period'));
 let updateReader;
-const climate=climateControls(()=>world,notify,setting=>audio.setWeather(setting.weather));
+const climate=climateControls(()=>world,notify,setting=>audio.setClimate(setting,world.periodKey));
 const stadiumFlight={eye:[486,210,-535],target:[82,20,-790],fov:49};
 place=fallback;
 function geo(){
@@ -311,7 +311,10 @@ pad.onlostpointercapture=pad.onpointercancel=pad.onpointerup=()=>{finger=null;pu
 function updateHud(){
   if(mode!=='world'||panel.open||!world)return;const pos=world.position(),deg=(pos.heading*180/Math.PI+360)%360;
   updateReader?.(world.flying||world.aerial||world.touring?{x:Infinity,z:Infinity}:pos);
-  if(audio.enabled)audio.setSheltered(world.sheltered);
+  if(audio.enabled){
+    audio.setSheltered(world.sheltered);
+    audio.updateHabitat(world.city.habitatAt(world.camera.position));
+  }
   if(world.flying)$('#altitude').textContent=Math.round(pos.height)+' m';
   if(world.touring)syncTourUi();
   $('#heading').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];$('#bearing').textContent=Math.round(deg)+'°';drawMini($('#mini'),map,pos);

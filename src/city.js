@@ -6,6 +6,7 @@ import * as T from 'three';
 import {parkLighting} from './park-lighting.js';
 import {waterfrontShow} from './city-lightshow.js';
 import {makeLake} from './lake.js';
+import {soundHabitat} from './sound-habitat.js';
 import {bayBridge} from './bay-bridge.js';
 import {islandShores} from './lake-shores.js';
 import {streetSurface} from './street-surface.js';
@@ -188,11 +189,12 @@ export function createCity(scene,map,options={}){
   const show=waterfrontShow(root,map);
   let weatherCover;
   const getWeatherCover=()=>weatherCover??=buildWeatherCover([...map.buildings,...grid.platforms.roofs],stadium);
-  let foliage=[],night=0;
+  let foliage=[],night=0,sampleHabitat;
   const far=farTerrain(root),water=makeLake(root,map,options);
   const ground=streetSurface(root,m,options,map.roads);
   const ready=canopyData.then(async trees=>{
     if(!far.active)return;
+    sampleHabitat=soundHabitat(map,trees);
     foliage=furnishing(root,map,m,grid,trees,options.quality==='low');
     await Promise.all([root.userData.foliageReady,root.userData.shrubReady,root.userData.talentReady,monumentsReady,artworkReady,details.ready]);
   });
@@ -311,5 +313,5 @@ export function createCity(scene,map,options={}){
   }
   function setSun(direction,color){ground.invalidate();if(!water)return;water.material.uniforms.sunDirection.value.copy(direction).normalize();if(color)water.material.uniforms.sunColor.value.set(color);}
   function dispose(){root.userData.disposeTalentPlates?.();root.userData.disposeBlossoms?.();weatherCover?.texture.dispose();ground.dispose();water?.dispose();flowerbed?.dispose();landscape?.dispose();bridges?.dispose();details?.dispose();far.active=false;scene.remove(root);root.traverse(obj=>{obj.geometry?.dispose();const mats=Array.isArray(obj.material)?obj.material:obj.material?[obj.material]:[];mats.forEach(mat=>mat.dispose());});}
-  return {root,ready,update,talentColumns:grid.talentColumns??[],signals:grid.signals,parkWalkPaths:tidal?.walkPaths??[],stadiumAreas:stadium?.motorExclusions??[],captureStreet:ground.capture,groundHeight,isWalkable,flightBlocked,getWeatherCover,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
+  return {root,ready,update,habitatAt(position){return sampleHabitat?.(position);},talentColumns:grid.talentColumns??[],signals:grid.signals,parkWalkPaths:tidal?.walkPaths??[],stadiumAreas:stadium?.motorExclusions??[],captureStreet:ground.capture,groundHeight,isWalkable,flightBlocked,getWeatherCover,setSun,setNight,dispose,water,bounds:[-3000,-3000,3000,3000]};
 }

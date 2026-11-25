@@ -381,7 +381,7 @@ export async function buildWorld(container,map,{progress,report,step,onCamera,on
     get period(){return climate.weather==='aurora'?'极光夜':skies[skyIndex].name;},
     get periodKey(){return climate.weather==='aurora'?'aurora':skies[skyIndex].key;},
     get climate(){return {...climate};},
-    get sheltered(){const p=camera.position;return climate.weather==='rain'&&city.getWeatherCover().roofAt(p.x,p.z)>p.y+.5;},
+    get sheltered(){const p=camera.position;return (climate.weather==='rain'||climate.weather==='snow')&&city.getWeatherCover().roofAt(p.x,p.z)>p.y+.5;},
     async setClimate(patch,label='',{immediate=false}={}){requestedClimate={...requestedClimate,...patch};await setSky({interactive:!immediate,label});},
     async setPeriod(key,label='',{immediate=false}={}){
       const idx=skies.findIndex(s=>s.key===key);
