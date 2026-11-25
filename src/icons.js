@@ -1,4 +1,6 @@
 const shapes = {
+  xSocial:'<path d="M3 3h4.6L21 21h-4.6ZM20.1 3l-6.8 7.8M3.9 21l6.8-7.8"/>',
+  qr:'<path d="M3 3h6v6H3zm12 0h6v6h-6zM3 15h6v6H3zm12 0h2v3h4m-6 3h3m3-7v1"/>',
   cloud:'<path d="M6.5 18a4.5 4.5 0 0 1-.3-9A6 6 0 0 1 17.8 8a5 5 0 1 1 .4 10Z"/>',
   drone:'<path d="m6 6 4.5 4.5m3 3L18 18m0-12-4.5 4.5m-3 3L6 18"/><circle cx="5.5" cy="5.5" r="3"/><circle cx="18.5" cy="5.5" r="3"/><circle cx="5.5" cy="18.5" r="3"/><circle cx="18.5" cy="18.5" r="3"/><rect x="9" y="9" width="6" height="6" rx="2"/>',
   play:'<path d="m7 4 13 8-13 8z"/>', pause:'<path d="M8 5v14m8-14v14" stroke-width="4"/>',

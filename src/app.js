@@ -226,7 +226,7 @@ function resume(){
   if(!world){launch();return;}closePanel();if(!world.aerial&&!world.touring)lookInput.engage();mode='world';document.body.dataset.mode='world';home.hidden=true;hud.hidden=false;world.setPlaying(true);world.setBlocked(false);showHint();
 }
 $('#loadBack').onclick=()=>{goHome();location.reload();};$('#start').onclick=resume;$('#brand').onclick=()=>mode==='world'?openPanel('pause'):closePanel();
-const titles={map:['FIELD MAP','panelMapTitle'],garage:['VEHICLE COLLECTION','panelGarageTitle'],talent:['STARLIGHT BRIDGE','panelTalentTitle'],help:['FIELD GUIDE','panelHelpTitle'],pause:['FREE ROAM','panelPauseTitle']};
+const titles={map:['FIELD MAP','panelMapTitle'],garage:['VEHICLE COLLECTION','panelGarageTitle'],talent:['STARLIGHT BRIDGE','panelTalentTitle'],help:['FIELD GUIDE','panelHelpTitle'],pause:['FREE ROAM','panelPauseTitle'],wechat:['','wechatAccount']};
 async function openPanel(key,entryId){
   if(loading)return;setCleanHud(false);climate.close();cleanup?.();cleanup=null;const version=++panelId;currentPanel=key;world?.setBlocked(true);
   if(!world)homeSkies.setActive(key==='help');
@@ -243,6 +243,10 @@ async function openPanel(key,entryId){
       const {showGarage}=await import('./garage.js');if(version!==panelId)return;
       const focusedCar=entryId??(mode==='world'&&place.id==='model3'?'model3':'e6');
       cleanup=showGarage(body,focusedCar,route.get('view'));
+    }else if(key==='wechat'){
+      body.innerHTML='<figure class="wechat-code"><img src="/media/creator-wechat.png" width="430" height="430"><figcaption></figcaption></figure>';
+      body.querySelector('img').alt=t('wechatQrAlt');
+      body.querySelector('figcaption').textContent=t('wechatQrHint');
     }else if(key==='help'){
       body.innerHTML=t('helpHtml');
     }else{
@@ -343,6 +347,8 @@ function applyLanguage(){
   const stadiumEntry=$('.flight-entry:not(.tour-entry)');
   if(stadiumEntry)stadiumEntry.textContent=t('flyStadium');
   $('.compare-entry').textContent=t('compareEntry');
+  $('#creatorLabel').textContent=t('followCreator');
+  $('#wechatLabel').textContent=t('wechatLink');
   const facts=document.querySelectorAll('.facts .fact');
   if(facts[0]){facts[0].querySelector('small').textContent=t('factStart');$('#spawnName').textContent=placeLabel(place);}
   if(facts[1]){facts[1].querySelector('small').textContent=t('factRadius');facts[1].querySelector('strong').innerHTML='<em>3.0</em> '+t('factRadiusUnit');}
